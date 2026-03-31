@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Therapist OS
+
+A personal AI-powered psychological intelligence PWA. Therapist OS surfaces behavioural patterns across your health, finance, habits, and location data, then gives you a private AI therapist to work through them — grounded in CBT, SDT, Behaviourism, and Interpersonal Therapy (IPT).
+
+> Built as a mobile-first PWA. Install it to your home screen for the full experience.
+
+---
+
+## Features
+
+- **Dashboard** — weekly insights across health, finance, and habits with framework-tagged analysis (CBT / SDT / Behaviourism / IPT)
+- **AI Therapist** — private async or live-mode conversation with your own therapist, context-aware from your dashboard
+- **Habits** — daily habit tracking with streaks, completion heatmaps, and progress rings
+- **Relationships** *(coming Phase 2)* — IPT-based relationship mapping and interaction logging
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 14 (App Router) |
+| Language | TypeScript |
+| Styling | Tailwind CSS + CSS custom properties |
+| Animation | Framer Motion |
+| State | Zustand (with persist middleware) |
+| UI components | shadcn/ui |
+| Icons | Lucide React |
+| Charts | Recharts |
+| PWA | next-pwa |
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Other commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build    # production build
+npm run lint     # ESLint
+npm run format   # Prettier
+```
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├── app/           # Next.js App Router (layout, globals.css)
+├── components/    # UI components by feature
+│   ├── dashboard/
+│   ├── habits/
+│   ├── therapist/
+│   ├── navigation/
+│   └── settings/
+├── data/          # Mock/seed data (health, finance, habits, insights)
+├── lib/           # Utility functions
+├── services/ai/   # AI service abstraction layer
+└── store/         # Zustand stores (settings, session, habits)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Psychology Frameworks
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The app applies four evidence-based frameworks to surface insights:
 
-## Deploy on Vercel
+| Framework | Focus |
+|---|---|
+| **CBT** | Identifying and challenging negative thought patterns |
+| **SDT** | Understanding autonomy, competence, and relatedness needs |
+| **Behaviourism** | Recognising how consequences shape behaviour |
+| **IPT** | Mapping relationship patterns as the root of wellbeing |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Roadmap
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [ ] Phase 2: Connect real AI providers (Claude, Gemini, Groq)
+- [ ] Phase 2: Ingest live data (Garmin, TrueLayer, Spotify, Google Calendar)
+- [ ] Phase 2: Relationship Tracker with full IPT tooling
+- [ ] Phase 3: Longitudinal insight graphs
+- [ ] Phase 3: Voice-first live sessions
+
+## License
+
+MIT — see [LICENSE](LICENSE).

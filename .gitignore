@@ -34,3 +34,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# env files
+.env
+.env.local
+.env.development
+.env.production
+
+# editor
+.vscode/
+.idea/
+
+# claude code
+.claude/
+
+# os
+.DS_Store
+Thumbs.db
