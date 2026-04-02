@@ -1,0 +1,2 @@
+-r requirements.txt
+whisper-cpp-python==0.2.0

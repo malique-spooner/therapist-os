@@ -1,15 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { Brain } from 'lucide-react';
 
 import { TopBar } from '@/components/navigation/TopBar';
 import { HeroCard } from './HeroCard';
 import { DataRing } from './DataRing';
 import { InsightCard } from './InsightCard';
-import { getCurrentHeroInsight, getInsightsForPeriod } from '@/data/insights';
-import { getDashboardRings, type Period } from '@/lib/mockDataUtils';
-import { healthData } from '@/data/health';
-import { financeData } from '@/data/finance';
+import { TodaySnapshot } from './TodaySnapshot';
+import { type Period } from '@/lib/mockDataUtils';
+import { api } from '@/lib/api';
+import { useApiQuery } from '@/hooks/useApiQuery';
 
 
 const PERIODS: { label: string; value: Period }[] = [
@@ -23,26 +24,45 @@ const ringColors = ['var(--color-primary)', 'var(--color-accent)', '#F59E0B'];
 
 interface DashboardPageProps {
   onSettings: () => void;
+  onOpenBrain?: () => void;
   onNavigateToTherapist: (context?: string) => void;
+  onOpenDomain?: (page: 'health' | 'nutrition' | 'relationships' | 'finance' | 'consumption' | 'location') => void;
 }
 
-export function DashboardPage({ onSettings, onNavigateToTherapist }: DashboardPageProps) {
+export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist, onOpenDomain }: DashboardPageProps) {
   const [period, setPeriod] = useState<Period>('this-week');
-  const rings = getDashboardRings(period);
-  const heroInsight = getCurrentHeroInsight();
-  const weekInsights = getInsightsForPeriod(period);
-  const allCards = weekInsights.flatMap(w => w.cards);
+  const { data, isLoading, error, refetch } = useApiQuery(() => api.getDashboard(period), [period]);
+  const rings = data?.rings ?? [];
+  const heroInsight = data?.heroInsight;
+  const allCards = data?.insights ?? [];
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
-      <TopBar onBack={() => {}} onSettings={onSettings} />
+      <TopBar
+        onBack={() => {}}
+        onSettings={onSettings}
+        leftElement={
+          <button
+            onClick={onOpenBrain}
+            className="flex items-center gap-2 -ml-1 rounded-2xl px-2 py-1.5 active:scale-95 transition-transform"
+            aria-label="Open Brain"
+          >
+            <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{ backgroundColor: 'var(--color-light)' }}>
+              <Brain size={16} style={{ color: 'var(--color-dark)' }} />
+            </div>
+            <span className="text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>Brain</span>
+          </button>
+        }
+      />
 
       <div className="flex-1 overflow-y-auto">
         {/* Greeting */}
         <div className="px-4 pt-4 pb-3">
-          <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>Good morning</h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Tuesday, 31 March 2026</p>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>{data?.greeting ?? 'Good morning'}</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{data?.dateLabel ?? new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
         </div>
+
+        {onOpenDomain && <TodaySnapshot onSelect={onOpenDomain} />}
 
         {/* Period filter */}
         <div className="px-4 pb-4">
@@ -66,7 +86,13 @@ export function DashboardPage({ onSettings, onNavigateToTherapist }: DashboardPa
 
         {/* Hero insight card */}
         <div className="pb-4">
-          <HeroCard insight={heroInsight} onTalkAboutThis={onNavigateToTherapist} />
+          {isLoading && <div className="mx-4 h-40 rounded-3xl animate-pulse" style={{ backgroundColor: 'var(--color-surface-2)' }} />}
+          {!isLoading && error && (
+            <button onClick={() => void refetch()} className="mx-4 w-[calc(100%-2rem)] rounded-3xl p-5 text-left" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}>
+              Could not load data. Tap to retry.
+            </button>
+          )}
+          {!isLoading && !error && heroInsight && <HeroCard insight={heroInsight} onTalkAboutThis={onNavigateToTherapist} />}
         </div>
 
         {/* Data rings */}
@@ -76,9 +102,9 @@ export function DashboardPage({ onSettings, onNavigateToTherapist }: DashboardPa
               {PERIODS.find(p => p.value === period)?.label} overview
             </h2>
             <div className="flex items-start justify-around">
-              {rings.map((ring, i) => (
+              {(isLoading ? [{ label: '', value: '', unit: '', percentage: 0, trend: '', trendPositive: true }, { label: '', value: '', unit: '', percentage: 0, trend: '', trendPositive: true }, { label: '', value: '', unit: '', percentage: 0, trend: '', trendPositive: true }] : rings).map((ring, i) => (
                 <DataRing
-                  key={ring.label}
+                  key={`${ring.label}-${i}`}
                   {...ring}
                   color={ringColors[i]}
                   delay={i * 0.1}
@@ -91,28 +117,17 @@ export function DashboardPage({ onSettings, onNavigateToTherapist }: DashboardPa
         {/* Mini charts row */}
         <div className="px-4 pb-4">
           <div className="flex gap-3 overflow-x-auto no-select pb-1">
-            <MiniTrend
-              label="Sleep"
-              data={healthData.slice(-14).map(d => d.sleepQuality)}
-              color="var(--color-primary)"
-              unit="/10"
-              latest={healthData[healthData.length - 1].sleepQuality.toString()}
-            />
-            <MiniTrend
-              label="Steps"
-              data={healthData.slice(-14).map(d => d.steps / 1000)}
-              color="var(--color-accent)"
-              unit="k"
-              latest={(healthData[healthData.length - 1].steps / 1000).toFixed(1)}
-            />
-            <MiniTrend
-              label="Spend"
-              data={financeData.slice(-14).map(d => d.totalSpend)}
-              color="#F59E0B"
-              unit="£"
-              latest={`£${financeData[financeData.length - 1].totalSpend}`}
-              invertTrend
-            />
+            {(data?.miniTrends ?? []).map((trend) => (
+              <MiniTrend
+                key={trend.label}
+                label={trend.label}
+                data={trend.data}
+                color={trend.label === 'Sleep' ? 'var(--color-primary)' : trend.label === 'Steps' ? 'var(--color-accent)' : '#F59E0B'}
+                unit={trend.unit}
+                latest={trend.latest}
+                invertTrend={trend.invertTrend}
+              />
+            ))}
           </div>
         </div>
 
@@ -147,6 +162,11 @@ interface MiniTrendProps {
 }
 
 function MiniTrend({ label, data, color, unit, latest, invertTrend }: MiniTrendProps) {
+  if (!data.length) {
+    return (
+      <div className="flex-shrink-0 rounded-2xl p-3 animate-pulse" style={{ width: 130, backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', height: 92 }} />
+    );
+  }
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;

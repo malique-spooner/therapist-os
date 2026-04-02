@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Message } from '@/store/session';
+import { formatCost } from '@/lib/costCalculator';
 
 interface MessageBubbleProps {
   message: Message;
@@ -44,6 +45,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
         <div className={`flex items-center gap-2 mt-1 ${isUser ? 'justify-end' : 'justify-start'}`}>
           <span className="text-xs" style={{ color: 'var(--color-text-muted)', fontSize: 10 }}>{time}</span>
+          {!isUser && typeof message.costPence === 'number' && message.costPence > 0 && (
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)', fontSize: 10 }}>
+              This response: {formatCost(message.costPence)}
+            </span>
+          )}
           {message.frameworksReferenced && message.frameworksReferenced.length > 0 && (
             <div className="flex gap-1">
               {message.frameworksReferenced.map(fw => (

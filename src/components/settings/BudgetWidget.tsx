@@ -4,12 +4,22 @@ import { useState } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { useSettingsStore } from '@/store/settings';
 import { formatCost, getBudgetPercent, getBudgetStatus } from '@/lib/costCalculator';
+import { api } from '@/lib/api';
 
 export function BudgetWidget() {
   const { budgetEnabled, budgetLimit, budgetSpent, autoSwitchAtLimit, disableAtLimit,
-    setBudgetEnabled, setBudgetLimit, setAutoSwitch, setDisableAtLimit, resetBudget } = useSettingsStore();
+    setBudgetEnabled, setBudgetLimit, setAutoSwitch, setDisableAtLimit, resetBudget, hydrateBudget } = useSettingsStore();
   const [editingLimit, setEditingLimit] = useState(false);
   const [limitInput, setLimitInput] = useState((budgetLimit / 100).toFixed(0));
+
+  async function persistBudget(next: { limitPence?: number; autoSwitchAt80?: boolean; disablePaidAtLimit?: boolean }) {
+    const updated = await api.updateBudget({
+      limitPence: next.limitPence ?? budgetLimit,
+      autoSwitchAt80: next.autoSwitchAt80 ?? autoSwitchAtLimit,
+      disablePaidAtLimit: next.disablePaidAtLimit ?? disableAtLimit,
+    });
+    hydrateBudget(updated);
+  }
 
   const pct = getBudgetPercent(budgetSpent, budgetLimit);
   const status = getBudgetStatus(budgetSpent, budgetLimit);
@@ -58,7 +68,12 @@ export function BudgetWidget() {
                   inputMode="numeric"
                 />
                 <button
-                  onClick={() => { setBudgetLimit(Math.round(parseFloat(limitInput || '10') * 100)); setEditingLimit(false); }}
+                  onClick={() => {
+                    const nextLimit = Math.round(parseFloat(limitInput || '10') * 100);
+                    setBudgetLimit(nextLimit);
+                    setEditingLimit(false);
+                    void persistBudget({ limitPence: nextLimit });
+                  }}
                   className="text-sm font-medium px-3 py-1 rounded-lg"
                   style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}
                 >
@@ -76,11 +91,11 @@ export function BudgetWidget() {
           <div className="space-y-3 pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
             <div className="flex items-center justify-between">
               <span className="text-sm" style={{ color: 'var(--color-text)' }}>Auto-switch to free at 80%</span>
-              <Switch checked={autoSwitchAtLimit} onCheckedChange={setAutoSwitch} />
+              <Switch checked={autoSwitchAtLimit} onCheckedChange={(value) => { setAutoSwitch(value); void persistBudget({ autoSwitchAt80: value }); }} />
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm" style={{ color: 'var(--color-text)' }}>Disable paid AI at limit</span>
-              <Switch checked={disableAtLimit} onCheckedChange={setDisableAtLimit} />
+              <Switch checked={disableAtLimit} onCheckedChange={(value) => { setDisableAtLimit(value); void persistBudget({ disablePaidAtLimit: value }); }} />
             </div>
           </div>
 

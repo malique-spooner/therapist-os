@@ -2,17 +2,19 @@
 
 import { motion } from 'framer-motion';
 import { Flame, Trophy } from 'lucide-react';
-import { getStreakForHabit, getLongestStreak, HABITS, HabitDay } from '@/data/habits';
+import { HabitDef } from '@/data/habits';
 
-export function StreakCard() {
-  const topHabits = HABITS.slice(0, 4).map(h => {
-    const key = h.id as keyof Omit<HabitDay, 'date'>;
-    return {
-      ...h,
-      streak: getStreakForHabit(key),
-      longest: getLongestStreak(key),
-    };
-  }).sort((a, b) => b.streak - a.streak);
+interface StreakCardProps {
+  habits: HabitDef[];
+  streaks: Record<string, { streak: number; longest: number }>;
+}
+
+export function StreakCard({ habits, streaks }: StreakCardProps) {
+  const topHabits = habits.slice(0, 4).map((habit) => ({
+    ...habit,
+    streak: streaks[habit.id]?.streak ?? 0,
+    longest: streaks[habit.id]?.longest ?? 0,
+  })).sort((a, b) => b.streak - a.streak);
 
   return (
     <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>

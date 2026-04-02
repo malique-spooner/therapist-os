@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-build:
-    name: Lint & Build
+  frontend:
+    name: Frontend
     runs-on: ubuntu-latest
 
     steps:
@@ -23,8 +23,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Frontend tests
+        run: npm test
+
       - name: Lint
         run: npm run lint
 
       - name: Build
         run: npm run build
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare env
+        run: cp .env.example .env
+
+      - name: Run backend tests in Docker
+        run: docker compose run --rm backend-tests

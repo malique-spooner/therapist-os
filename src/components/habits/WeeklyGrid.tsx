@@ -1,12 +1,18 @@
 'use client';
 
-import { habitsHistory, HABITS, HabitDay } from '@/data/habits';
+import { HabitDay, HabitDef } from '@/data/habits';
 import { motion } from 'framer-motion';
+import { HabitHistoryDay } from '@/lib/api';
 
 const HABIT_KEYS: (keyof Omit<HabitDay, 'date'>)[] = ['workout', 'sleep-midnight', 'budget', 'mood', 'social', 'meditation'];
 
-export function WeeklyGrid() {
-  const lastTwoWeeks = habitsHistory.slice(-14);
+interface WeeklyGridProps {
+  habits: HabitDef[];
+  history: HabitHistoryDay[];
+}
+
+export function WeeklyGrid({ habits, history }: WeeklyGridProps) {
+  const lastTwoWeeks = history.slice(-14);
 
   return (
     <div className="overflow-x-auto">
@@ -17,7 +23,7 @@ export function WeeklyGrid() {
           {lastTwoWeeks.map((d, i) => {
             const date = new Date(d.date);
             const dow = ['S','M','T','W','T','F','S'][date.getDay()];
-            const isToday = d.date === '2026-03-31';
+            const isToday = d.date === new Date().toISOString().slice(0, 10);
             return (
               <div key={i} className="text-center">
                 <span className="text-xs font-medium" style={{ color: isToday ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>
@@ -30,7 +36,7 @@ export function WeeklyGrid() {
 
         {/* Habit rows */}
         {HABIT_KEYS.map((key) => {
-          const habit = HABITS.find(h => h.id === key);
+          const habit = habits.find(h => h.id === key);
           if (!habit) return null;
           return (
             <div key={key} className="grid gap-1 mb-1" style={{ gridTemplateColumns: '80px repeat(14, 1fr)' }}>
@@ -40,7 +46,7 @@ export function WeeklyGrid() {
                 </span>
               </div>
               {lastTwoWeeks.map((day, i) => {
-                const val = day[key];
+                const val = day.values[key];
                 const done = typeof val === 'boolean' ? val : (val as number) >= 5;
                 return (
                   <motion.div

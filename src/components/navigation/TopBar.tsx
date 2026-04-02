@@ -7,17 +7,18 @@ interface TopBarProps {
   onBack?: () => void;
   onSettings?: () => void;
   rightElement?: React.ReactNode;
+  leftElement?: React.ReactNode;
   title?: string;
 }
 
-export function TopBar({ showBack, onBack, onSettings, rightElement, title }: TopBarProps) {
+export function TopBar({ showBack, onBack, onSettings, rightElement, leftElement, title }: TopBarProps) {
   return (
     <div
       className="flex items-center justify-between px-4 h-14 safe-top"
       style={{ borderBottom: '1px solid var(--color-border)' }}
     >
       <div className="flex items-center" style={{ minWidth: 80 }}>
-        {showBack ? (
+        {leftElement ?? (showBack ? (
           <button onClick={onBack} className="p-2 -ml-2 rounded-xl active:scale-95 transition-transform" aria-label="Back">
             <ArrowLeft size={20} style={{ color: 'var(--color-primary)' }} />
           </button>
@@ -27,11 +28,11 @@ export function TopBar({ showBack, onBack, onSettings, rightElement, title }: To
               Therapist OS
             </span>
           </button>
-        )}
+        ))}
       </div>
 
       {title && (
-        <span className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+        <span className="text-[1.05rem] font-semibold font-display" style={{ color: 'var(--color-text)' }}>
           {title}
         </span>
       )}

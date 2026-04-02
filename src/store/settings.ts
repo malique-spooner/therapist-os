@@ -23,10 +23,12 @@ interface SettingsState {
   setActiveProvider: (id: AIProviderId) => void;
   setBudgetEnabled: (v: boolean) => void;
   setBudgetLimit: (pence: number) => void;
+  setBudgetSpent: (pence: number) => void;
   addBudgetSpent: (pence: number) => void;
   resetBudget: () => void;
   setAutoSwitch: (v: boolean) => void;
   setDisableAtLimit: (v: boolean) => void;
+  hydrateBudget: (payload: { limitPence: number; spentPence: number; autoSwitchAt80: boolean; disablePaidAtLimit: boolean }) => void;
   toggleFramework: (fw: 'cbt' | 'sdt' | 'behaviourism') => void;
 }
 
@@ -48,10 +50,18 @@ export const useSettingsStore = create<SettingsState>()(
       setActiveProvider: (activeProvider) => set({ activeProvider }),
       setBudgetEnabled: (budgetEnabled) => set({ budgetEnabled }),
       setBudgetLimit: (budgetLimit) => set({ budgetLimit }),
+      setBudgetSpent: (budgetSpent) => set({ budgetSpent }),
       addBudgetSpent: (pence) => set((s) => ({ budgetSpent: s.budgetSpent + pence })),
       resetBudget: () => set({ budgetSpent: 0 }),
       setAutoSwitch: (autoSwitchAtLimit) => set({ autoSwitchAtLimit }),
       setDisableAtLimit: (disableAtLimit) => set({ disableAtLimit }),
+      hydrateBudget: ({ limitPence, spentPence, autoSwitchAt80, disablePaidAtLimit }) =>
+        set({
+          budgetLimit: limitPence,
+          budgetSpent: spentPence,
+          autoSwitchAtLimit: autoSwitchAt80,
+          disableAtLimit: disablePaidAtLimit,
+        }),
       toggleFramework: (fw) =>
         set((s) => ({ frameworks: { ...s.frameworks, [fw]: !s.frameworks[fw] } })),
     }),

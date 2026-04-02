@@ -8,6 +8,7 @@ export interface Message {
   isVoice?: boolean;
   voiceDuration?: number;
   frameworksReferenced?: string[];
+  costPence?: number;
   isTyping?: boolean;
 }
 
