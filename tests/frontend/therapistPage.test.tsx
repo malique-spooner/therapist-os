@@ -61,29 +61,52 @@ describe('TherapistPage live mode', () => {
       preloadedContext: null,
     });
     useSettingsStore.setState({
-      activeProvider: 'claude-sonnet',
+      activeProvider: 'local-qwen',
       budgetSpent: 0,
     });
 
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({
+    global.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.endsWith('/api/ai/opening-message')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ message: 'Opening prompt' }),
+        } as Response);
+      }
+
+      if (url.endsWith('/api/ai/conversations')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [],
+        } as Response);
+      }
+
+      if (url.endsWith('/api/ai/live/session')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            clientSecret: 'live-secret-123',
+            model: 'gpt-realtime',
+            voice: 'alloy',
+            estimatedCostPerMinutePence: 6,
+            warning: 'Live voice currently uses a hosted realtime bridge while local voice is being finished.',
+          }),
+        } as Response);
+      }
+
+      if (url === 'https://api.openai.com/v1/realtime/calls') {
+        return Promise.resolve({
+          ok: true,
+          text: async () => 'answer-sdp',
+        } as Response);
+      }
+
+      return Promise.resolve({
         ok: true,
-        json: async () => ({ message: 'Opening prompt' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          clientSecret: 'live-secret-123',
-          model: 'gpt-realtime',
-          voice: 'alloy',
-          estimatedCostPerMinutePence: 6,
-          warning: 'Live mode uses OpenAI Realtime and costs about 6 pence per minute.',
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        text: async () => 'answer-sdp',
-      }) as unknown as typeof fetch;
+        json: async () => ({}),
+      } as Response);
+    }) as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -110,5 +133,73 @@ describe('TherapistPage live mode', () => {
     const calls = vi.mocked(global.fetch).mock.calls.map(([url]) => String(url));
     expect(calls).toContain('http://localhost:8000/api/ai/live/session');
     expect(calls).toContain('https://api.openai.com/v1/realtime/calls');
+  });
+
+  it('shows previous chats and allows starting a new one', async () => {
+    global.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.endsWith('/api/ai/opening-message')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ message: 'Opening prompt' }),
+        } as Response);
+      }
+
+      if (url.endsWith('/api/ai/conversations')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([{
+            id: 'conv-1',
+            startedAt: '2026-04-01T10:00:00Z',
+            endedAt: null,
+            sessionType: 'async',
+            provider: 'local-qwen',
+            model: 'qwen3:30b',
+            totalTokensUsed: 240,
+            totalCostPence: 0,
+            messages: [
+              {
+                id: 'msg-1',
+                role: 'user',
+                content: 'I felt overwhelmed after work.',
+                createdAt: '2026-04-01T10:00:00Z',
+                frameworksReferenced: [],
+                costPence: 0,
+              },
+            ],
+          }]),
+        } as Response);
+      }
+
+      if (url.endsWith('/api/ai/conversations/conv-1/messages')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([{
+            id: 'msg-1',
+            role: 'user',
+            content: 'I felt overwhelmed after work.',
+            createdAt: '2026-04-01T10:00:00Z',
+            frameworksReferenced: [],
+            costPence: 0,
+          }]),
+        } as Response);
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({}),
+      } as Response);
+    }) as unknown as typeof fetch;
+
+    render(<TherapistPage onBack={() => {}} preloadedContext={null} onClearContext={() => {}} />);
+
+    expect(await screen.findByText('Opening prompt')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /all chats/i }));
+
+    expect(await screen.findByText('All chats')).toBeInTheDocument();
+    expect(screen.getByText(/I felt overwhelmed after work/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /new chat/i })).toHaveLength(2);
   });
 });

@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models import LocationData, LocationDailySummary
+from ..models import LocationCompanionLog, LocationData, LocationDailySummary
+from ..schemas.open_prompts import LocationCompanionUpdateSchema
 from ..services.data_sources import DataSourceService
 from ..services.location_summary import LocationSummaryService
 from ..services.periods import date_window
@@ -39,6 +40,15 @@ def _serialize_summary(row: LocationDailySummary) -> dict:
     }
 
 
+def _serialize_companion_log(row: LocationCompanionLog) -> dict:
+    return {
+        "date": row.date.isoformat(),
+        "personIds": row.person_ids or [],
+        "contextLabel": row.context_label,
+        "note": row.note,
+    }
+
+
 @router.get("", dependencies=[Depends(verify_api_key)])
 def get_location(period: str = "this-week", db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
@@ -65,6 +75,31 @@ def get_location_summary(period: str = "this-week", db: Session = Depends(get_db
         .order_by(LocationDailySummary.date)
     ).all()
     return [_serialize_summary(row) for row in rows]
+
+
+@router.get("/companions", dependencies=[Depends(verify_api_key)])
+def get_location_companions(date: str, db: Session = Depends(get_db)) -> dict:
+    target_date = datetime.fromisoformat(date).date()
+    row = db.scalar(select(LocationCompanionLog).where(LocationCompanionLog.date == target_date))
+    if not row:
+      return {"date": target_date.isoformat(), "personIds": [], "contextLabel": None, "note": None}
+    return _serialize_companion_log(row)
+
+
+@router.put("/companions", dependencies=[Depends(verify_api_key)])
+def upsert_location_companions(date: str, payload: LocationCompanionUpdateSchema, db: Session = Depends(get_db)) -> dict:
+    target_date = datetime.fromisoformat(date).date()
+    row = db.scalar(select(LocationCompanionLog).where(LocationCompanionLog.date == target_date))
+    if not row:
+        row = LocationCompanionLog(date=target_date)
+        db.add(row)
+
+    row.person_ids = payload.personIds
+    row.context_label = payload.contextLabel
+    row.note = payload.note
+    db.commit()
+    db.refresh(row)
+    return _serialize_companion_log(row)
 
 
 @router.post("/owntracks")

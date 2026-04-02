@@ -9,7 +9,9 @@ def test_data_sources_list_returns_known_sources(client):
     assert response.status_code == 200
     payload = response.json()
     ids = {item["id"] for item in payload}
-    assert {"garmin", "truelayer", "spotify", "voice_journal"} <= ids
+    assert {"garmin", "truelayer", "spotify", "google_drive", "voice_journal"} <= ids
+    google_drive = next(item for item in payload if item["id"] == "google_drive")
+    assert google_drive["folderPath"] == "Therapist OS / Google Takeout"
 
 
 def test_data_source_connect_returns_hint_when_not_configured(client):

@@ -31,6 +31,13 @@ DEFAULT_SOURCES = {
         "icon": "🎵",
         "hint": "Spotify sync is not wired yet in this repo.",
     },
+    "google_drive": {
+        "name": "Google Drive",
+        "category": "Imports - Google Takeout archives, history exports",
+        "icon": "🗂️",
+        "hint": "Planned import path for Google Takeout archives. Connect Drive access and point exports at the Therapist OS / Google Takeout folder.",
+        "folder_path": "Therapist OS / Google Takeout",
+    },
     "youtube": {
         "name": "YouTube",
         "category": "Consumption - Watch History",
@@ -76,6 +83,7 @@ class DataSourceService:
             "garmin": self._garmin.is_configured,
             "truelayer": self._truelayer.is_configured,
             "spotify": self._spotify.is_configured,
+            "google_drive": False,
             "youtube": False,
             "owntracks": True,
             "google_calendar": False,
@@ -220,6 +228,7 @@ class DataSourceService:
             "available": record.available,
             "lastSync": self._relative_time(record.last_sync_at),
             "lastSyncStatus": record.last_sync_status,
+            "folderPath": DEFAULT_SOURCES[record.source_id].get("folder_path"),
             "connectionHint": record.connection_hint,
             "lastError": record.last_error,
         }

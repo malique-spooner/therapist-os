@@ -39,12 +39,11 @@ export function getDashboardRings(period: Period) {
 
 export function getWeeklyHabitCompletion(): number {
   const lastWeek = habitsHistory.slice(-7);
-  const habitKeys = ['workout', 'sleep-midnight', 'budget', 'social', 'meditation'] as const;
   let total = 0, completed = 0;
   for (const day of lastWeek) {
-    for (const key of habitKeys) {
+    for (const key of Object.keys(day.values)) {
       total++;
-      const val = day[key];
+      const val = day.values[key];
       if (typeof val === 'boolean' ? val : val > 0) completed++;
     }
   }

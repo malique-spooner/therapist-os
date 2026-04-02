@@ -1,14 +1,14 @@
 from datetime import datetime
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models import Relationship, RelationshipInteraction
-from ..schemas.relationships import RelationshipCreateSchema, RelationshipInteractionCreateSchema
+from ..models import Relationship, RelationshipInteraction, RelationshipScreenshotImport
+from ..schemas.relationships import RelationshipCreateSchema, RelationshipInteractionCreateSchema, RelationshipScreenshotImportSchema
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/relationships", tags=["relationships"], dependencies=[Depends(verify_api_key)])
@@ -41,6 +41,21 @@ def _serialize_interaction(row: RelationshipInteraction) -> dict:
         "type": row.interaction_type,
         "presenceScore": row.presence_score,
         "feelingWord": row.feeling_word,
+    }
+
+
+def _serialize_import(row: RelationshipScreenshotImport) -> dict:
+    return {
+        "id": row.id,
+        "source": row.source,
+        "filename": row.filename,
+        "mimeType": row.mime_type,
+        "fileSizeBytes": row.file_size_bytes,
+        "capturedAt": row.captured_at.isoformat() if row.captured_at else None,
+        "matchedPersonIds": row.matched_person_ids or [],
+        "detectedLabels": row.detected_labels or [],
+        "note": row.note,
+        "importedAt": row.imported_at.isoformat(),
     }
 
 
@@ -129,3 +144,42 @@ def get_due_relationships(db: Session = Depends(get_db)) -> list[dict]:
             )
     due.sort(key=lambda item: item["daysAgo"], reverse=True)
     return due
+
+
+@router.get("/imports")
+def get_relationship_imports(db: Session = Depends(get_db)) -> list[dict]:
+    rows = db.scalars(
+        select(RelationshipScreenshotImport)
+        .order_by(RelationshipScreenshotImport.imported_at.desc())
+    ).all()
+    return [_serialize_import(row) for row in rows]
+
+
+@router.post("/imports/snapchat", response_model=RelationshipScreenshotImportSchema)
+async def import_snapchat_best_friends_screenshot(
+    screenshot: UploadFile = File(...),
+    capturedAt: str | None = Form(default=None),
+    matchedPersonIds: str = Form(default=""),
+    detectedLabels: str = Form(default=""),
+    note: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    content = await screenshot.read()
+    matched_ids = [item.strip() for item in matchedPersonIds.split(",") if item.strip()]
+    labels = [item.strip() for item in detectedLabels.split(",") if item.strip()]
+    captured_at = datetime.fromisoformat(capturedAt) if capturedAt else None
+
+    row = RelationshipScreenshotImport(
+        source="snapchat_best_friends",
+        filename=screenshot.filename or "snapchat-best-friends.png",
+        mime_type=screenshot.content_type,
+        file_size_bytes=len(content) if content is not None else None,
+        captured_at=captured_at,
+        matched_person_ids=matched_ids,
+        detected_labels=labels,
+        note=note,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _serialize_import(row)

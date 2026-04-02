@@ -34,13 +34,15 @@ describe('SettingsPage data sources', () => {
 
     expect(await screen.findByText('Garmin Connect')).toBeInTheDocument();
     expect(screen.getByText(/GARMIN_EMAIL/i)).toBeInTheDocument();
+    expect(screen.getByText('Google Drive')).toBeInTheDocument();
+    expect(screen.getByText(/Folder: Therapist OS \/ Google Takeout/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Brain' })).toBeInTheDocument();
     expect(screen.getByText('Local LLM on Mac')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Garmin Connect' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open Brain' }));
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Sync now' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sync Garmin Connect now' })).toBeInTheDocument());
     expect(onOpenBrain).toHaveBeenCalledTimes(1);
   });
 
@@ -51,6 +53,7 @@ describe('SettingsPage data sources', () => {
 
     expect(await screen.findByText('Garmin Connect')).toBeInTheDocument();
     expect(screen.getByText('TrueLayer')).toBeInTheDocument();
+    expect(screen.getByText('Google Drive')).toBeInTheDocument();
     expect(screen.getByText(/Live connection status unavailable/i)).toBeInTheDocument();
   });
 });

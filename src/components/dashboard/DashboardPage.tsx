@@ -11,6 +11,7 @@ import { TodaySnapshot } from './TodaySnapshot';
 import { type Period } from '@/lib/mockDataUtils';
 import { api } from '@/lib/api';
 import { useApiQuery } from '@/hooks/useApiQuery';
+import { RetryNotice } from '@/components/ui/retry-notice';
 
 
 const PERIODS: { label: string; value: Period }[] = [
@@ -88,9 +89,7 @@ export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist, 
         <div className="pb-4">
           {isLoading && <div className="mx-4 h-40 rounded-3xl animate-pulse" style={{ backgroundColor: 'var(--color-surface-2)' }} />}
           {!isLoading && error && (
-            <button onClick={() => void refetch()} className="mx-4 w-[calc(100%-2rem)] rounded-3xl p-5 text-left" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}>
-              Could not load data. Tap to retry.
-            </button>
+            <RetryNotice onRetry={refetch} className="mx-4 w-[calc(100%-2rem)] p-5" />
           )}
           {!isLoading && !error && heroInsight && <HeroCard insight={heroInsight} onTalkAboutThis={onNavigateToTherapist} />}
         </div>

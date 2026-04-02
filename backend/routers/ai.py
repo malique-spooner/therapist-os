@@ -144,7 +144,7 @@ def get_conversation_messages(conversation_id: str, db: Session = Depends(get_db
 
 @router.post("/conversations")
 def start_conversation(payload: dict | None = None, db: Session = Depends(get_db)) -> dict:
-    provider_id = (payload or {}).get("provider", "claude-sonnet")
+    provider_id = (payload or {}).get("provider", "local-qwen")
     provider = select_provider(provider_id)
     conversation = AIConversation(ai_provider=provider.id, ai_model=provider.model, session_type="async")
     db.add(conversation)

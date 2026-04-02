@@ -26,10 +26,10 @@ describe('HabitsPage', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders identity-style habit cards with hold-to-complete copy', async () => {
+  it('renders the classic habits layout with simple row interactions', async () => {
     render(<HabitsPage onSettings={() => {}} />);
 
     expect(await screen.findByText('Read 10 pages')).toBeInTheDocument();
-    expect(screen.getByText('Hold to complete')).toBeInTheDocument();
+    expect(screen.getByText('Habit Tracker')).toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { ArrowRight, Sparkles, X } from 'lucide-react';
 
 import { DashboardPage } from './dashboard/DashboardPage';
 import { TherapistPage } from './therapist/TherapistPage';
@@ -18,6 +19,7 @@ import { ConsumptionPage } from './consumption/ConsumptionPage';
 import { NutritionPage } from './nutrition/NutritionPage';
 import { RelationshipsPage } from './relationships/RelationshipsPage';
 import { LocationPage } from './location/LocationPage';
+import { api, type AppOpenPromptPayload } from '@/lib/api';
 
 type PageId =
   | 'dashboard'
@@ -46,20 +48,44 @@ const pageDepth: Record<PageId, number> = {
 };
 
 export function AppShell() {
+  const [mounted, setMounted] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
   const [direction, setDirection] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [therapistContext, setTherapistContext] = useState<string | null>(null);
+  const [openPrompt, setOpenPrompt] = useState<AppOpenPromptPayload | null>(null);
+  const [openPromptVisible, setOpenPromptVisible] = useState(false);
   const hasCheckedInToday = useCheckInStore((state) => state.hasCheckedInToday)();
   const checkInHydrated = useCheckInStore((state) => state.hydrated);
   const hydrateCheckIns = useCheckInStore((state) => state.hydrateFromApi);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!checkInHydrated) {
       void hydrateCheckIns();
     }
   }, [checkInHydrated, hydrateCheckIns]);
+
+  useEffect(() => {
+    if (!mounted || !checkInHydrated || !hasCheckedInToday) return;
+
+    let active = true;
+    void api.getOpenPrompt().then((prompt) => {
+      if (!active) return;
+      setOpenPrompt(prompt);
+      setOpenPromptVisible(Boolean(prompt));
+    }).catch(() => {
+      if (!active) return;
+      setOpenPrompt(null);
+      setOpenPromptVisible(false);
+    });
+
+    return () => { active = false; };
+  }, [mounted, checkInHydrated, hasCheckedInToday]);
 
   function navigateTo(page: PageId) {
     setDirection(pageDepth[page] >= pageDepth[currentPage] ? 1 : -1);
@@ -79,6 +105,36 @@ export function AppShell() {
   function navigateToBrain() {
     setShowSettings(false);
     navigateTo('brain');
+  }
+
+  async function dismissOpenPrompt() {
+    if (!openPrompt) return;
+    setOpenPromptVisible(false);
+    try {
+      await api.dismissOpenPrompt(openPrompt.promptKey);
+    } catch {
+      // best effort
+    }
+  }
+
+  async function completeOpenPrompt() {
+    if (!openPrompt) return;
+    setOpenPromptVisible(false);
+    try {
+      await api.completeOpenPrompt(openPrompt.promptKey);
+    } catch {
+      // best effort
+    }
+
+    const targetPage = openPrompt.targetPage as PageId | 'dashboard';
+    if (targetPage === 'therapist' && openPrompt.question) {
+      navigateToTherapist(openPrompt.question);
+      return;
+    }
+
+    if (targetPage in pageDepth) {
+      navigateTo(targetPage as PageId);
+    }
   }
 
   let currentContent: React.ReactNode = null;
@@ -185,7 +241,57 @@ export function AppShell() {
         )}
       </AnimatePresence>
 
-      {!hasCheckedInToday && <DailyCheckIn onComplete={() => navigateHome()} />}
+      <AnimatePresence>
+        {openPrompt && openPromptVisible && mounted && checkInHydrated && hasCheckedInToday && (
+          <motion.div
+            className="fixed inset-x-4 bottom-24 z-30 rounded-[28px] p-4"
+            style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: '0 20px 50px rgba(0,0,0,0.12)' }}
+            initial={{ y: 30, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 30, opacity: 0 }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(82,183,136,0.12)' }}>
+                  <Sparkles size={18} style={{ color: 'var(--color-accent)' }} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{openPrompt.title}</p>
+                  <p className="text-sm mt-1 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                    {openPrompt.question}
+                  </p>
+                  <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                    {openPrompt.supportingText}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => { void dismissOpenPrompt(); }} className="p-2 rounded-xl" aria-label="Dismiss app open prompt">
+                <X size={18} style={{ color: 'var(--color-text-muted)' }} />
+              </button>
+            </div>
+
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => { void dismissOpenPrompt(); }}
+                className="flex-1 h-11 rounded-2xl font-medium"
+                style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}
+              >
+                Not now
+              </button>
+              <button
+                onClick={() => { void completeOpenPrompt(); }}
+                className="flex-1 h-11 rounded-2xl font-semibold flex items-center justify-center gap-2"
+                style={{ backgroundColor: 'var(--color-dark)', color: '#fff' }}
+              >
+                {openPrompt.primaryLabel}
+                <ArrowRight size={15} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {mounted && checkInHydrated && !hasCheckedInToday && <DailyCheckIn onComplete={() => navigateHome()} />}
     </div>
   );
 }

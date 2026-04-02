@@ -95,7 +95,7 @@ It helps the app suggest safer, smaller, more testable behaviour changes.
 
 The intended architecture is:
 - VPS stores data, syncs sources, and serves the app
-- Mac runs local private inference for the Brain composer, therapist, Whisper, and optional TTS
+- Mac runs `Qwen3 30B` as the primary local model for the Brain composer and therapist, plus local Whisper and optional local TTS
 - phone reads the latest saved outputs from the VPS
 
 ## Next Implementation Goal

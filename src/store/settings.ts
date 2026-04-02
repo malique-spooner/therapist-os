@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type Theme = 'light' | 'dark' | 'system';
-export type AIProviderId = 'gemini-flash' | 'gemini-pro' | 'claude-haiku' | 'claude-sonnet' | 'groq-llama';
+export type AIProviderId = 'local-qwen';
 
 interface SettingsState {
   theme: Theme;
@@ -37,7 +37,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       theme: 'system',
       textSize: 'medium',
-      activeProvider: 'claude-sonnet',
+      activeProvider: 'local-qwen',
       budgetEnabled: true,
       budgetLimit: 1000, // £10.00 in pence
       budgetSpent: 240,  // £2.40 pre-populated for demo

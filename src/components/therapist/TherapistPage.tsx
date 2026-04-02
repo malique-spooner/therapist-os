@@ -2,14 +2,14 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Mic, MicOff, RefreshCw, Radio } from 'lucide-react';
+import { Send, Mic, MicOff, Radio, MessagesSquare, Plus, X } from 'lucide-react';
 import { TopBar } from '@/components/navigation/TopBar';
 import { MessageBubble, TypingIndicator } from './MessageBubble';
 import { Waveform } from './Waveform';
 import { BudgetBanner } from './BudgetBanner';
 import { useSessionStore } from '@/store/session';
 import { useSettingsStore } from '@/store/settings';
-import { api } from '@/lib/api';
+import { api, type ConversationPayload, type ConversationMessagePayload } from '@/lib/api';
 import { formatCost } from '@/lib/costCalculator';
 
 
@@ -21,14 +21,18 @@ interface TherapistPageProps {
 }
 
 export function TherapistPage({ onBack, onSettings, preloadedContext, onClearContext }: TherapistPageProps) {
-  const { messages, isTyping, mode, liveState, addMessage, setTyping, setMode, setLiveState, clearSession } = useSessionStore();
-  const { activeProvider, addBudgetSpent } = useSettingsStore();
+  const { messages, isTyping, mode, liveState, addMessage, replaceMessages, setTyping, setMode, setLiveState, clearSession } = useSessionStore();
+  const { addBudgetSpent } = useSettingsStore();
 
   const [input, setInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSupported, setRecordingSupported] = useState(true);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [sessionCost, setSessionCost] = useState(0);
+  const [conversations, setConversations] = useState<ConversationPayload[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const openingInjected = useRef(false);
@@ -57,6 +61,56 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
     setSessionCost(0);
     openingInjected.current = false;
     void injectOpeningMessage();
+  }
+
+  function summariseConversation(conversation: ConversationPayload) {
+    const firstUserMessage = conversation.messages.find((message) => message.role === 'user')?.content;
+    const firstAnyMessage = conversation.messages[0]?.content;
+    const source = firstUserMessage || firstAnyMessage || 'Untitled conversation';
+    return source.length > 54 ? `${source.slice(0, 54).trim()}…` : source;
+  }
+
+  function mapConversationMessages(items: ConversationMessagePayload[]) {
+    return items.map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      timestamp: new Date(message.createdAt),
+      frameworksReferenced: message.frameworksReferenced ?? undefined,
+      costPence: message.costPence ?? undefined,
+    }));
+  }
+
+  async function loadConversations() {
+    setHistoryLoading(true);
+    setHistoryError(null);
+
+    try {
+      const nextConversations = await api.getConversations();
+      setConversations(nextConversations);
+    } catch {
+      setHistoryError('Could not load previous chats right now.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function openConversation(nextConversation: ConversationPayload) {
+    setHistoryError(null);
+    setHistoryLoading(true);
+
+    try {
+      const conversationMessages = await api.getConversationMessages(nextConversation.id);
+      replaceMessages(mapConversationMessages(conversationMessages));
+      setConversationId(nextConversation.id);
+      setSessionCost(nextConversation.totalCostPence);
+      setHistoryOpen(false);
+      openingInjected.current = true;
+    } catch {
+      setHistoryError('Could not open that chat right now.');
+    } finally {
+      setHistoryLoading(false);
+    }
   }
 
   // Inject opening message on first load — ref guard prevents StrictMode double-invoke
@@ -101,6 +155,10 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
       cleanupLiveSession();
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     };
+  }, []);
+
+  useEffect(() => {
+    void loadConversations();
   }, []);
 
   function extractLiveResponseText(event: Record<string, unknown>): string {
@@ -245,7 +303,7 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
     setTyping(true);
 
     try {
-      const response = await api.sendMessage(content, activeProvider, conversationId ?? undefined);
+      const response = await api.sendMessage(content, 'local-qwen', conversationId ?? undefined);
       setConversationId(response.conversationId);
       setSessionCost(response.sessionCostPence);
       addMessage({
@@ -282,7 +340,7 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
     }
 
     const confirmed = window.confirm(
-      "Live mode uses OpenAI's Realtime API.\nEstimated cost: ~£0.06 per minute.\nA 10-minute session costs approximately £0.60.\n\nContinue?"
+      "Live voice currently uses a hosted realtime bridge while local voice is being finished.\nEstimated cost: ~£0.06 per minute.\nA 10-minute session costs approximately £0.60.\n\nContinue?"
     );
     if (!confirmed) {
       return;
@@ -308,7 +366,7 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
       addMessage({
         id: `live-session-error-${Date.now()}`,
         role: 'ai',
-        content: 'Live mode is not available right now. Check the OpenAI setup and try again.',
+        content: 'Live mode is not available right now. Check the realtime voice setup and try again.',
         timestamp: new Date(),
       });
     }
@@ -388,26 +446,135 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
     }
   }
 
-  const providerLabel = activeProvider.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
-
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
       <TopBar
         showBack={Boolean(onBack)}
         onBack={onBack}
         onSettings={onSettings}
-        title="AI Therapist"
+        title="Mind AI Therapist"
         rightElement={
-          <button onClick={resetConversation} className="p-2 -mr-2 rounded-xl active:scale-90 transition-transform" aria-label="New session">
-            <RefreshCw size={18} style={{ color: 'var(--color-text-muted)' }} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                setHistoryOpen(true);
+                void loadConversations();
+              }}
+              className="p-2 rounded-xl active:scale-90 transition-transform"
+              aria-label="All chats"
+            >
+              <MessagesSquare size={18} style={{ color: 'var(--color-text-muted)' }} />
+            </button>
+            <button onClick={resetConversation} className="p-2 -mr-2 rounded-xl active:scale-90 transition-transform" aria-label="New chat">
+              <Plus size={18} style={{ color: 'var(--color-text-muted)' }} />
+            </button>
+          </div>
         }
       />
 
-      {/* Provider + mode bar */}
+      <AnimatePresence>
+        {historyOpen && (
+          <>
+            <motion.button
+              type="button"
+              className="absolute inset-0 z-20"
+              style={{ backgroundColor: 'rgba(7, 16, 11, 0.28)' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setHistoryOpen(false)}
+              aria-label="Close chat history"
+            />
+            <motion.aside
+              className="absolute top-0 right-0 z-30 h-full w-[86%] max-w-sm border-l"
+              style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+            >
+              <div className="flex items-center justify-between px-4 pt-5 pb-4" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>All chats</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                    Reopen previous therapist conversations or start a new one.
+                  </p>
+                </div>
+                <button onClick={() => setHistoryOpen(false)} className="p-2 rounded-xl" aria-label="Close all chats">
+                  <X size={18} style={{ color: 'var(--color-text-muted)' }} />
+                </button>
+              </div>
+
+              <div className="px-4 py-4" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                <button
+                  onClick={() => {
+                    resetConversation();
+                    setHistoryOpen(false);
+                  }}
+                  className="w-full h-11 rounded-2xl font-semibold flex items-center justify-center gap-2"
+                  style={{ backgroundColor: 'var(--color-dark)', color: '#fff' }}
+                >
+                  <Plus size={16} />
+                  New chat
+                </button>
+              </div>
+
+              <div className="overflow-y-auto h-[calc(100%-123px)] px-3 py-3">
+                {historyLoading && (
+                  <div className="px-3 py-8 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>
+                    Loading chats...
+                  </div>
+                )}
+                {!historyLoading && historyError && (
+                  <div className="px-3 py-8 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>
+                    {historyError}
+                  </div>
+                )}
+                {!historyLoading && !historyError && conversations.length === 0 && (
+                  <div className="px-3 py-8 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>
+                    No previous chats yet. Start your first conversation.
+                  </div>
+                )}
+                {!historyLoading && !historyError && conversations.map((conversation) => (
+                  <button
+                    key={conversation.id}
+                    onClick={() => { void openConversation(conversation); }}
+                    className="w-full text-left rounded-3xl px-4 py-4 mb-3 transition-colors"
+                    style={{
+                      backgroundColor: conversation.id === conversationId ? 'var(--color-surface-3)' : 'var(--color-surface-2)',
+                      border: `1px solid ${conversation.id === conversationId ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>
+                          {summariseConversation(conversation)}
+                        </p>
+                        <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                          {new Date(conversation.startedAt).toLocaleDateString(undefined, {
+                            day: 'numeric',
+                            month: 'short',
+                          })} · {conversation.messages.length} messages
+                        </p>
+                      </div>
+                      {conversation.totalCostPence > 0 && (
+                        <span className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                          {formatCost(conversation.totalCostPence)}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Model + mode bar */}
       <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
         <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          {providerLabel}{sessionCost > 0 ? ` · Session: ${formatCost(sessionCost)}` : ''}
+          Local Mind · Qwen3 30B{sessionCost > 0 ? ` · Session: ${formatCost(sessionCost)}` : ''}
         </span>
         <button
           onClick={() => { void toggleLive(); }}

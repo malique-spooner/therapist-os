@@ -57,7 +57,7 @@ export function BrainPage({ onBack }: BrainPageProps) {
                 <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'rgba(27,67,50,0.75)' }}>Current brain</p>
                 <h1 className="text-2xl font-semibold mt-2" style={{ color: 'var(--color-dark)' }}>{brainOverview.version}</h1>
                 <p className="text-sm mt-2 max-w-[34ch] leading-relaxed" style={{ color: 'rgba(27,67,50,0.82)' }}>
-                  Fresh interpretation, private local inference, and transparent layer-by-layer thinking.
+                  Fresh interpretation, private local inference with Qwen3 30B, and transparent layer-by-layer thinking.
                 </p>
               </div>
               <div className="w-14 h-14 rounded-[20px] flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(255,255,255,0.72)' }}>

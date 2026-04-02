@@ -52,4 +52,35 @@ describe('api client', () => {
     expect(String(url)).toBe('http://localhost:8000/api/ai/live/session');
     expect(init?.method).toBe('POST');
   });
+
+  it('calls app-open prompt and location companion endpoints with the expected paths', async () => {
+    await api.getOpenPrompt();
+    await api.dismissOpenPrompt('location_people_2026-03-31');
+    await api.getLocationCompanions('2026-03-31');
+    await api.saveLocationCompanions('2026-03-31', {
+      personIds: ['alex'],
+      contextLabel: 'Social outing',
+      note: 'Dinner after work',
+    });
+
+    const calls = vi.mocked(global.fetch).mock.calls.map(([url]) => String(url));
+    expect(calls).toContain('http://localhost:8000/api/open-prompts/current');
+    expect(calls).toContain('http://localhost:8000/api/open-prompts/location_people_2026-03-31/dismiss');
+    expect(calls).toContain('http://localhost:8000/api/location/companions?date=2026-03-31');
+  });
+
+  it('uploads snapchat best-friends screenshot imports as multipart form data', async () => {
+    await api.importSnapchatBestFriendsScreenshot({
+      file: new File(['image'], 'best-friends.png', { type: 'image/png' }),
+      capturedAt: '2026-04-02T08:30:00',
+      matchedPersonIds: ['alex'],
+      detectedLabels: ['Alex'],
+      note: 'Morning check',
+    });
+
+    const [url, init] = vi.mocked(global.fetch).mock.calls[0];
+    expect(String(url)).toBe('http://localhost:8000/api/relationships/imports/snapchat');
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBeInstanceOf(FormData);
+  });
 });

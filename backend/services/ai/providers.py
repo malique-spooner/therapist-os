@@ -81,6 +81,15 @@ from .openai import OpenAIProvider  # noqa: E402
 
 
 REAL_PROVIDERS: dict[str, AIProvider] = {
+    "local-qwen": DeterministicFallbackProvider(
+        "local-qwen",
+        "Local Mind",
+        "qwen3:30b",
+        "Private on Mac",
+        0,
+        "free",
+        ["private therapist chat", "daily insights", "pattern synthesis"],
+    ),
     "gemini-flash": GoogleProvider("gemini-flash", "Gemini Flash", "gemini-2.0-flash", "Free", 0),
     "gemini-pro": GoogleProvider("gemini-pro", "Gemini Pro", "gemini-1.5-pro", "Free tier", 0),
     "claude-haiku": AnthropicProvider("claude-haiku", "Claude Haiku", "claude-haiku-4-5-20251001", "~£0.02 per session", 2),
@@ -128,4 +137,4 @@ def select_provider(provider_id: str) -> AIProvider:
         return provider
     if provider_id in FALLBACK_PROVIDERS:
         return FALLBACK_PROVIDERS[provider_id]
-    return FALLBACK_PROVIDERS["claude-sonnet"]
+    return FALLBACK_PROVIDERS["local-qwen"]

@@ -28,7 +28,7 @@ The long-term goal is not just logging. It is helping a single person notice pat
 
 The app is now moving toward a privacy-first architecture:
 - the VPS remains the always-on source of truth for app data and APIs
-- the Mac is intended to run local inference for the Brain, therapist chat, Whisper transcription, and optional TTS
+- the Mac is intended to run `Qwen3 30B` for local inference, plus local Whisper transcription and optional local TTS
 - the phone app always talks to the VPS
 - the VPS talks to the Mac when private local AI work is needed
 

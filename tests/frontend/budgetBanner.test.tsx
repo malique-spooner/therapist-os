@@ -9,7 +9,7 @@ describe('BudgetBanner', () => {
     useSettingsStore.setState({
       theme: 'system',
       textSize: 'medium',
-      activeProvider: 'claude-sonnet',
+      activeProvider: 'local-qwen',
       budgetEnabled: true,
       budgetLimit: 1000,
       budgetSpent: 850,

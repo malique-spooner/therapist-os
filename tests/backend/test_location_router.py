@@ -40,3 +40,28 @@ def test_owntracks_webhook_rejects_invalid_secret(client, monkeypatch):
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid OwnTracks secret"
+
+
+def test_location_companion_tags_can_be_saved_and_loaded(client):
+    update = client.put(
+        "/api/location/companions?date=2026-03-31",
+        headers={"X-API-Key": "dev-secret-key"},
+        json={
+            "personIds": ["alex-id", "mum-id"],
+            "contextLabel": "Social outing",
+            "note": "Dinner after work",
+        },
+    )
+
+    assert update.status_code == 200
+    assert update.json()["personIds"] == ["alex-id", "mum-id"]
+
+    response = client.get(
+        "/api/location/companions?date=2026-03-31",
+        headers={"X-API-Key": "dev-secret-key"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["contextLabel"] == "Social outing"
+    assert payload["note"] == "Dinner after work"

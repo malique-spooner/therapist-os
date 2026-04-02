@@ -10,6 +10,7 @@ class DataSourceSchema(BaseModel):
     available: bool
     lastSync: str | None = None
     lastSyncStatus: str | None = None
+    folderPath: str | None = None
     connectionHint: str | None = None
     lastError: str | None = None
 

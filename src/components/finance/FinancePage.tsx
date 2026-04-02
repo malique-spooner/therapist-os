@@ -9,6 +9,7 @@ import { InsightCard } from '@/components/dashboard/InsightCard';
 import type { Period } from '@/lib/mockDataUtils';
 import { api } from '@/lib/api';
 import { useApiQuery } from '@/hooks/useApiQuery';
+import { RetryNotice } from '@/components/ui/retry-notice';
 
 const periods: { label: string; value: Period }[] = [
   { label: 'This Week', value: 'this-week' },
@@ -66,9 +67,7 @@ export function FinancePage({ onBack, onSettings, onTalkAboutThis }: FinancePage
       <TopBar showBack onBack={onBack} onSettings={onSettings} title="Finance" />
       <div className="flex-1 overflow-y-auto pb-6">
         {error && (
-          <button onClick={() => void refetch()} className="mx-4 mb-4 w-[calc(100%-2rem)] rounded-3xl p-4 text-left" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}>
-            Could not load data. Tap to retry.
-          </button>
+          <RetryNotice onRetry={refetch} className="mx-4 mb-4 w-[calc(100%-2rem)]" />
         )}
         <FinanceSummary days={days} />
         <SpendingDonut days={days} />

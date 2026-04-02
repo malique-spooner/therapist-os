@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { TopBar } from '@/components/navigation/TopBar';
-
 import { useSettingsStore } from '@/store/settings';
 import { Brain, CheckCircle2, Circle, ExternalLink, Lock, Radar, Mic2, AudioLines, Laptop } from 'lucide-react';
 import { api, type DataSourcePayload } from '@/lib/api';
+import { RetryNotice } from '@/components/ui/retry-notice';
 
 
 interface SettingsPageProps {
@@ -51,6 +51,19 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     lastError: null,
   },
   {
+    id: 'google_drive',
+    name: 'Google Drive',
+    category: 'Imports - Google Takeout archives and history exports',
+    icon: '🗂️',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    folderPath: 'Therapist OS / Google Takeout',
+    connectionHint: 'Planned import source for Google Takeout. Point recurring exports at the Therapist OS / Google Takeout folder.',
+    lastError: null,
+  },
+  {
     id: 'owntracks',
     name: 'OwnTracks',
     category: 'Location - live phone pings and daily movement summaries',
@@ -76,6 +89,8 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
   },
 ];
 
+const DATA_SOURCES_FALLBACK_MESSAGE = 'Live connection status unavailable. Showing saved connections. Tap to retry.';
+
 function SectionHeader({ title }: { title: string }) {
   return (
     <div className="px-4 pt-6 pb-2">
@@ -86,6 +101,19 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
+function mergeDataSources(sources: DataSourcePayload[]) {
+  const byId = new Map(sources.map((source) => [source.id, source]));
+
+  return DEFAULT_DATA_SOURCES.map((source) => ({
+    ...source,
+    ...byId.get(source.id),
+  }));
+}
+
+function mergeDataSource(source: DataSourcePayload) {
+  return mergeDataSources([source])[0];
+}
+
 
 export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
   const { theme, setTheme, textSize, setTextSize } = useSettingsStore();
@@ -93,15 +121,16 @@ export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
   const [dataSourcesError, setDataSourcesError] = useState<string | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
+  async function refreshDataSources() {
+    const sources = await api.getDataSources();
+    setDataSources(mergeDataSources(sources));
+    setDataSourcesError(null);
+  }
+
   useEffect(() => {
     let active = true;
-    void api.getDataSources().then((sources) => {
-      if (active) {
-        setDataSources(sources);
-        setDataSourcesError(null);
-      }
-    }).catch(() => {
-      if (active) setDataSourcesError('Live connection status unavailable. Showing saved connections. Tap to retry.');
+    void refreshDataSources().catch(() => {
+      if (active) setDataSourcesError(DATA_SOURCES_FALLBACK_MESSAGE);
     });
     return () => { active = false; };
   }, []);
@@ -113,11 +142,12 @@ export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
       const result = source.connected
         ? await api.syncDataSource(source.id)
         : await api.connectDataSource(source.id);
-      setDataSources((current) => current.map((item) => item.id === source.id ? result.source : item));
+      const mergedSource = mergeDataSource(result.source);
+      setDataSources((current) => current.map((item) => item.id === source.id ? mergedSource : item));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load data. Tap to retry.';
       setDataSources((current) => current.map((item) => item.id === source.id ? { ...item, lastError: message } : item));
-      setDataSourcesError('Live connection status unavailable. Showing saved connections. Tap to retry.');
+      setDataSourcesError(DATA_SOURCES_FALLBACK_MESSAGE);
     } finally {
       setActiveActionId(null);
     }
@@ -136,7 +166,7 @@ export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
                 <Brain size={18} style={{ color: 'var(--color-dark)' }} />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold" style={{ color: 'var(--color-dark)' }}>Brain v2.2</p>
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-dark)' }}>Brain v3</p>
                 <p className="text-xs mt-1 leading-relaxed" style={{ color: 'rgba(27,67,50,0.8)' }}>
                   A 10-layer brain combines data quality, pattern finding, prediction, text intelligence, causal learning, and private local AI on your Mac.
                 </p>
@@ -177,8 +207,8 @@ export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
               {
                 icon: <Laptop size={16} style={{ color: 'var(--color-accent)' }} />,
                 title: 'Local LLM on Mac',
-                desc: 'Therapist chat, daily insight refreshes, and profile writing run privately on your Mac when it is available.',
-                status: 'Primary',
+                desc: 'Primary model: Qwen3 30B, running locally on your Mac for private therapist chat, daily insight refreshes, and profile writing. It is the single-model setup for now, chosen for deeper pattern synthesis while keeping everything private on your machine.',
+                status: 'Qwen3 30B',
               },
               {
                 icon: <Mic2 size={16} style={{ color: 'var(--color-accent)' }} />,
@@ -228,6 +258,9 @@ export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
                 {!source.connected && source.connectionHint && (
                   <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{source.connectionHint}</p>
                 )}
+                {source.folderPath && (
+                  <p className="text-xs" style={{ color: 'var(--color-accent)' }}>Folder: {source.folderPath}</p>
+                )}
                 {source.lastError && (
                   <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{source.lastError}</p>
                 )}
@@ -242,6 +275,13 @@ export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
                   style={{ backgroundColor: source.connected ? 'var(--color-border)' : 'var(--color-primary)', color: source.connected ? 'var(--color-text-muted)' : '#fff' }}
                   onClick={() => { void handleSourceAction(source); }}
                   disabled={activeActionId === source.id}
+                  aria-label={
+                    activeActionId === source.id
+                      ? `Working on ${source.name}`
+                      : source.connected
+                        ? `Sync ${source.name} now`
+                        : `Connect ${source.name}`
+                  }
                 >
                   {activeActionId === source.id ? 'Working...' : source.connected ? 'Sync now' : 'Connect'}
                 </button>
@@ -251,20 +291,11 @@ export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
         </div>
         {dataSourcesError && (
           <div className="px-4 pt-2">
-            <button
-              className="w-full rounded-2xl px-4 py-3 text-left text-xs"
-              style={{ color: 'var(--color-text-muted)', backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
-              onClick={() => {
-                void api.getDataSources()
-                  .then((sources) => {
-                    setDataSources(sources);
-                    setDataSourcesError(null);
-                  })
-                  .catch(() => setDataSourcesError('Live connection status unavailable. Showing saved connections. Tap to retry.'));
-              }}
-            >
-              {dataSourcesError}
-            </button>
+            <RetryNotice
+              message={dataSourcesError}
+              onRetry={() => refreshDataSources().catch(() => setDataSourcesError(DATA_SOURCES_FALLBACK_MESSAGE))}
+              className="w-full rounded-2xl px-4 py-3 text-xs"
+            />
           </div>
         )}
 

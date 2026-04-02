@@ -19,6 +19,7 @@ interface SessionState {
   liveState: 'idle' | 'listening' | 'processing' | 'speaking';
   preloadedContext: string | null;
   addMessage: (msg: Message) => void;
+  replaceMessages: (messages: Message[]) => void;
   setTyping: (v: boolean) => void;
   setMode: (m: 'async' | 'live') => void;
   setLiveState: (s: 'idle' | 'listening' | 'processing' | 'speaking') => void;
@@ -34,6 +35,7 @@ export const useSessionStore = create<SessionState>()((set) => ({
   preloadedContext: null,
 
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
+  replaceMessages: (messages) => set({ messages }),
   setTyping: (isTyping) => set({ isTyping }),
   setMode: (mode) => set({ mode }),
   setLiveState: (liveState) => set({ liveState }),

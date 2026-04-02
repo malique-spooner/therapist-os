@@ -13,6 +13,8 @@
 @layer base {
   :root {
     /* Therapist OS Design Tokens */
+    --font-sans: "SF Pro Text", "SF Pro Display", "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, "Times New Roman", serif;
     --color-primary: #2D6A4F;
     --color-accent: #52B788;
     --color-light: #B7E4C7;
@@ -90,6 +92,7 @@
   body {
     background-color: var(--color-surface);
     color: var(--color-text);
+    font-family: var(--font-sans);
   }
 
   button, input, textarea, select {
@@ -97,7 +100,7 @@
   }
 
   h1, h2, h3, [data-display='true'] {
-    font-family: var(--font-display), Georgia, "Times New Roman", serif;
+    font-family: var(--font-display);
     letter-spacing: -0.02em;
   }
 
@@ -127,7 +130,7 @@
   .bg-surface { background-color: var(--color-surface); }
   .bg-surface-2 { background-color: var(--color-surface-2); }
   .border-color { border-color: var(--color-border); }
-  .font-display { font-family: var(--font-display), Georgia, "Times New Roman", serif; letter-spacing: -0.02em; }
+  .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
 }
 
 @keyframes pulse-ring {

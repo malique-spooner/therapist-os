@@ -1,6 +1,6 @@
 """nutrition relationships and checkins
 
-Revision ID: 0005_nutrition_relationships_checkins
+Revision ID: 0005_rel_checkins
 Revises: 0004_location_data
 Create Date: 2026-04-02 02:25:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0005_nutrition_relationships_checkins"
+revision = "0005_rel_checkins"
 down_revision = "0004_location_data"
 branch_labels = None
 depends_on = None

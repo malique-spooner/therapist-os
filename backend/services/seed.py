@@ -9,13 +9,27 @@ from sqlalchemy.orm import Session
 from ..models import AIConversation, AIMessage, DailyCheckIn, DataSourceConnection, FinanceData, Habit, HabitLog, HealthData, MonthlyBudget, MusicData, NutritionLog, Relationship, RelationshipInteraction, UserProfile, WeatherData
 
 DEFAULT_HABITS = [
-    {"id": "workout", "name": "Morning workout", "sub_label": "movement", "category": "Movement", "category_icon": "🏃", "habit_type": "boolean", "frequency": "daily"},
-    {"id": "sleep-midnight", "name": "Sleep before midnight", "sub_label": "sleep hygiene", "category": "Sleep", "category_icon": "🌙", "habit_type": "boolean", "frequency": "daily"},
-    {"id": "budget", "name": "Stayed within daily budget", "sub_label": "finance", "category": "Finance", "category_icon": "💷", "habit_type": "boolean", "frequency": "daily"},
-    {"id": "mood", "name": "Mood check-in", "sub_label": "how are you feeling?", "category": "Mind", "category_icon": "🧠", "habit_type": "scale", "max_value": 10, "frequency": "daily"},
-    {"id": "water", "name": "Water intake", "sub_label": "stay hydrated", "category": "Nutrition", "category_icon": "💧", "habit_type": "numeric", "unit": "litres", "frequency": "daily"},
-    {"id": "social", "name": "Social interaction", "sub_label": "meaningful connection", "category": "Social", "category_icon": "🤝", "habit_type": "boolean", "frequency": "daily"},
-    {"id": "meditation", "name": "Meditation / breathing", "sub_label": "mindfulness", "category": "Mind", "category_icon": "🧘", "habit_type": "boolean", "frequency": "daily"},
+    {"id": "racket-sport", "name": "Racket sport", "sub_label": "1x per week", "category": "Movement", "category_icon": "🎾", "habit_type": "boolean", "frequency": "1x per week"},
+    {"id": "team-sport", "name": "Team sport", "sub_label": "1x per week", "category": "Movement", "category_icon": "⚽", "habit_type": "boolean", "frequency": "1x per week"},
+    {"id": "running", "name": "Running", "sub_label": "1x per week", "category": "Movement", "category_icon": "🏃", "habit_type": "boolean", "frequency": "1x per week"},
+    {"id": "passive-exercise", "name": "Passive exercise (cycling)", "sub_label": "1x per week", "category": "Movement", "category_icon": "🚲", "habit_type": "boolean", "frequency": "1x per week"},
+    {"id": "cad", "name": "CAD", "sub_label": "2x per week", "category": "Learning", "category_icon": "📐", "habit_type": "boolean", "frequency": "2x per week"},
+    {"id": "computer-science", "name": "Computer Science", "sub_label": "3x per week", "category": "Learning", "category_icon": "💻", "habit_type": "boolean", "frequency": "3x per week"},
+    {"id": "read-pages", "name": "Read 25 pages", "sub_label": "per week", "category": "Learning", "category_icon": "📚", "habit_type": "numeric", "unit": "pages", "frequency": "25 pages per week"},
+    {"id": "audiobooks", "name": "Listen to 6 audiobooks", "sub_label": "per year", "category": "Learning", "category_icon": "🎧", "habit_type": "boolean", "frequency": "6 per year"},
+    {"id": "watch-episodes", "name": "Watch 2 episodes", "sub_label": "per week", "category": "Media", "category_icon": "📺", "habit_type": "boolean", "frequency": "2 per week"},
+    {"id": "listen-music", "name": "Listen to music", "sub_label": "stay connected to sound", "category": "Media", "category_icon": "🎵", "habit_type": "boolean", "frequency": "daily"},
+    {"id": "facetime", "name": "FaceTime", "sub_label": "5x per week", "category": "Social", "category_icon": "📱", "habit_type": "boolean", "frequency": "5x per week"},
+    {"id": "irl", "name": "IRL", "sub_label": "1x per week", "category": "Social", "category_icon": "🤝", "habit_type": "boolean", "frequency": "1x per week"},
+    {"id": "post", "name": "Post", "sub_label": "2 per week", "category": "Social", "category_icon": "🪄", "habit_type": "boolean", "frequency": "2 per week"},
+    {"id": "cook", "name": "Cook", "sub_label": "1x biweekly", "category": "Home", "category_icon": "🍳", "habit_type": "boolean", "frequency": "biweekly"},
+    {"id": "clean", "name": "Clean", "sub_label": "1x biweekly", "category": "Home", "category_icon": "🧼", "habit_type": "boolean", "frequency": "biweekly"},
+    {"id": "journal", "name": "Journal", "sub_label": "1x per week", "category": "Mind", "category_icon": "✍️", "habit_type": "boolean", "frequency": "1x per week"},
+    {"id": "plan-week", "name": "Plan week ahead", "sub_label": "weekly reset", "category": "Mind", "category_icon": "🗓️", "habit_type": "boolean", "frequency": "weekly"},
+    {"id": "sleep-before-12", "name": "Sleep before 12", "sub_label": "4x per week", "category": "Sleep", "category_icon": "🌙", "habit_type": "boolean", "frequency": "4x per week"},
+    {"id": "wake-7am", "name": "Wake up at 7am", "sub_label": "morning anchor", "category": "Sleep", "category_icon": "⏰", "habit_type": "boolean", "frequency": "daily"},
+    {"id": "smoke-limit", "name": "Smoke 1g max", "sub_label": "per week", "category": "Health", "category_icon": "🌿", "habit_type": "numeric", "unit": "g", "frequency": "1g max per week"},
+    {"id": "quit-snus", "name": "Quit Snus", "sub_label": "stay off it", "category": "Health", "category_icon": "🚭", "habit_type": "boolean", "frequency": "daily"},
 ]
 
 RELATIONSHIP_PEOPLE = [
@@ -184,22 +198,28 @@ def seed_demo_data(db: Session) -> None:
         r6 = _seed(i * 127 + 6)
         r7 = _seed(i * 131 + 7)
 
-        workout = r1 > 0.45
-        sleep_midnight = r2 > _lerp(0.55, 0.3, progress)
-        social = r3 > (0.4 if is_weekend else 0.7)
-        budget = r4 > (0.65 if is_weekend and social else _lerp(0.55, 0.35, progress))
-        mood = int(max(3, min(9, round(6.5 + (-0.8 if dow in (1, 2) else 0) + (0.7 if workout else 0) + (r5 - 0.5) * 3))))
-        water = round(1.5 + r6 * 1.2, 1)
-        meditation = r7 > 0.5
-
         values: dict[str, tuple[bool | None, float | None, int | None]] = {
-            "workout": (workout, None, None),
-            "sleep-midnight": (sleep_midnight, None, None),
-            "budget": (budget, None, None),
-            "mood": (None, None, mood),
-            "water": (None, water, None),
-            "social": (social, None, None),
-            "meditation": (meditation, None, None),
+            "racket-sport": (is_weekend and r1 > 0.78, None, None),
+            "team-sport": ((not is_weekend) and r2 > 0.91, None, None),
+            "running": ((not is_weekend) and r3 > 0.84, None, None),
+            "passive-exercise": ((is_weekend and r4 > 0.62) or ((not is_weekend) and r4 > 0.88), None, None),
+            "cad": ((not is_weekend) and r5 > 0.72, None, None),
+            "computer-science": ((not is_weekend) and r6 > 0.58, None, None),
+            "read-pages": (None, float(max(0, round((r5 > 0.58 and (8 + r6 * 18)) or (r6 * 5)))) , None),
+            "audiobooks": (r7 > 0.68, None, None),
+            "watch-episodes": ((is_weekend and r2 > 0.45) or ((not is_weekend) and r2 > 0.78), None, None),
+            "listen-music": (r3 > 0.22, None, None),
+            "facetime": (r4 > (0.48 if is_weekend else 0.62), None, None),
+            "irl": (r3 > (0.4 if is_weekend else 0.7), None, None),
+            "post": (r5 > 0.7, None, None),
+            "cook": ((i % 14) == 3, None, None),
+            "clean": ((i % 14) == 10, None, None),
+            "journal": (r6 > 0.78, None, None),
+            "plan-week": (dow == 6, None, None),
+            "sleep-before-12": (r1 > _lerp(0.62, 0.42, progress), None, None),
+            "wake-7am": (r2 > (0.35 if not is_weekend else 0.74), None, None),
+            "smoke-limit": (None, float(round(((0.3 + r2 * 0.4) if r7 > 0.88 else (0.1 + r2 * 0.15) if r7 > 0.7 else 0) * 10) / 10), None),
+            "quit-snus": (r7 > 0.14, None, None),
         }
         for habit_id, (completed, numeric_value, scale_value) in values.items():
             db.add(

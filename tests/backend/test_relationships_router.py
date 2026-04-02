@@ -30,3 +30,27 @@ def test_due_relationships_returns_payload(client):
 
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+def test_snapchat_relationship_import_can_be_created(client):
+    response = client.post(
+        "/api/relationships/imports/snapchat",
+        headers={"X-API-Key": "dev-secret-key"},
+        files={"screenshot": ("best-friends.png", b"fake-image-bytes", "image/png")},
+        data={
+            "capturedAt": "2026-04-02T08:30:00",
+            "matchedPersonIds": "alex,mum",
+            "detectedLabels": "Alex,Mum",
+            "note": "Morning check of best friends",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "snapchat_best_friends"
+    assert payload["matchedPersonIds"] == ["alex", "mum"]
+    assert payload["detectedLabels"] == ["Alex", "Mum"]
+
+    listing = client.get("/api/relationships/imports", headers={"X-API-Key": "dev-secret-key"})
+    assert listing.status_code == 200
+    assert listing.json()
