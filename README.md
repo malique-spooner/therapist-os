@@ -1,184 +1,171 @@
 # Therapist OS
 
-A personal AI-powered psychological intelligence PWA. Therapist OS surfaces behavioural patterns across your health, finance, habits, and location data, then gives you a private AI therapist to work through them — grounded in CBT, SDT, Behaviourism, and Interpersonal Therapy (IPT).
+Therapist OS is a mobile-first personal intelligence app that brings together life data, pattern detection, and a private AI therapist.
 
-> Built as a mobile-first PWA. Install it to your home screen for the full experience.
+The project now has:
+- a Next.js 14 frontend PWA
+- a FastAPI backend with PostgreSQL and Alembic
+- Docker-based local and deployment workflows
+- backend ingestion and sync paths for multiple life domains
+- a Brain system UI that maps how insights are meant to be generated over time
 
----
+## What The App Does
 
-## Features
+Therapist OS tracks and connects:
+- physical health
+- nutrition
+- relationships
+- finance
+- media consumption
+- location
+- daily check-ins
+- habits
+- therapist conversations
 
-- **Dashboard** — weekly insights across health, finance, and habits with framework-tagged analysis (CBT / SDT / Behaviourism / IPT)
-- **AI Therapist** — private async or live-mode conversation with your own therapist, context-aware from your dashboard
-- **Habits** — daily habit tracking with streaks, completion heatmaps, and progress rings
-- **Relationships** *(coming Phase 2)* — IPT-based relationship mapping and interaction logging
+The long-term goal is not just logging. It is helping a single person notice patterns, understand what helps, and build a private, evolving intelligence layer around their real life.
+
+## Current Product Direction
+
+The app is now moving toward a privacy-first architecture:
+- the VPS remains the always-on source of truth for app data and APIs
+- the Mac is intended to run local inference for the Brain, therapist chat, Whisper transcription, and optional TTS
+- the phone app always talks to the VPS
+- the VPS talks to the Mac when private local AI work is needed
+
+That direction is reflected in the frontend already, especially in the Brain page and the updated Settings screen.
+
+## Main Surfaces
+
+- Dashboard
+- Brain
+- AI Therapist
+- Habits
+- Health
+- Nutrition
+- Relationships
+- Finance
+- Consumption
+- Location
+- Settings
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 14 (App Router) |
-| Language | TypeScript |
-| Styling | Tailwind CSS + CSS custom properties |
+| Frontend | Next.js 14, TypeScript |
+| Styling | Tailwind CSS, CSS variables |
+| State | Zustand |
 | Animation | Framer Motion |
-| State | Zustand (with persist middleware) |
-| UI components | shadcn/ui |
-| Icons | Lucide React |
 | Charts | Recharts |
 | PWA | next-pwa |
+| Backend | FastAPI, SQLAlchemy, Alembic |
+| Database | PostgreSQL |
+| Background jobs | APScheduler |
+| Local/private voice | Whisper.cpp pathway |
+| Deployment | Docker Compose + nginx |
 
-## Getting Started
+## Quick Start
+
+### 1. Install frontend dependencies
 
 ```bash
 npm install
-npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-## Phase 2 Backend
-
-The repo now includes a FastAPI backend, Alembic migrations, Docker Compose, and a Postgres-first local workflow.
-
-### 1. Create your env file
+### 2. Create env
 
 ```bash
 cp .env.example .env
 ```
 
-For local frontend development, the important public values are:
+Important local values:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_API_KEY=dev-secret-key
 ```
 
-### 2. Run the backend with Docker Compose
+### 3. Start backend services
 
 ```bash
 docker compose up --build
 ```
 
-The API and scheduler containers now bootstrap themselves by:
+API health:
 
-- applying Alembic migrations
-- seeding demo data when `SEED_DEMO_DATA=true`
-- starting the API or scheduler process
+- [http://localhost:8000/healthz](http://localhost:8000/healthz)
+- [http://localhost:8000/readyz](http://localhost:8000/readyz)
 
-The backend health check is available at [http://localhost:8000/healthz](http://localhost:8000/healthz).
-
-### 3. Run the frontend against the backend
-
-In a second terminal:
+### 4. Start frontend
 
 ```bash
-npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The dashboard, habits, therapist, provider list, and budget widget now read from the backend API.
+Frontend:
 
-### 4. Local Python workflow without Docker
+- [http://localhost:3000](http://localhost:3000)
 
-After creating a Python 3.11 environment and installing `backend/requirements.txt`:
+If port `3000` is already in use, Next may move to another port such as `3001`.
 
-```bash
-python -m backend.bootstrap
-uvicorn backend.main:app --reload
-```
+## Testing
 
-`backend.bootstrap` is the local setup step. It applies Alembic migrations and seeds demo data when enabled.
-
-### Testing
-
-Frontend tests run locally with:
+Frontend:
 
 ```bash
 npm test
 ```
 
-Backend tests are intended to run in the Python 3.11 Docker image:
+Backend:
 
 ```bash
 docker compose run --rm backend-tests
 ```
 
-That avoids host-Python drift and keeps backend test execution aligned with the deployed runtime.
-
-## Reliability & Safety
-
-The repo now includes:
-
-- structured JSON logging with request IDs
-- liveness and readiness endpoints
-- centralized exception handling
-- environment validation warnings at startup
-- ntfy notification error surfacing
-- backup and restore scripts for Postgres
-- CI for frontend tests/build and backend Docker-based tests
-
-Operational docs live in:
-
-- [docs/OPERATIONS.md](docs/OPERATIONS.md)
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- [docs/PRIVACY.md](docs/PRIVACY.md)
-
-### Other commands
+Production build:
 
 ```bash
-npm run build    # production build
-npm run lint     # ESLint
-npm run format   # Prettier
+npm run build
 ```
 
-## Project Structure
+## Docs
 
-```
-src/
-├── app/           # Next.js App Router (layout, globals.css)
-├── components/    # UI components by feature
-│   ├── dashboard/
-│   ├── habits/
-│   ├── therapist/
-│   ├── navigation/
-│   └── settings/
-├── data/          # Mock/seed data (health, finance, habits, insights)
-├── lib/           # Utility functions
-├── services/ai/   # AI service abstraction layer
-└── store/         # Zustand stores (settings, session, habits)
-```
+High-level docs:
 
-```text
-backend/
-├── main.py
-├── bootstrap.py
-├── scheduler.py
-├── models/
-├── routers/
-├── services/
-└── alembic/
-```
+- [docs/FRONTEND.md](docs/FRONTEND.md)
+- [docs/BACKEND.md](docs/BACKEND.md)
+- [docs/BRAIN.md](docs/BRAIN.md)
+- [docs/TESTING.md](docs/TESTING.md)
+- [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- [docs/OPERATIONS.md](docs/OPERATIONS.md)
+- [docs/PRIVACY.md](docs/PRIVACY.md)
 
-## Psychology Frameworks
+Module-specific docs:
 
-The app applies four evidence-based frameworks to surface insights:
+- [backend/README.md](backend/README.md)
 
-| Framework | Focus |
-|---|---|
-| **CBT** | Identifying and challenging negative thought patterns |
-| **SDT** | Understanding autonomy, competence, and relatedness needs |
-| **Behaviourism** | Recognising how consequences shape behaviour |
-| **IPT** | Mapping relationship patterns as the root of wellbeing |
+## Current Status
 
-## Current Phase 2 Status
+Working today:
+- backend app scaffold and migrations
+- Dockerized backend + Postgres
+- API-backed frontend wiring for the restored domain pages
+- Brain page and updated Settings page
+- local/private product direction reflected in the UI
+- frontend tests, backend Docker tests, and production build all green
 
-- [x] FastAPI backend scaffold with Docker Compose, Postgres service, API key auth, and Alembic baseline
-- [x] Live API integration for the currently implemented frontend surfaces: dashboard, habits, therapist, providers, and budget
-- [x] Real weather ingestion endpoint and scheduler hook
-- [x] Ntfy-based notification service and scheduler jobs
-- [ ] Real AI provider integration
-- [ ] Garmin / TrueLayer / Spotify / OwnTracks ingestion
-- [ ] Live voice pipeline and remaining ingestion jobs
+Still to be completed or fully verified:
+- live account verification for external providers
+- live local-Mac inference path
+- full Brain v3 implementation behind the frontend blueprint
+- VPS deployment verification against real infrastructure
+
+## Notes
+
+- This repo contains both the product app and the backend infrastructure work for Phase 2.
+- The Brain page is currently a frontend blueprint for the intended intelligence system. It does not yet mean every listed detector or model is implemented.
+- Some legacy files still exist in the tree from earlier iterations; the current product direction is reflected best in the main app shell, Brain page, Therapist, Settings, and the API-backed domain pages.
 
 ## License
 
