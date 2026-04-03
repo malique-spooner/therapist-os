@@ -28,6 +28,7 @@ class RelationshipInteractionSchema(BaseModel):
 
 
 class RelationshipInteractionCreateSchema(BaseModel):
+    date: str | None = None
     personIds: list[str]
     type: str
     presenceScore: int | None = None

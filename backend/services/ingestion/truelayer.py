@@ -19,9 +19,28 @@ class TrueLayerIngestionService:
     BASE_URL = "https://api.truelayer.com"
     AUTH_URL = "https://auth.truelayer.com/connect/token"
 
+    def __init__(self, config: dict[str, str] | None = None) -> None:
+        self._config = config or {}
+
     @property
     def is_configured(self) -> bool:
-        return bool(settings.TRUELAYER_CLIENT_ID and settings.TRUELAYER_CLIENT_SECRET and settings.TRUELAYER_REFRESH_TOKEN)
+        return bool(self._client_id and self._client_secret and self._refresh_token)
+
+    @property
+    def _client_id(self) -> str:
+        return self._config.get("client_id") or settings.TRUELAYER_CLIENT_ID
+
+    @property
+    def _client_secret(self) -> str:
+        return self._config.get("client_secret") or settings.TRUELAYER_CLIENT_SECRET
+
+    @property
+    def _access_token(self) -> str:
+        return self._config.get("access_token") or settings.TRUELAYER_ACCESS_TOKEN
+
+    @property
+    def _refresh_token(self) -> str:
+        return self._config.get("refresh_token") or settings.TRUELAYER_REFRESH_TOKEN
 
     async def refresh_token(self) -> str:
         if not self.is_configured:
@@ -29,9 +48,9 @@ class TrueLayerIngestionService:
 
         payload = {
             "grant_type": "refresh_token",
-            "client_id": settings.TRUELAYER_CLIENT_ID,
-            "client_secret": settings.TRUELAYER_CLIENT_SECRET,
-            "refresh_token": settings.TRUELAYER_REFRESH_TOKEN,
+            "client_id": self._client_id,
+            "client_secret": self._client_secret,
+            "refresh_token": self._refresh_token,
         }
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(self.AUTH_URL, data=payload)
@@ -44,7 +63,7 @@ class TrueLayerIngestionService:
         return access_token
 
     async def sync_transactions(self, from_date: date, db: Session) -> list[FinanceData]:
-        access_token = settings.TRUELAYER_ACCESS_TOKEN or await self.refresh_token()
+        access_token = self._access_token or await self.refresh_token()
         async with httpx.AsyncClient(
             timeout=20,
             headers={"Authorization": f"Bearer {access_token}"},
@@ -124,6 +143,7 @@ class TrueLayerIngestionService:
         record.category = self.categorise_transaction(transaction)
         record.merchant = merchant
         record.description = transaction.get("description")
+        record.is_demo = False
         return record
 
     @staticmethod

@@ -3,14 +3,17 @@
 import { useEffect, useState } from 'react';
 import { TopBar } from '@/components/navigation/TopBar';
 import { useSettingsStore } from '@/store/settings';
-import { Brain, CheckCircle2, Circle, ExternalLink, Lock, Radar, Mic2, AudioLines, Laptop } from 'lucide-react';
-import { api, type DataSourcePayload } from '@/lib/api';
+import { Brain, ExternalLink, Lock, Radar, Mic2, AudioLines, Laptop } from 'lucide-react';
+import { api, type DataSourcePayload, type DataSourceSetupPayload } from '@/lib/api';
 import { RetryNotice } from '@/components/ui/retry-notice';
+import { DataSourceSetupSheet } from '@/components/settings/DataSourceSetupSheet';
 
 
 interface SettingsPageProps {
   onBack: () => void;
   onOpenBrain?: () => void;
+  requestedSourceId?: string | null;
+  onSourceRequestHandled?: () => void;
 }
 
 const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
@@ -23,7 +26,7 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     available: false,
     lastSync: null,
     lastSyncStatus: null,
-    connectionHint: 'Add GARMIN_EMAIL and GARMIN_PASSWORD on the backend to enable sync.',
+    connectionHint: 'Save your Garmin Connect login, then run a sync to pull steps, sleep, HRV, and workouts.',
     lastError: null,
   },
   {
@@ -35,7 +38,7 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     available: false,
     lastSync: null,
     lastSyncStatus: null,
-    connectionHint: 'Add TrueLayer credentials and tokens on the backend to enable sync.',
+    connectionHint: 'Save your TrueLayer app credentials, then finish bank sign-in to enable finance sync.',
     lastError: null,
   },
   {
@@ -72,7 +75,7 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     available: false,
     lastSync: null,
     lastSyncStatus: null,
-    connectionHint: 'Point OwnTracks at your server webhook to enable live location sync.',
+    connectionHint: 'Save a webhook username and password, then paste the generated webhook URL into OwnTracks on your phone.',
     lastError: null,
   },
   {
@@ -84,7 +87,55 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     available: false,
     lastSync: null,
     lastSyncStatus: null,
-    connectionHint: 'Add OPENWEATHER_API_KEY on the backend to enable weather context.',
+    connectionHint: 'Save your OpenWeather API key, then run a sync to add weather and daylight context.',
+    lastError: null,
+  },
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    category: 'Consumption - watch history and archive imports',
+    icon: '▶️',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'YouTube is still a manual import path in Phase 2.',
+    lastError: null,
+  },
+  {
+    id: 'google_calendar',
+    name: 'Google Calendar',
+    category: 'Commitments - events and time allocation',
+    icon: '📅',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Calendar integration is planned but not wired yet in this repo.',
+    lastError: null,
+  },
+  {
+    id: 'google_photos',
+    name: 'Google Photos',
+    category: 'Visual - photo metadata and locations',
+    icon: '📷',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Photos integration is planned but not wired yet in this repo.',
+    lastError: null,
+  },
+  {
+    id: 'voice_journal',
+    name: 'Voice Journal',
+    category: 'Mood - transcription and reflection inputs',
+    icon: '🎙️',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Voice journaling depends on the Whisper flow.',
     lastError: null,
   },
 ];
@@ -103,23 +154,42 @@ function SectionHeader({ title }: { title: string }) {
 
 function mergeDataSources(sources: DataSourcePayload[]) {
   const byId = new Map(sources.map((source) => [source.id, source]));
-
-  return DEFAULT_DATA_SOURCES.map((source) => ({
+  const mergedDefaults = DEFAULT_DATA_SOURCES.map((source) => ({
     ...source,
     ...byId.get(source.id),
   }));
+
+  const unknownSources = sources.filter((source) => !DEFAULT_DATA_SOURCES.some((item) => item.id === source.id));
+  return [...mergedDefaults, ...unknownSources];
 }
 
 function mergeDataSource(source: DataSourcePayload) {
-  return mergeDataSources([source])[0];
+  const fallback = DEFAULT_DATA_SOURCES.find((item) => item.id === source.id);
+  return fallback ? { ...fallback, ...source } : source;
+}
+
+function getSourceActionLabel(source: DataSourcePayload) {
+  if (source.connected) return 'Manage';
+  if (source.connectionState === 'authorization-required') return 'Finish';
+  return 'Connect';
+}
+
+function getSourceStatusLabel(source: DataSourcePayload) {
+  if (source.connected) return 'Connected';
+  if (source.connectionState === 'authorization-required') return 'Finish sign-in';
+  if (source.available) return 'Ready';
+  return 'Setup';
 }
 
 
-export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
-  const { theme, setTheme, textSize, setTextSize } = useSettingsStore();
+export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceRequestHandled }: SettingsPageProps) {
+  const { theme, setTheme, textSize, setTextSize, dataMode, setDataMode } = useSettingsStore();
   const [dataSources, setDataSources] = useState<DataSourcePayload[]>(DEFAULT_DATA_SOURCES);
   const [dataSourcesError, setDataSourcesError] = useState<string | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
+  const [setupSource, setSetupSource] = useState<DataSourcePayload | null>(null);
+  const [setupDetails, setSetupDetails] = useState<DataSourceSetupPayload | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
 
   async function refreshDataSources() {
     const sources = await api.getDataSources();
@@ -135,15 +205,107 @@ export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
     return () => { active = false; };
   }, []);
 
-  async function handleSourceAction(source: DataSourcePayload) {
+  useEffect(() => {
+    if (!requestedSourceId || setupOpen || activeActionId) return;
+    const source = dataSources.find((item) => item.id === requestedSourceId);
+    if (!source) return;
+    void openSetup(source).finally(() => {
+      onSourceRequestHandled?.();
+    });
+  }, [requestedSourceId, dataSources, setupOpen, activeActionId, onSourceRequestHandled]);
+
+  function updateSource(updated: DataSourcePayload) {
+    const mergedSource = mergeDataSource(updated);
+    setDataSources((current) => {
+      if (current.some((item) => item.id === updated.id)) {
+        return current.map((item) => item.id === updated.id ? mergedSource : item);
+      }
+      return [...current, mergedSource];
+    });
+  }
+
+  async function openSetup(source: DataSourcePayload) {
     setActiveActionId(source.id);
     setDataSourcesError(null);
     try {
-      const result = source.connected
-        ? await api.syncDataSource(source.id)
-        : await api.connectDataSource(source.id);
-      const mergedSource = mergeDataSource(result.source);
-      setDataSources((current) => current.map((item) => item.id === source.id ? mergedSource : item));
+      const setup = await api.getDataSourceSetup(source.id);
+      setSetupSource(source);
+      setSetupDetails(setup);
+      setSetupOpen(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load data. Tap to retry.';
+      setDataSourcesError(message);
+    } finally {
+      setActiveActionId(null);
+    }
+  }
+
+  async function handleSetupSave(values: Record<string, string>) {
+    if (!setupSource) return;
+    setActiveActionId(setupSource.id);
+    setDataSourcesError(null);
+    try {
+      const result = await api.saveDataSourceSetup(setupSource.id, values);
+      updateSource(result.source);
+      const refreshedSetup = await api.getDataSourceSetup(setupSource.id);
+      setSetupSource(result.source);
+      setSetupDetails(refreshedSetup);
+      setSetupOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load data. Tap to retry.';
+      setDataSources((current) => current.map((item) => item.id === setupSource.id ? { ...item, lastError: message } : item));
+      setDataSourcesError(DATA_SOURCES_FALLBACK_MESSAGE);
+    } finally {
+      setActiveActionId(null);
+    }
+  }
+
+  async function handleSync(source: DataSourcePayload) {
+    setActiveActionId(source.id);
+    setDataSourcesError(null);
+    try {
+      const result = await api.syncDataSource(source.id);
+      updateSource(result.source);
+      if (setupSource?.id === source.id) {
+        setSetupSource(result.source);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load data. Tap to retry.';
+      setDataSources((current) => current.map((item) => item.id === source.id ? { ...item, lastError: message } : item));
+      setDataSourcesError(DATA_SOURCES_FALLBACK_MESSAGE);
+    } finally {
+      setActiveActionId(null);
+    }
+  }
+
+  async function handleAuthorize(source: DataSourcePayload) {
+    setActiveActionId(source.id);
+    setDataSourcesError(null);
+    try {
+      const result = await api.beginDataSourceAuthorization(source.id);
+      if (typeof window !== 'undefined') {
+        window.location.href = result.url;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not start sign-in.';
+      setDataSources((current) => current.map((item) => item.id === source.id ? { ...item, lastError: message } : item));
+      setDataSourcesError(DATA_SOURCES_FALLBACK_MESSAGE);
+    } finally {
+      setActiveActionId(null);
+    }
+  }
+
+  async function handleDisconnect(source: DataSourcePayload) {
+    setActiveActionId(source.id);
+    setDataSourcesError(null);
+    try {
+      const result = await api.disconnectDataSource(source.id);
+      updateSource(result.source);
+      if (setupSource?.id === source.id) {
+        setSetupSource(result.source);
+        const refreshedSetup = await api.getDataSourceSetup(source.id);
+        setSetupDetails(refreshedSetup);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load data. Tap to retry.';
       setDataSources((current) => current.map((item) => item.id === source.id ? { ...item, lastError: message } : item));
@@ -266,24 +428,28 @@ export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
                 )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {source.connected
-                  ? <CheckCircle2 size={16} style={{ color: 'var(--color-success)' }} />
-                  : <Circle size={16} style={{ color: 'var(--color-border)' }} />
-                }
+                <span
+                  className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                  style={{
+                    backgroundColor: source.connected ? 'rgba(82, 183, 136, 0.14)' : 'var(--color-surface)',
+                    color: source.connected ? 'var(--color-success)' : 'var(--color-text-muted)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                >
+                  {getSourceStatusLabel(source)}
+                </span>
                 <button
                   className="text-xs font-medium px-2.5 py-1 rounded-lg"
                   style={{ backgroundColor: source.connected ? 'var(--color-border)' : 'var(--color-primary)', color: source.connected ? 'var(--color-text-muted)' : '#fff' }}
-                  onClick={() => { void handleSourceAction(source); }}
+                  onClick={() => { void openSetup(source); }}
                   disabled={activeActionId === source.id}
                   aria-label={
                     activeActionId === source.id
                       ? `Working on ${source.name}`
-                      : source.connected
-                        ? `Sync ${source.name} now`
-                        : `Connect ${source.name}`
+                      : `${getSourceActionLabel(source)} ${source.name}`
                   }
                 >
-                  {activeActionId === source.id ? 'Working...' : source.connected ? 'Sync now' : 'Connect'}
+                  {activeActionId === source.id ? 'Working...' : getSourceActionLabel(source)}
                 </button>
               </div>
             </div>
@@ -302,6 +468,31 @@ export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
         {/* Appearance */}
         <SectionHeader title="Appearance" />
         <div className="mx-4 rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+          <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
+            <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>Data mode</p>
+            <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
+              Temporary wiring switch for Phase 2. Use this to compare seeded demo views against live connected data.
+            </p>
+            <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+              {([
+                { value: 'demo-only', label: 'Demo' },
+                { value: 'mixed', label: 'Mixed' },
+                { value: 'real-only', label: 'Real only' },
+              ] as const).map((item) => (
+                <button
+                  key={item.value}
+                  onClick={() => setDataMode(item.value)}
+                  className="flex-1 py-2 text-sm font-medium transition-colors"
+                  style={{
+                    backgroundColor: dataMode === item.value ? 'var(--color-primary)' : 'transparent',
+                    color: dataMode === item.value ? '#fff' : 'var(--color-text-muted)',
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
             <p className="text-sm font-medium mb-3" style={{ color: 'var(--color-text)' }}>Theme</p>
             <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
@@ -376,6 +567,22 @@ export function SettingsPage({ onBack, onOpenBrain }: SettingsPageProps) {
           <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>Personal · Portfolio · Future Product</p>
         </div>
       </div>
+
+      <DataSourceSetupSheet
+        source={setupSource}
+        setup={setupDetails}
+        open={setupOpen}
+        saving={activeActionId === setupSource?.id}
+        onClose={() => {
+          setSetupOpen(false);
+          setSetupSource(null);
+          setSetupDetails(null);
+        }}
+        onSave={handleSetupSave}
+        onAuthorize={handleAuthorize}
+        onSync={handleSync}
+        onDisconnect={handleDisconnect}
+      />
     </div>
   );
 }

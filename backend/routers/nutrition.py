@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date as date_type
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -31,7 +31,7 @@ def _serialize(row: NutritionLog) -> dict:
     }
 
 
-def _upsert(target_date: date, payload: NutritionCreateSchema, db: Session) -> NutritionLog:
+def _upsert(target_date: date_type, payload: NutritionCreateSchema, db: Session) -> NutritionLog:
     row = db.scalar(select(NutritionLog).where(NutritionLog.date == target_date))
     if not row:
         row = NutritionLog(date=target_date)
@@ -45,6 +45,7 @@ def _upsert(target_date: date, payload: NutritionCreateSchema, db: Session) -> N
     row.caffeine_count = int(payload.caffeine.get("count", 0))
     row.caffeine_last_before_noon = bool(payload.caffeine.get("lastBeforeNoon", True))
     row.alcohol_units = int(payload.alcohol.get("units", 0))
+    row.is_demo = False
     db.commit()
     db.refresh(row)
     return row
@@ -63,7 +64,22 @@ def get_nutrition_today(db: Session = Depends(get_db)) -> dict:
     if row:
         return _serialize(row)
     return {
-        "date": date.today().isoformat(),
+        "date": date_type.today().isoformat(),
+        "meals": {"breakfast": False, "lunch": False, "dinner": False, "heavySnacking": False},
+        "foodQuality": 2,
+        "caffeine": {"count": 0, "lastBeforeNoon": True},
+        "alcohol": {"units": 0},
+    }
+
+
+@router.get("/day")
+def get_nutrition_for_date(date: str, db: Session = Depends(get_db)) -> dict:
+    target_date = date_type.fromisoformat(date)
+    row = db.scalar(select(NutritionLog).where(NutritionLog.date == target_date))
+    if row:
+        return _serialize(row)
+    return {
+        "date": target_date.isoformat(),
         "meals": {"breakfast": False, "lunch": False, "dinner": False, "heavySnacking": False},
         "foodQuality": 2,
         "caffeine": {"count": 0, "lastBeforeNoon": True},
@@ -73,9 +89,15 @@ def get_nutrition_today(db: Session = Depends(get_db)) -> dict:
 
 @router.post("/today")
 def save_nutrition_today(payload: NutritionCreateSchema, db: Session = Depends(get_db)) -> dict:
-    return _serialize(_upsert(date.today(), payload, db))
+    return _serialize(_upsert(date_type.today(), payload, db))
 
 
 @router.put("/today")
 def update_nutrition_today(payload: NutritionCreateSchema, db: Session = Depends(get_db)) -> dict:
-    return _serialize(_upsert(date.today(), payload, db))
+    return _serialize(_upsert(date_type.today(), payload, db))
+
+
+@router.put("/day")
+def update_nutrition_for_date(date: str, payload: NutritionCreateSchema, db: Session = Depends(get_db)) -> dict:
+    target_date = date_type.fromisoformat(date)
+    return _serialize(_upsert(target_date, payload, db))

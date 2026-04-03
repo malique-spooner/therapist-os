@@ -19,3 +19,4 @@ def test_save_checkin_and_get_streak(client):
     streak = client.get("/api/checkins/streak", headers={"X-API-Key": "dev-secret-key"})
     assert streak.status_code == 200
     assert "streak" in streak.json()
+    assert save.json()["timestamp"] > 2_147_483_647

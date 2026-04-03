@@ -19,5 +19,6 @@ class HealthData(Base):
     workout_logged: Mapped[bool] = mapped_column(Boolean, default=False)
     workout_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     workout_duration_minutes: Mapped[int | None] = mapped_column(Integer, default=0)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

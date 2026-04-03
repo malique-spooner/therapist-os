@@ -1,4 +1,5 @@
 import type { AIProvider, AIResponse } from '@/services/ai/types';
+import type { BrainPayload, BrainLayer, BrainVersion, BrainOverview } from '@/lib/brain';
 import type { HabitDef } from '@/data/habits';
 import type { DayHealth } from '@/data/health';
 import type { DayFinance } from '@/data/finance';
@@ -142,11 +143,41 @@ export interface DataSourcePayload {
   icon: string;
   connected: boolean;
   available: boolean;
+  connectionState?: string | null;
   lastSync: string | null;
   lastSyncStatus: string | null;
   folderPath?: string | null;
   connectionHint: string | null;
   lastError: string | null;
+}
+
+export interface DataSourceSetupFieldPayload {
+  key: string;
+  label: string;
+  type: string;
+  required: boolean;
+  placeholder?: string | null;
+  helpText?: string | null;
+  hasValue: boolean;
+  value?: string | null;
+}
+
+export interface DataSourceSetupPayload {
+  id: string;
+  name: string;
+  mode: string;
+  title: string;
+  description: string;
+  instructions: string[];
+  actionLabel: string;
+  connected: boolean;
+  available: boolean;
+  fields: DataSourceSetupFieldPayload[];
+  webhookUrl?: string | null;
+  callbackUrl?: string | null;
+  folderPath?: string | null;
+  canAuthorize: boolean;
+  authActionLabel?: string | null;
 }
 
 export interface TranscriptionPayload {
@@ -180,6 +211,17 @@ export interface ConversationPayload {
   totalTokensUsed: number;
   totalCostPence: number;
   messages: ConversationMessagePayload[];
+}
+
+export type BrainOverviewPayload = BrainOverview;
+export type BrainLayerPayload = BrainLayer;
+export type BrainVersionPayload = BrainVersion;
+export type BrainPayloadResponse = BrainPayload;
+
+export interface DateQuery {
+  period?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? 'dev-secret-key';
@@ -218,35 +260,55 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function withDateQuery(path: string, query?: DateQuery) {
+  if (!query) return path;
+  const params = new URLSearchParams();
+  if (query.period) params.set('period', query.period);
+  if (query.startDate) params.set('startDate', query.startDate);
+  if (query.endDate) params.set('endDate', query.endDate);
+  const suffix = params.toString();
+  return suffix ? `${path}?${suffix}` : path;
+}
+
 export const api = {
   getDashboard: (period: string) => request<DashboardPayload>(`/api/dashboard?period=${period}`),
-  getHealth: (period: string) => request<HealthPayload[]>(`/api/health?period=${period}`),
+  getBrain: () => request<BrainPayloadResponse>('/api/brain'),
+  getHealth: (query: string | DateQuery) =>
+    request<HealthPayload[]>(withDateQuery('/api/health', typeof query === 'string' ? { period: query } : query)),
   getHealthToday: () => request<HealthPayload>('/api/health/today'),
   syncHealth: () => request<{ detail: string; daysSynced: number; latestDate: string | null }>('/api/health/sync', { method: 'POST' }),
-  getFinance: (period: string) => request<FinancePayload[]>(`/api/finance?period=${period}`),
+  getFinance: (query: string | DateQuery) =>
+    request<FinancePayload[]>(withDateQuery('/api/finance', typeof query === 'string' ? { period: query } : query)),
   getFinanceToday: () => request<FinancePayload>('/api/finance/today'),
   syncFinance: () => request<{ detail: string; transactionsSynced: number }>('/api/finance/sync', { method: 'POST' }),
-  getConsumption: (period: string) => request<ConsumptionPayload[]>(`/api/consumption?period=${period}`),
+  getConsumption: (query: string | DateQuery) =>
+    request<ConsumptionPayload[]>(withDateQuery('/api/consumption', typeof query === 'string' ? { period: query } : query)),
   getConsumptionToday: () => request<ConsumptionPayload>('/api/consumption/today'),
   syncConsumption: () => request<{ detail: string; daysSynced: number; latestDate: string | null }>('/api/consumption/sync', { method: 'POST' }),
-  getLocation: (period: string) => request<LocationPointPayload[]>(`/api/location?period=${period}`),
+  getLocation: (query: string | DateQuery) =>
+    request<LocationPointPayload[]>(withDateQuery('/api/location', typeof query === 'string' ? { period: query } : query)),
   getLocationToday: () => request<LocationSummaryPayload>('/api/location/today'),
-  getLocationSummary: (period: string) => request<LocationSummaryPayload[]>(`/api/location/summary?period=${period}`),
+  getLocationSummary: (query: string | DateQuery) =>
+    request<LocationSummaryPayload[]>(withDateQuery('/api/location/summary', typeof query === 'string' ? { period: query } : query)),
   getLocationCompanions: (date: string) => request<LocationCompanionPayload>(`/api/location/companions?date=${date}`),
   saveLocationCompanions: (date: string, payload: Omit<LocationCompanionPayload, 'date'>) =>
     request<LocationCompanionPayload>(`/api/location/companions?date=${date}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  getNutrition: (period: string) => request<NutritionPayload[]>(`/api/nutrition?period=${period}`),
+  getNutrition: (query: string | DateQuery) =>
+    request<NutritionPayload[]>(withDateQuery('/api/nutrition', typeof query === 'string' ? { period: query } : query)),
+  getNutritionForDate: (date: string) => request<NutritionPayload>(`/api/nutrition/day?date=${date}`),
   getTodayNutrition: () => request<NutritionPayload>('/api/nutrition/today'),
   saveTodayNutrition: (payload: Omit<NutritionPayload, 'date'>) =>
     request<NutritionPayload>('/api/nutrition/today', { method: 'POST', body: JSON.stringify(payload) }),
   updateTodayNutrition: (payload: Omit<NutritionPayload, 'date'>) =>
     request<NutritionPayload>('/api/nutrition/today', { method: 'PUT', body: JSON.stringify(payload) }),
+  saveNutritionForDate: (date: string, payload: Omit<NutritionPayload, 'date'>) =>
+    request<NutritionPayload>(`/api/nutrition/day?date=${date}`, { method: 'PUT', body: JSON.stringify(payload) }),
   getRelationships: () => request<RelationshipPayload[]>('/api/relationships'),
   createRelationship: (payload: Omit<RelationshipPayload, 'id' | 'avatarColour'>) =>
     request<RelationshipPayload>('/api/relationships', { method: 'POST', body: JSON.stringify(payload) }),
-  getRelationshipInteractions: (period: string) =>
-    request<RelationshipInteractionPayload[]>(`/api/relationships/interactions?period=${period}`),
-  createRelationshipInteraction: (payload: Omit<RelationshipInteractionPayload, 'id' | 'date' | 'timestamp'>) =>
+  getRelationshipInteractions: (query: string | DateQuery) =>
+    request<RelationshipInteractionPayload[]>(withDateQuery('/api/relationships/interactions', typeof query === 'string' ? { period: query } : query)),
+  createRelationshipInteraction: (payload: Omit<RelationshipInteractionPayload, 'id' | 'timestamp' | 'date'> & { date?: string }) =>
     request<RelationshipInteractionPayload>('/api/relationships/interactions', { method: 'POST', body: JSON.stringify(payload) }),
   deleteRelationshipInteraction: (interactionId: string) =>
     request<{ detail: string }>(`/api/relationships/interactions/${interactionId}`, { method: 'DELETE' }),
@@ -298,6 +360,22 @@ export const api = {
   getCheckinStreak: () => request<{ streak: number }>('/api/checkins/streak'),
   getHabits: () => request<HabitsOverview>('/api/habits'),
   getDataSources: () => request<DataSourcePayload[]>('/api/data-sources'),
+  getDataSourceSetup: (sourceId: string) =>
+    request<DataSourceSetupPayload>(`/api/data-sources/${sourceId}/setup`),
+  saveDataSourceSetup: (sourceId: string, values: Record<string, string>) =>
+    request<{ detail: string; source: DataSourcePayload }>(`/api/data-sources/${sourceId}/setup`, {
+      method: 'POST',
+      body: JSON.stringify({ values }),
+    }),
+  beginDataSourceAuthorization: (sourceId: string) =>
+    request<{ url: string }>(`/api/data-sources/${sourceId}/authorize`, {
+      method: 'POST',
+    }),
+  completeDataSourceAuthorization: (sourceId: string, payload: { code?: string | null; state?: string | null; error?: string | null }) =>
+    request<{ detail: string; source: DataSourcePayload }>(`/api/data-sources/${sourceId}/oauth/callback`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   connectDataSource: (sourceId: string) =>
     request<{ detail: string; source: DataSourcePayload }>(`/api/data-sources/${sourceId}/connect`, { method: 'POST' }),
   syncDataSource: (sourceId: string) =>

@@ -83,6 +83,7 @@ Important local values:
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_API_KEY=dev-secret-key
+DATA_SOURCE_ENCRYPTION_KEY=replace-this-with-a-long-random-secret
 ```
 
 ### 3. Start backend services

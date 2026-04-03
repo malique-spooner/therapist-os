@@ -42,6 +42,24 @@ def test_owntracks_webhook_rejects_invalid_secret(client, monkeypatch):
     assert response.json()["detail"] == "Invalid OwnTracks secret"
 
 
+def test_owntracks_webhook_accepts_saved_basic_auth(client):
+    save = client.post(
+        "/api/data-sources/owntracks/setup",
+        headers={"X-API-Key": "dev-secret-key"},
+        json={"values": {"username": "tracker", "password": "supersecret"}},
+    )
+    assert save.status_code == 200
+
+    response = client.post(
+        "/api/location/owntracks",
+        json={"_type": "location", "lat": 51.5, "lon": -0.1, "tst": 1775000000},
+        headers={"Authorization": "Basic dHJhY2tlcjpzdXBlcnNlY3JldA=="},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["detail"] == "Location received"
+
+
 def test_location_companion_tags_can_be_saved_and_loaded(client):
     update = client.put(
         "/api/location/companions?date=2026-03-31",

@@ -13,9 +13,10 @@ const interactionTypes = [
 
 interface InteractionLoggerProps {
   preselectedPersonId?: string | null;
+  selectedDate: string;
 }
 
-export function InteractionLogger({ preselectedPersonId }: InteractionLoggerProps) {
+export function InteractionLogger({ preselectedPersonId, selectedDate }: InteractionLoggerProps) {
   const people = useRelationshipsStore((state) => state.people);
   const interactions = useRelationshipsStore((state) => state.interactions);
   const addInteraction = useRelationshipsStore((state) => state.addInteraction);
@@ -32,6 +33,7 @@ export function InteractionLogger({ preselectedPersonId }: InteractionLoggerProp
   function submit() {
     if (!selectedPeople.length) return;
     addInteraction({
+      date: selectedDate,
       personIds: selectedPeople,
       type: selectedType,
       presenceScore,
@@ -41,14 +43,14 @@ export function InteractionLogger({ preselectedPersonId }: InteractionLoggerProp
     setPresenceScore(4);
   }
 
-  const recent = [...interactions].slice(-5).reverse();
+  const recent = [...interactions].filter((interaction) => interaction.date === selectedDate).slice(-5).reverse();
 
   return (
     <div className="px-4 pb-4 space-y-3">
       <div className="rounded-[28px] p-4 space-y-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
         <div>
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Recent interactions</p>
-          <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>Quick log — takes 10 seconds</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>Quick log for the selected day</p>
         </div>
 
         <div>
@@ -142,6 +144,9 @@ export function InteractionLogger({ preselectedPersonId }: InteractionLoggerProp
               </button>
             </div>
           ))}
+          {!recent.length && (
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No relationship logs on this day yet.</p>
+          )}
         </div>
       </div>
     </div>

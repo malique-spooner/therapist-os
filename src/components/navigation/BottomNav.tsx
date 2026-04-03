@@ -1,11 +1,11 @@
 'use client';
 
-import { HeartPulse, Home, MessageCircleHeart, MoreHorizontal, Repeat2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Brain, Coins, HeartPulse, Home, MapPinned, MessageCircleHeart, Music4, Repeat2, Salad, Users2 } from 'lucide-react';
 
 interface BottomNavProps {
-  current: 'dashboard' | 'health' | 'therapist' | 'habits';
-  onNavigate: (page: 'dashboard' | 'health' | 'therapist' | 'habits') => void;
-  onMore: () => void;
+  current: 'dashboard' | 'health' | 'therapist' | 'habits' | 'nutrition' | 'relationships' | 'finance' | 'consumption' | 'location' | 'brain';
+  onNavigate: (page: 'dashboard' | 'health' | 'therapist' | 'habits' | 'nutrition' | 'relationships' | 'finance' | 'consumption' | 'location' | 'brain') => void;
 }
 
 const items = [
@@ -13,36 +13,72 @@ const items = [
   { id: 'health' as const, label: 'Health', icon: HeartPulse },
   { id: 'therapist' as const, label: 'Mind', icon: MessageCircleHeart },
   { id: 'habits' as const, label: 'Habits', icon: Repeat2 },
+  { id: 'nutrition' as const, label: 'Food', icon: Salad },
+  { id: 'relationships' as const, label: 'People', icon: Users2 },
+  { id: 'finance' as const, label: 'Money', icon: Coins },
+  { id: 'consumption' as const, label: 'Media', icon: Music4 },
+  { id: 'location' as const, label: 'Places', icon: MapPinned },
+  { id: 'brain' as const, label: 'Brain', icon: Brain },
 ];
 
-export function BottomNav({ current, onNavigate, onMore }: BottomNavProps) {
+export function BottomNav({ current, onNavigate }: BottomNavProps) {
   return (
-    <div style={{ borderTop: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-      <div className="grid grid-cols-5 gap-1 px-2 py-2">
+    <div
+      style={{
+        borderTop: '1px solid color-mix(in srgb, var(--color-border) 86%, white 14%)',
+        background:
+          'linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 84%, white 16%) 0%, var(--color-surface) 100%)',
+        backdropFilter: 'blur(18px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        boxShadow: '0 -14px 34px rgba(15, 23, 42, 0.06)',
+      }}
+    >
+      <div className="flex gap-1 overflow-x-auto px-2 py-2 no-select">
         {items.map((item) => {
           const Icon = item.icon;
           const active = current === item.id;
           return (
-            <button
+            <motion.button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className="min-h-11 rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-95 transition-transform"
-              style={{ color: active ? 'var(--color-primary)' : 'var(--color-text-muted)' }}
+              whileTap={{ scale: 0.96 }}
+              animate={{ y: active ? -2 : 0 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+              className="relative min-h-11 min-w-[76px] rounded-[22px] flex-shrink-0 flex flex-col items-center justify-center gap-1 px-3 py-2"
+              style={{
+                color: active ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                backgroundColor: 'transparent',
+              }}
             >
-              <Icon size={18} />
-              <span className="text-[11px] font-medium">{item.label}</span>
-            </button>
+              {active && (
+                <motion.div
+                  layoutId="bottom-nav-active-pill"
+                  className="absolute inset-0 rounded-[22px]"
+                  transition={{ type: 'spring', stiffness: 430, damping: 32 }}
+                  style={{
+                    background:
+                      'linear-gradient(180deg, rgba(82, 183, 136, 0.18) 0%, rgba(82, 183, 136, 0.1) 100%)',
+                    border: '1px solid rgba(82, 183, 136, 0.22)',
+                    boxShadow: '0 10px 24px rgba(82, 183, 136, 0.14)',
+                  }}
+                />
+              )}
+              <motion.div
+                className="relative z-10 flex flex-col items-center justify-center gap-1"
+                animate={{ scale: active ? 1.03 : 1 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 24 }}
+              >
+                <motion.div
+                  animate={{ rotate: active ? [0, -8, 6, 0] : 0, scale: active ? 1.08 : 1 }}
+                  transition={{ duration: 0.42, ease: 'easeOut' }}
+                >
+                  <Icon size={18} />
+                </motion.div>
+                <span className="text-[11px] font-medium">{item.label}</span>
+              </motion.div>
+            </motion.button>
           );
         })}
-
-        <button
-          onClick={onMore}
-          className="min-h-11 rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-95 transition-transform"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          <MoreHorizontal size={18} />
-          <span className="text-[11px] font-medium">More</span>
-        </button>
       </div>
     </div>
   );

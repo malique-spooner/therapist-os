@@ -51,3 +51,7 @@ next-env.d.ts
 # os
 .DS_Store
 Thumbs.db
+
+# python cache
+__pycache__/
+*.py[cod]

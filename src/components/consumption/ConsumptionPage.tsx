@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { TopBar } from '@/components/navigation/TopBar';
 import { ValenceMeter } from './ValenceMeter';
 import { ValenceChart } from './ValenceChart';
@@ -10,13 +10,8 @@ import type { Period } from '@/lib/mockDataUtils';
 import { api } from '@/lib/api';
 import { useApiQuery } from '@/hooks/useApiQuery';
 import { RetryNotice } from '@/components/ui/retry-notice';
-
-const periods: { label: string; value: Period }[] = [
-  { label: 'This Week', value: 'this-week' },
-  { label: 'Last Week', value: 'last-week' },
-  { label: 'This Month', value: 'this-month' },
-  { label: 'Last Month', value: 'last-month' },
-];
+import { DateRangeControl, type DateRangeValue } from '@/components/ui/date-range-control';
+import { APP_TODAY, addDays, clampIsoDate, differenceInDays } from '@/lib/date';
 
 const insights = [
   {
@@ -58,9 +53,29 @@ interface ConsumptionPageProps {
 }
 
 export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: ConsumptionPageProps) {
-  const [period, setPeriod] = useState<Period>('this-week');
-  const { data, isLoading, error, refetch } = useApiQuery(() => api.getConsumption(period), [period]);
-  const days = data ?? [];
+  const { data, isLoading, error, refetch } = useApiQuery(() => api.getConsumption('3-months'), []);
+  const allDays = useMemo(() => data ?? [], [data]);
+  const availableDates = useMemo(() => allDays.map((day) => day.date), [allDays]);
+  const latestDate = availableDates[availableDates.length - 1] ?? APP_TODAY;
+  const earliestDate = availableDates[0] ?? addDays(latestDate, -89);
+  const [range, setRange] = useState<DateRangeValue>(() => ({
+    startDate: addDays(latestDate, -6),
+    endDate: latestDate,
+  }));
+
+  useEffect(() => {
+    setRange((current) => {
+      const endDate = clampIsoDate(current.endDate, earliestDate, latestDate);
+      const startDate = clampIsoDate(current.startDate, earliestDate, endDate);
+      return { startDate, endDate };
+    });
+  }, [earliestDate, latestDate]);
+
+  const days = useMemo(
+    () => allDays.filter((day) => day.date >= range.startDate && day.date <= range.endDate),
+    [allDays, range.endDate, range.startDate],
+  );
+  const derivedPeriod: Period = differenceInDays(range.startDate, range.endDate) + 1 <= 7 ? 'this-week' : differenceInDays(range.startDate, range.endDate) + 1 <= 31 ? 'this-month' : '3-months';
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
@@ -69,21 +84,14 @@ export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: Consump
         {error && (
           <RetryNotice onRetry={refetch} className="mx-4 mb-4 w-[calc(100%-2rem)]" />
         )}
+        <DateRangeControl
+          value={range}
+          onChange={setRange}
+          availableDates={availableDates}
+          minDate={earliestDate}
+          maxDate={latestDate}
+        />
         <ValenceMeter days={days} />
-        <div className="px-4 pb-4">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {periods.map((item) => (
-              <button
-                key={item.value}
-                onClick={() => setPeriod(item.value)}
-                className="flex-shrink-0 rounded-full px-3 py-1.5 text-sm font-medium"
-                style={{ backgroundColor: period === item.value ? 'var(--color-primary)' : 'var(--color-surface-2)', color: period === item.value ? '#fff' : 'var(--color-text-muted)', border: `1px solid ${period === item.value ? 'transparent' : 'var(--color-border)'}` }}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
         {isLoading && !days.length ? (
           <>
             <div className="mx-4 h-72 rounded-[28px] animate-pulse mb-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }} />
@@ -91,7 +99,7 @@ export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: Consump
           </>
         ) : (
           <>
-            <ValenceChart period={period} days={days} />
+            <ValenceChart period={derivedPeriod} days={days} />
             <YouTubeSection days={days} />
           </>
         )}

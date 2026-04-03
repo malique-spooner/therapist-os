@@ -1,21 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { TopBar } from '@/components/navigation/TopBar';
 import { NutritionLog } from './NutritionLog';
 import { ScienceTip } from './ScienceTip';
 import { NutritionCharts } from './NutritionCharts';
 import { InsightCard } from '@/components/dashboard/InsightCard';
 import { getTodayScienceTip } from '@/lib/domainData';
-import type { Period } from '@/lib/mockDataUtils';
-import { useNutritionStore } from '@/store/nutrition';
-
-const periods: { label: string; value: Period }[] = [
-  { label: 'This Week', value: 'this-week' },
-  { label: 'Last Week', value: 'last-week' },
-  { label: 'This Month', value: 'this-month' },
-  { label: 'Last Month', value: 'last-month' },
-];
+import { api, type NutritionPayload } from '@/lib/api';
+import { useApiQuery } from '@/hooks/useApiQuery';
+import { DateRangeControl, type DateRangeValue } from '@/components/ui/date-range-control';
+import { APP_TODAY, addDays, clampIsoDate } from '@/lib/date';
+import { RetryNotice } from '@/components/ui/retry-notice';
 
 const insights = [
   {
@@ -57,38 +53,99 @@ interface NutritionPageProps {
 }
 
 export function NutritionPage({ onBack, onSettings, onTalkAboutThis }: NutritionPageProps) {
-  const [period, setPeriod] = useState<Period>('this-week');
-  const history = useNutritionStore((state) => state.history);
-  const hydrated = useNutritionStore((state) => state.hydrated);
-  const hydrateFromApi = useNutritionStore((state) => state.hydrateFromApi);
+  const { data, error, refetch, setData } = useApiQuery(() => api.getNutrition('3-months'), []);
+  const history = useMemo(() => data ?? [], [data]);
+  const availableDates = useMemo(() => history.map((day) => day.date), [history]);
+  const latestDate = availableDates[availableDates.length - 1] ?? APP_TODAY;
+  const earliestDate = availableDates[0] ?? addDays(latestDate, -89);
+  const [selectedRange, setSelectedRange] = useState<DateRangeValue>({ startDate: latestDate, endDate: latestDate });
 
   useEffect(() => {
-    if (!hydrated) {
-      void hydrateFromApi();
+    setSelectedRange((current) => {
+      const date = clampIsoDate(current.endDate, earliestDate, latestDate);
+      return { startDate: date, endDate: date };
+    });
+  }, [earliestDate, latestDate]);
+
+  const selectedDate = selectedRange.endDate;
+  const selectedLog = useMemo<NutritionPayload>(() => (
+    history.find((day) => day.date === selectedDate) ?? {
+      date: selectedDate,
+      meals: { breakfast: false, lunch: false, dinner: false, heavySnacking: false },
+      foodQuality: 2,
+      caffeine: { count: 0, lastBeforeNoon: true },
+      alcohol: { units: 0 },
     }
-  }, [hydrateFromApi, hydrated]);
+  ), [history, selectedDate]);
+  const visibleDays = useMemo(
+    () => history.filter((day) => day.date >= addDays(selectedDate, -13) && day.date <= selectedDate),
+    [history, selectedDate],
+  );
+
+  async function save(next: NutritionPayload) {
+    setData((current) => {
+      const rows = current ?? [];
+      const existing = rows.some((row) => row.date === next.date);
+      const updated = existing
+        ? rows.map((row) => row.date === next.date ? next : row)
+        : [...rows, next].sort((a, b) => a.date.localeCompare(b.date));
+      return updated;
+    });
+    try {
+      await api.saveNutritionForDate(next.date, {
+        meals: next.meals,
+        foodQuality: next.foodQuality,
+        caffeine: next.caffeine,
+        alcohol: next.alcohol,
+      });
+      await refetch();
+    } catch {
+      await refetch();
+    }
+  }
+
+  function updateSelected(mutator: (current: NutritionPayload) => NutritionPayload) {
+    void save(mutator(selectedLog));
+  }
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
       <TopBar showBack onBack={onBack} onSettings={onSettings} title="Nutrition" />
       <div className="flex-1 overflow-y-auto pb-6">
-        <NutritionLog />
+        {error && (
+          <RetryNotice onRetry={refetch} className="mx-4 mb-4 w-[calc(100%-2rem)]" />
+        )}
+        <DateRangeControl
+          mode="single"
+          value={selectedRange}
+          onChange={setSelectedRange}
+          availableDates={availableDates}
+          minDate={earliestDate}
+          maxDate={latestDate}
+        />
+        <NutritionLog
+          value={selectedLog}
+          label={selectedDate === APP_TODAY ? 'Today' : 'Selected'}
+          onToggleMeal={(meal) => updateSelected((current) => ({
+            ...current,
+            meals: { ...current.meals, [meal]: !current.meals[meal] },
+          }))}
+          onFoodQualityChange={(foodQuality) => updateSelected((current) => ({ ...current, foodQuality }))}
+          onCaffeineCountChange={(count) => updateSelected((current) => ({
+            ...current,
+            caffeine: { ...current.caffeine, count, lastBeforeNoon: count === 0 ? true : current.caffeine.lastBeforeNoon },
+          }))}
+          onAlcoholChange={(units) => updateSelected((current) => ({
+            ...current,
+            alcohol: { units },
+          }))}
+          onTimingChange={(lastBeforeNoon) => updateSelected((current) => ({
+            ...current,
+            caffeine: { ...current.caffeine, lastBeforeNoon },
+          }))}
+        />
         <ScienceTip tip={getTodayScienceTip()} />
-        <div className="px-4 pb-4">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {periods.map((item) => (
-              <button
-                key={item.value}
-                onClick={() => setPeriod(item.value)}
-                className="flex-shrink-0 rounded-full px-3 py-1.5 text-sm font-medium"
-                style={{ backgroundColor: period === item.value ? 'var(--color-primary)' : 'var(--color-surface-2)', color: period === item.value ? '#fff' : 'var(--color-text-muted)', border: `1px solid ${period === item.value ? 'transparent' : 'var(--color-border)'}` }}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <NutritionCharts period={period} days={history} />
+        <NutritionCharts days={visibleDays} />
         <div className="px-4 space-y-3">
           {insights.map((insight, index) => (
             <InsightCard key={insight.id} insight={insight} index={index} onTalkAboutThis={onTalkAboutThis} />

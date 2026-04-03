@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     USER_LONGITUDE: float = Field(default=-0.1278)
     SEED_DEMO_DATA: bool = Field(default=True)
     AUTO_RUN_MIGRATIONS: bool = Field(default=False)
+    DATA_SOURCE_ENCRYPTION_KEY: str = ""
 
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""

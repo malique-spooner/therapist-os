@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+from base64 import urlsafe_b64encode
 from datetime import datetime
+import hashlib
+import secrets
 from typing import Callable
+from urllib.parse import urlencode, urlparse
+
+import httpx
 
 from sqlalchemy.orm import Session
 
+from ..config import settings
+from ..core.secrets import secret_box
 from ..models import DataSourceConnection
 from .ingestion.garmin import GarminIngestionService
 from .ingestion.spotify import SpotifyIngestionService
@@ -17,26 +25,94 @@ DEFAULT_SOURCES = {
         "name": "Garmin Connect",
         "category": "Body - Steps, Sleep, HRV, Workouts",
         "icon": "⌚",
-        "hint": "Add GARMIN_EMAIL and GARMIN_PASSWORD on the backend to enable sync.",
+        "hint": "Enter your Garmin Connect email and password to enable health sync through the current Garmin library integration.",
+        "setup": {
+            "mode": "credentials",
+            "title": "Connect Garmin Connect",
+            "description": "Save your Garmin Connect login so Therapist OS can sync steps, sleep, HRV, and workouts.",
+            "actionLabel": "Save Garmin login",
+            "instructions": [
+                "Use the same email and password you use to sign in to Garmin Connect.",
+                "These credentials are stored encrypted on the backend and only used for Garmin sync jobs.",
+                "If you use multi-factor auth or Garmin changes the login flow, you may need to reconnect later.",
+            ],
+            "fields": [
+                {"key": "email", "label": "Garmin email", "type": "email", "placeholder": "you@example.com", "required": True},
+                {"key": "password", "label": "Garmin password", "type": "password", "placeholder": "Password", "required": True},
+            ],
+        },
     },
     "truelayer": {
         "name": "TrueLayer (Bank)",
         "category": "Finance - Transactions, Spending Categories",
         "icon": "🏦",
-        "hint": "Complete the TrueLayer OAuth setup on the backend to enable bank sync.",
+        "hint": "Add your TrueLayer app credentials, then complete the bank sign-in flow to enable finance sync.",
+        "setup": {
+            "mode": "oauth-credentials",
+            "title": "Connect TrueLayer",
+            "description": "Save your TrueLayer app credentials, then continue to the secure bank sign-in flow to grant account and transaction access.",
+            "actionLabel": "Save TrueLayer app",
+            "authActionLabel": "Continue with TrueLayer",
+            "instructions": [
+                "Create or open your TrueLayer app dashboard and copy the Client ID and Client Secret here.",
+                "Add the callback URL shown below to your TrueLayer app exactly as written.",
+                "During sign-in, grant account, balance, card, transaction, and offline access so Therapist OS can refresh data later without asking every time.",
+            ],
+            "fields": [
+                {"key": "client_id", "label": "Client ID", "type": "text", "placeholder": "TrueLayer client id", "required": True},
+                {"key": "client_secret", "label": "Client secret", "type": "password", "placeholder": "TrueLayer client secret", "required": True},
+                {"key": "refresh_token", "label": "Refresh token", "type": "password", "placeholder": "Filled automatically after sign-in", "required": False, "helpText": "Leave blank if you want Therapist OS to fetch this during the sign-in flow."},
+                {"key": "access_token", "label": "Access token (optional)", "type": "password", "placeholder": "Optional access token", "required": False},
+            ],
+        },
     },
     "spotify": {
         "name": "Spotify",
         "category": "Consumption - Music, Listening Patterns",
         "icon": "🎵",
-        "hint": "Spotify sync is not wired yet in this repo.",
+        "hint": "Add your Spotify app credentials, then complete Spotify sign-in to enable recent listening sync.",
+        "setup": {
+            "mode": "oauth-credentials",
+            "title": "Connect Spotify",
+            "description": "Save your Spotify app credentials, then continue to Spotify to grant recent-listening access.",
+            "actionLabel": "Save Spotify app",
+            "authActionLabel": "Continue with Spotify",
+            "instructions": [
+                "Create a Spotify Web API app in the Spotify developer dashboard.",
+                "Add the callback URL shown below to the app settings exactly as written before you continue.",
+                "Therapist OS asks for the recently played scope so it can sync your listening history.",
+            ],
+            "fields": [
+                {"key": "client_id", "label": "Client ID", "type": "text", "placeholder": "Spotify client id", "required": True},
+                {"key": "client_secret", "label": "Client secret", "type": "password", "placeholder": "Spotify client secret", "required": True},
+                {"key": "refresh_token", "label": "Refresh token", "type": "password", "placeholder": "Filled automatically after sign-in", "required": False, "helpText": "Leave blank if you want Therapist OS to fetch this during the sign-in flow."},
+            ],
+        },
     },
     "google_drive": {
         "name": "Google Drive",
         "category": "Imports - Google Takeout archives, history exports",
         "icon": "🗂️",
-        "hint": "Planned import path for Google Takeout archives. Connect Drive access and point exports at the Therapist OS / Google Takeout folder.",
+        "hint": "Set the Takeout folder path and save your Google OAuth credentials so Therapist OS can read export archives.",
         "folder_path": "Therapist OS / Google Takeout",
+        "setup": {
+            "mode": "oauth-credentials",
+            "title": "Connect Google Drive",
+            "description": "Save the Takeout folder and your Google app credentials, then continue to Google to grant Drive read access.",
+            "actionLabel": "Save Drive setup",
+            "authActionLabel": "Continue with Google",
+            "instructions": [
+                "Create a Google OAuth Web application and copy the Client ID and Client Secret here.",
+                "Add the callback URL shown below to your authorized redirect URIs exactly as written.",
+                "Therapist OS requests read-only Drive access so it can download new Google Takeout archives from your chosen folder.",
+            ],
+            "fields": [
+                {"key": "folder_path", "label": "Takeout folder", "type": "text", "placeholder": "Therapist OS / Google Takeout", "required": True},
+                {"key": "client_id", "label": "Google client ID", "type": "text", "placeholder": "OAuth client id", "required": True},
+                {"key": "client_secret", "label": "Google client secret", "type": "password", "placeholder": "OAuth client secret", "required": True},
+                {"key": "refresh_token", "label": "Refresh token", "type": "password", "placeholder": "Filled automatically after sign-in", "required": False},
+            ],
+        },
     },
     "youtube": {
         "name": "YouTube",
@@ -48,7 +124,22 @@ DEFAULT_SOURCES = {
         "name": "OwnTracks",
         "category": "Location - Continuous GPS Logging",
         "icon": "📍",
-        "hint": "Configure OwnTracks to POST to the backend webhook once the location endpoint is live.",
+        "hint": "Save a webhook username and password, then paste the URL into OwnTracks on your phone.",
+        "setup": {
+            "mode": "webhook",
+            "title": "Connect OwnTracks",
+            "description": "Therapist OS will generate the webhook details OwnTracks should use for live location pings.",
+            "actionLabel": "Save webhook login",
+            "instructions": [
+                "Save a private webhook username and password here.",
+                "Open OwnTracks on your phone, choose HTTP mode, and paste the webhook URL shown below.",
+                "Set the same username and password in OwnTracks so Therapist OS can verify incoming location pings.",
+            ],
+            "fields": [
+                {"key": "username", "label": "OwnTracks username", "type": "text", "placeholder": "owntracks-user", "required": True},
+                {"key": "password", "label": "OwnTracks password", "type": "password", "placeholder": "Private webhook password", "required": True},
+            ],
+        },
     },
     "google_calendar": {
         "name": "Google Calendar",
@@ -68,28 +159,115 @@ DEFAULT_SOURCES = {
         "icon": "🎙️",
         "hint": "Voice journaling depends on the Whisper flow, which is still pending.",
     },
+    "weather": {
+        "name": "OpenWeather",
+        "category": "Environment - Weather and daylight context",
+        "icon": "☀️",
+        "hint": "Add your OpenWeather API key to enable weather context.",
+        "setup": {
+            "mode": "api-key",
+            "title": "Connect OpenWeather",
+            "description": "Save your OpenWeather API key so Therapist OS can add weather and daylight context automatically.",
+            "actionLabel": "Save API key",
+            "instructions": [
+                "Create an OpenWeather account and generate an API key with access to the One Call API.",
+                "Paste the key here and Therapist OS will use your saved home coordinates to add weather and daylight context.",
+            ],
+            "fields": [
+                {"key": "api_key", "label": "OpenWeather API key", "type": "password", "placeholder": "OpenWeather API key", "required": True},
+            ],
+        },
+    },
+}
+
+SENSITIVE_FIELD_KEYS: dict[str, set[str]] = {
+    "garmin": {"password"},
+    "truelayer": {"client_secret", "refresh_token", "access_token", "pkce_verifier", "oauth_state"},
+    "spotify": {"client_secret", "refresh_token", "access_token", "oauth_state"},
+    "google_drive": {"client_secret", "refresh_token", "access_token", "oauth_state"},
+    "owntracks": {"password"},
+    "weather": {"api_key"},
 }
 
 
 class DataSourceService:
     def __init__(self) -> None:
-        self._garmin = GarminIngestionService()
-        self._spotify = SpotifyIngestionService()
-        self._truelayer = TrueLayerIngestionService()
         self._whisper = WhisperService()
 
-    def _availability(self) -> dict[str, bool]:
+    def _config(self, record: DataSourceConnection | None) -> dict[str, str]:
+        if not record:
+            return {}
+        public_config = {str(key): str(value) for key, value in (record.config_json or {}).items() if value is not None}
+        secret_config = self._secret_config(record)
+        if secret_config:
+            public_config.update(secret_config)
+        return public_config
+
+    def _secret_config(self, record: DataSourceConnection | None) -> dict[str, str]:
+        if not record or not record.encrypted_config_json:
+            return {}
+        decrypted = secret_box.decrypt(record.encrypted_config_json)
+        import json
+
+        payload = json.loads(decrypted)
+        return {str(key): str(value) for key, value in payload.items() if value is not None}
+
+    def _store_config(self, source_id: str, record: DataSourceConnection, values: dict[str, str]) -> None:
+        import json
+
+        sensitive = SENSITIVE_FIELD_KEYS.get(source_id, set())
+        public_config = {key: value for key, value in values.items() if key not in sensitive}
+        secret_config = {key: value for key, value in values.items() if key in sensitive}
+        record.config_json = public_config or None
+        record.encrypted_config_json = secret_box.encrypt(json.dumps(secret_config, sort_keys=True)) if secret_config else None
+
+    def _availability(self, db: Session) -> dict[str, bool]:
+        garmin = self._record("garmin", db)
+        truelayer = self._record("truelayer", db)
+        spotify = self._record("spotify", db)
+        owntracks = self._record("owntracks", db)
+        google_drive = self._record("google_drive", db)
+        weather = self._record("weather", db)
+
         return {
-            "garmin": self._garmin.is_configured,
-            "truelayer": self._truelayer.is_configured,
-            "spotify": self._spotify.is_configured,
-            "google_drive": False,
+            "garmin": GarminIngestionService(self._config(garmin)).is_configured,
+            "truelayer": TrueLayerIngestionService(self._config(truelayer)).is_configured,
+            "spotify": SpotifyIngestionService(self._config(spotify)).is_configured,
+            "google_drive": bool(self._config(google_drive).get("folder_path") and self._config(google_drive).get("client_id") and self._config(google_drive).get("client_secret") and self._config(google_drive).get("refresh_token")),
             "youtube": False,
-            "owntracks": True,
+            "owntracks": bool(self._config(owntracks).get("username") and self._config(owntracks).get("password")),
             "google_calendar": False,
             "google_photos": False,
             "voice_journal": self._whisper.is_available,
+            "weather": bool(self._config(weather).get("api_key")),
         }
+
+    def _is_connected(self, source_id: str, config: dict[str, str], available: bool) -> bool:
+        if not available:
+            return False
+        if source_id in {"spotify", "truelayer", "google_drive"}:
+            return bool(config.get("refresh_token"))
+        return True
+
+    def _connection_state(self, source_id: str, config: dict[str, str], available: bool, connected: bool) -> str:
+        if connected:
+            return "connected"
+        if source_id in {"spotify", "truelayer", "google_drive"} and self._can_authorize(source_id, config):
+            return "authorization-required"
+        if available:
+            return "ready"
+        return "setup-required"
+
+    def _connection_hint(self, source_id: str, config: dict[str, str], available: bool, connected: bool) -> str | None:
+        if connected:
+            return None
+        if source_id == "spotify" and self._can_authorize(source_id, config):
+            return "App credentials saved. Continue with Spotify sign-in to finish connecting your account."
+        if source_id == "truelayer" and self._can_authorize(source_id, config):
+            return "App credentials saved. Continue with TrueLayer to grant bank access and store a refresh token."
+        if source_id == "google_drive" and self._can_authorize(source_id, config):
+            return "OAuth setup saved. Continue with Google to grant Drive read-only access and finish the connection."
+        return DEFAULT_SOURCES[source_id]["hint"]
 
     def _record(self, source_id: str, db: Session) -> DataSourceConnection:
         record = db.get(DataSourceConnection, source_id)
@@ -106,15 +284,16 @@ class DataSourceService:
         return record
 
     def list_sources(self, db: Session) -> list[dict]:
-        availability = self._availability()
+        availability = self._availability(db)
         payload: list[dict] = []
         for source_id, default in DEFAULT_SOURCES.items():
             record = self._record(source_id, db)
             record.display_name = default["name"]
             record.category = default["category"]
+            config = self._config(record)
             record.available = availability.get(source_id, False)
-            if not record.connected:
-                record.connection_hint = default["hint"]
+            record.connected = self._is_connected(source_id, config, record.available)
+            record.connection_hint = self._connection_hint(source_id, config, record.available, record.connected)
             payload.append(self.serialize(record, default["icon"]))
         db.commit()
         return payload
@@ -123,11 +302,13 @@ class DataSourceService:
         if source_id not in DEFAULT_SOURCES:
             raise KeyError(source_id)
         record = self._record(source_id, db)
-        available = self._availability().get(source_id, False)
+        available = self._availability(db).get(source_id, False)
+        config = self._config(record)
         record.available = available
-        if not available:
+        record.connected = self._is_connected(source_id, config, available)
+        if not record.connected:
             record.connected = False
-            record.connection_hint = DEFAULT_SOURCES[source_id]["hint"]
+            record.connection_hint = self._connection_hint(source_id, config, available, False)
             db.commit()
             return self.serialize(record, DEFAULT_SOURCES[source_id]["icon"])
 
@@ -145,6 +326,9 @@ class DataSourceService:
         record.connected = False
         record.last_sync_status = None
         record.last_error = None
+        record.config_json = None
+        record.encrypted_config_json = None
+        record.available = False
         record.connection_hint = DEFAULT_SOURCES[source_id]["hint"]
         db.commit()
         db.refresh(record)
@@ -154,7 +338,7 @@ class DataSourceService:
         if source_id not in DEFAULT_SOURCES:
             raise KeyError(source_id)
         record = self._record(source_id, db)
-        action = self._sync_action(source_id)
+        action = self._sync_action(source_id, record)
         if action is None:
             record.connected = False
             record.last_sync_status = "unsupported"
@@ -184,7 +368,7 @@ class DataSourceService:
         if source_id not in DEFAULT_SOURCES:
             return
         record = self._record(source_id, db)
-        record.available = self._availability().get(source_id, record.available)
+        record.available = self._availability(db).get(source_id, record.available)
         record.connected = success
         record.last_sync_status = "success" if success else "failed"
         record.last_sync_at = datetime.utcnow() if success else record.last_sync_at
@@ -192,14 +376,323 @@ class DataSourceService:
         record.connection_hint = None if success else DEFAULT_SOURCES[source_id]["hint"]
         db.commit()
 
-    def _sync_action(self, source_id: str) -> Callable[[Session], object] | None:
+    def _sync_action(self, source_id: str, record: DataSourceConnection) -> Callable[[Session], object] | None:
+        config = self._config(record)
         if source_id == "garmin":
-            return self._garmin.sync_last_7_days
+            return GarminIngestionService(config).sync_last_7_days
         if source_id == "truelayer":
-            return self._truelayer.sync_last_30_days
+            return TrueLayerIngestionService(config).sync_last_30_days
         if source_id == "spotify":
-            return self._spotify.sync_recent_listening
+            return SpotifyIngestionService(config).sync_recent_listening
+        if source_id == "weather":
+            from .ingestion.weather import WeatherIngestionService
+
+            return WeatherIngestionService(config).sync_today
         return None
+
+    def get_setup(self, source_id: str, db: Session) -> dict:
+        if source_id not in DEFAULT_SOURCES:
+            raise KeyError(source_id)
+        record = self._record(source_id, db)
+        default = DEFAULT_SOURCES[source_id]
+        setup = default.get("setup")
+        if not setup:
+            return {
+                "id": source_id,
+                "name": default["name"],
+                "mode": "unsupported",
+                "title": f"Connect {default['name']}",
+                "description": default["hint"],
+                "instructions": [],
+                "actionLabel": "Close",
+                "connected": record.connected,
+                "available": record.available,
+                "fields": [],
+                "webhookUrl": None,
+                "callbackUrl": None,
+                "folderPath": default.get("folder_path"),
+            }
+
+        config = self._config(record)
+        fields = []
+        for field in setup.get("fields", []):
+            value = config.get(field["key"])
+            field_type = field.get("type", "text")
+            fields.append(
+                {
+                    "key": field["key"],
+                    "label": field["label"],
+                    "type": field_type,
+                    "required": field.get("required", True),
+                    "placeholder": field.get("placeholder"),
+                    "helpText": field.get("helpText"),
+                    "hasValue": bool(value),
+                    "value": value if field_type not in {"password"} else None,
+                }
+            )
+
+        return {
+            "id": source_id,
+            "name": default["name"],
+            "mode": setup["mode"],
+            "title": setup["title"],
+            "description": setup["description"],
+            "instructions": setup.get("instructions", []),
+            "actionLabel": setup["actionLabel"],
+            "connected": record.connected,
+            "available": self._availability(db).get(source_id, False),
+            "fields": fields,
+            "webhookUrl": self._webhook_url(source_id),
+            "callbackUrl": self._callback_url(source_id),
+            "folderPath": config.get("folder_path") or default.get("folder_path"),
+            "canAuthorize": self._can_authorize(source_id, config),
+            "authActionLabel": setup.get("authActionLabel"),
+        }
+
+    def save_setup(self, source_id: str, values: dict[str, str], db: Session) -> dict:
+        if source_id not in DEFAULT_SOURCES:
+            raise KeyError(source_id)
+        record = self._record(source_id, db)
+        existing = self._config(record)
+        setup = DEFAULT_SOURCES[source_id].get("setup", {})
+        next_config = {**existing}
+
+        for field in setup.get("fields", []):
+            key = field["key"]
+            if key in values:
+                value = values[key].strip()
+                if value:
+                    next_config[key] = value
+                elif field.get("required", True):
+                    next_config.pop(key, None)
+
+        self._store_config(source_id, record, next_config)
+        record.available = self._availability(db).get(source_id, False)
+        record.connected = self._is_connected(source_id, next_config, record.available)
+        record.last_error = None
+        record.connection_hint = self._connection_hint(source_id, next_config, record.available, record.connected)
+        db.commit()
+        db.refresh(record)
+        return self.serialize(record, DEFAULT_SOURCES[source_id]["icon"])
+
+    def begin_authorization(self, source_id: str, db: Session) -> str:
+        if source_id not in DEFAULT_SOURCES:
+            raise KeyError(source_id)
+        record = self._record(source_id, db)
+        config = self._config(record)
+        if not self._can_authorize(source_id, config):
+            raise RuntimeError(DEFAULT_SOURCES[source_id]["hint"])
+
+        state = secrets.token_urlsafe(18)
+        next_config = {**config, "oauth_state": state}
+        verifier = None
+        challenge = None
+        if source_id == "truelayer":
+            verifier = self._pkce_verifier_from_state(state)
+            challenge = self._pkce_challenge_from_verifier(verifier)
+            next_config["pkce_verifier"] = verifier
+        self._store_config(source_id, record, next_config)
+        db.commit()
+
+        if source_id == "spotify":
+            query = urlencode(
+                {
+                    "client_id": config["client_id"],
+                    "response_type": "code",
+                    "redirect_uri": self._callback_url(source_id),
+                    "state": state,
+                    "scope": "user-read-recently-played",
+                    "show_dialog": "true",
+                }
+            )
+            return f"https://accounts.spotify.com/authorize?{query}"
+
+        if source_id == "google_drive":
+            query = urlencode(
+                {
+                    "client_id": config["client_id"],
+                    "redirect_uri": self._callback_url(source_id),
+                    "response_type": "code",
+                    "scope": "https://www.googleapis.com/auth/drive.readonly",
+                    "access_type": "offline",
+                    "include_granted_scopes": "true",
+                    "prompt": "consent",
+                    "state": state,
+                }
+            )
+            return f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
+
+        if source_id == "truelayer":
+            query = urlencode(
+                {
+                    "response_type": "code",
+                    "client_id": config["client_id"],
+                    "redirect_uri": self._callback_url(source_id),
+                    "scope": "info accounts balance cards transactions offline_access",
+                    "state": state,
+                    "code_challenge": challenge,
+                    "code_challenge_method": "S256",
+                }
+            )
+            return f"https://auth.truelayer.com/?{query}"
+
+        raise RuntimeError("Authorization flow is not available for this source")
+
+    async def complete_authorization(self, source_id: str, code: str | None, state: str | None, error: str | None, db: Session) -> dict:
+        if source_id not in DEFAULT_SOURCES:
+            raise KeyError(source_id)
+        record = self._record(source_id, db)
+        config = self._config(record)
+
+        if error:
+            raise RuntimeError(error)
+        if not code:
+            raise RuntimeError("No authorization code was returned")
+        if not state or config.get("oauth_state") != state:
+            raise RuntimeError("Authorization state did not match")
+
+        token_payload = await self._exchange_code(source_id, code, config)
+        next_config = {**config}
+        next_config.pop("oauth_state", None)
+        next_config.pop("pkce_verifier", None)
+        if token_payload.get("refresh_token"):
+            next_config["refresh_token"] = str(token_payload["refresh_token"])
+        if token_payload.get("access_token"):
+            next_config["access_token"] = str(token_payload["access_token"])
+        self._store_config(source_id, record, next_config)
+        record.available = self._availability(db).get(source_id, False)
+        record.connected = self._is_connected(source_id, next_config, record.available)
+        record.last_error = None
+        record.connection_hint = self._connection_hint(source_id, next_config, record.available, record.connected)
+        db.commit()
+        db.refresh(record)
+        return self.serialize(record, DEFAULT_SOURCES[source_id]["icon"])
+
+    async def _exchange_code(self, source_id: str, code: str, config: dict[str, str]) -> dict[str, str]:
+        if source_id == "spotify":
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.post(
+                    "https://accounts.spotify.com/api/token",
+                    data={
+                        "grant_type": "authorization_code",
+                        "code": code,
+                        "redirect_uri": self._callback_url(source_id),
+                        "client_id": config["client_id"],
+                        "client_secret": config["client_secret"],
+                    },
+                )
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    detail = self._oauth_error_detail("Spotify", response)
+                    raise RuntimeError(detail) from exc
+                payload = response.json()
+            return {"access_token": payload.get("access_token", ""), "refresh_token": payload.get("refresh_token", "")}
+
+        if source_id == "google_drive":
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.post(
+                    "https://oauth2.googleapis.com/token",
+                    data={
+                        "grant_type": "authorization_code",
+                        "code": code,
+                        "redirect_uri": self._callback_url(source_id),
+                        "client_id": config["client_id"],
+                        "client_secret": config["client_secret"],
+                    },
+                )
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    detail = self._oauth_error_detail("Google Drive", response)
+                    raise RuntimeError(detail) from exc
+                payload = response.json()
+            return {"access_token": payload.get("access_token", ""), "refresh_token": payload.get("refresh_token", "")}
+
+        if source_id == "truelayer":
+            verifier = config.get("pkce_verifier", self._pkce_verifier_from_state(config.get("oauth_state", "")))
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.post(
+                    TrueLayerIngestionService.AUTH_URL,
+                    data={
+                        "grant_type": "authorization_code",
+                        "client_id": config["client_id"],
+                        "client_secret": config["client_secret"],
+                        "redirect_uri": self._callback_url(source_id),
+                        "code": code,
+                        "code_verifier": verifier,
+                    },
+                )
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    detail = self._oauth_error_detail("TrueLayer", response)
+                    raise RuntimeError(detail) from exc
+                payload = response.json()
+            return {"access_token": payload.get("access_token", ""), "refresh_token": payload.get("refresh_token", "")}
+
+        raise RuntimeError("Authorization exchange is not available for this source")
+
+    @staticmethod
+    def _pkce_verifier_from_state(state: str) -> str:
+        seed = hashlib.sha256(state.encode("utf-8")).digest()
+        return urlsafe_b64encode(seed).decode("utf-8").rstrip("=")[:64]
+
+    @staticmethod
+    def _pkce_challenge_from_verifier(verifier: str) -> str:
+        digest = hashlib.sha256(verifier.encode("utf-8")).digest()
+        return urlsafe_b64encode(digest).decode("utf-8").rstrip("=")
+
+    def _can_authorize(self, source_id: str, config: dict[str, str]) -> bool:
+        if source_id in {"spotify", "truelayer", "google_drive"}:
+            return bool(config.get("client_id") and config.get("client_secret"))
+        return False
+
+    def _webhook_url(self, source_id: str) -> str | None:
+        if source_id != "owntracks":
+            return None
+        parsed = urlparse(settings.FRONTEND_URL)
+        host = parsed.hostname or "localhost"
+        scheme = parsed.scheme or "http"
+        base = f"{scheme}://{host}:8000"
+        return f"{base}{settings.API_V1_PREFIX}/location/owntracks"
+
+    def _callback_url(self, source_id: str) -> str | None:
+        frontend_base = settings.FRONTEND_URL.rstrip("/")
+        spotify_base = frontend_base.replace("://localhost", "://127.0.0.1")
+        if source_id == "spotify":
+            return f"{spotify_base}/callback/spotify"
+        if source_id == "google_drive":
+            return f"{frontend_base}/callback/google-drive"
+        if source_id == "truelayer":
+            return f"{frontend_base}/callback/truelayer"
+        return None
+
+    @staticmethod
+    def _oauth_error_detail(provider_name: str, response: httpx.Response) -> str:
+        try:
+            payload = response.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+
+        parts = []
+        if isinstance(payload, dict):
+            error = payload.get("error")
+            description = payload.get("error_description") or payload.get("message")
+            if error:
+                parts.append(str(error))
+            if description:
+                parts.append(str(description))
+
+        if parts:
+            return f"{provider_name} rejected the connection: {' - '.join(parts)}"
+        return f"{provider_name} rejected the connection during token exchange. Check the redirect URI, client ID, and client secret."
+
+    def get_runtime_config(self, source_id: str, db: Session) -> dict[str, str]:
+        if source_id not in DEFAULT_SOURCES:
+            raise KeyError(source_id)
+        record = self._record(source_id, db)
+        return self._config(record)
 
     @staticmethod
     def _relative_time(timestamp: datetime | None) -> str | None:
@@ -219,6 +712,7 @@ class DataSourceService:
         return f"{days} day{'s' if days != 1 else ''} ago"
 
     def serialize(self, record: DataSourceConnection, icon: str) -> dict:
+        config = self._config(record)
         return {
             "id": record.source_id,
             "name": record.display_name,
@@ -226,9 +720,10 @@ class DataSourceService:
             "icon": icon,
             "connected": record.connected,
             "available": record.available,
+            "connectionState": self._connection_state(record.source_id, config, record.available, record.connected),
             "lastSync": self._relative_time(record.last_sync_at),
             "lastSyncStatus": record.last_sync_status,
-            "folderPath": DEFAULT_SOURCES[record.source_id].get("folder_path"),
+            "folderPath": config.get("folder_path") or DEFAULT_SOURCES[record.source_id].get("folder_path"),
             "connectionHint": record.connection_hint,
             "lastError": record.last_error,
         }

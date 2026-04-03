@@ -11,14 +11,56 @@ describe('SettingsPage data sources', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ([
-          { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: false, available: false, lastSync: null, lastSyncStatus: null, connectionHint: 'Add GARMIN_EMAIL and GARMIN_PASSWORD on the backend to enable sync.', lastError: null },
+          { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: false, available: false, connectionState: 'setup-required', lastSync: null, lastSyncStatus: null, connectionHint: 'Add GARMIN_EMAIL and GARMIN_PASSWORD on the backend to enable sync.', lastError: null },
         ]),
       })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
+          id: 'garmin',
+          name: 'Garmin Connect',
+          mode: 'credentials',
+          title: 'Connect Garmin Connect',
+          description: 'Save your Garmin login so Therapist OS can sync steps, sleep, HRV, and workouts.',
+          instructions: [],
+          actionLabel: 'Save Garmin login',
+          connected: false,
+          available: false,
+          fields: [
+            { key: 'email', label: 'Garmin email', type: 'email', required: true, placeholder: 'you@example.com', hasValue: false, value: null },
+            { key: 'password', label: 'Garmin password', type: 'password', required: true, placeholder: 'Password', hasValue: false, value: null },
+          ],
+          webhookUrl: null,
+          callbackUrl: null,
+          folderPath: null,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
           detail: 'Data source connected',
-          source: { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: true, available: true, lastSync: 'just now', lastSyncStatus: 'success', connectionHint: null, lastError: null },
+          source: { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: true, available: true, connectionState: 'connected', lastSync: 'just now', lastSyncStatus: 'success', connectionHint: null, lastError: null },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'garmin',
+          name: 'Garmin Connect',
+          mode: 'credentials',
+          title: 'Connect Garmin Connect',
+          description: 'Save your Garmin login so Therapist OS can sync steps, sleep, HRV, and workouts.',
+          instructions: [],
+          actionLabel: 'Save Garmin login',
+          connected: true,
+          available: true,
+          fields: [
+            { key: 'email', label: 'Garmin email', type: 'email', required: true, placeholder: 'you@example.com', hasValue: true, value: 'athlete@example.com' },
+            { key: 'password', label: 'Garmin password', type: 'password', required: true, placeholder: 'Password', hasValue: true, value: null },
+          ],
+          webhookUrl: null,
+          callbackUrl: null,
+          folderPath: null,
         }),
       }) as unknown as typeof fetch;
   });
@@ -28,7 +70,7 @@ describe('SettingsPage data sources', () => {
     vi.restoreAllMocks();
   });
 
-  it('loads backend-backed data sources and triggers connect actions', async () => {
+  it('loads backend-backed data sources and opens source-specific setup', async () => {
     const onOpenBrain = vi.fn();
     render(<SettingsPage onBack={() => {}} onOpenBrain={onOpenBrain} />);
 
@@ -40,9 +82,15 @@ describe('SettingsPage data sources', () => {
     expect(screen.getByText('Local LLM on Mac')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Garmin Connect' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open Brain' }));
+    expect(await screen.findByText('Connect Garmin Connect')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Garmin email *'), { target: { value: 'athlete@example.com' } });
+    fireEvent.change(screen.getByLabelText('Garmin password *'), { target: { value: 'topsecret' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Garmin login' }));
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Sync Garmin Connect now' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Manage Garmin Connect' })).toBeInTheDocument());
+    expect(screen.getByText('Connected')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Brain' }));
     expect(onOpenBrain).toHaveBeenCalledTimes(1);
   });
 

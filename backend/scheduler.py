@@ -3,16 +3,17 @@ import asyncio
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from .database import SessionLocal
+from .services.data_sources import DataSourceService
 from .services.ingestion.weather import WeatherIngestionService
 from .services.profile_service import ProfileService
 from .services.notifications import NotificationService
 
 
 async def _sync_weather_job() -> None:
-    service = WeatherIngestionService()
-    if not service.is_configured:
-        return
     with SessionLocal() as db:
+        service = WeatherIngestionService(DataSourceService().get_runtime_config("weather", db))
+        if not service.is_configured:
+            return
         await service.sync_today(db)
 
 

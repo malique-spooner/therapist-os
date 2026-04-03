@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+import secrets
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -106,9 +107,29 @@ def upsert_location_companions(date: str, payload: LocationCompanionUpdateSchema
 async def owntracks_webhook(
     payload: dict,
     db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
     x_owntracks_secret: str | None = Header(default=None),
 ) -> dict:
-    if settings.OWNTRACKS_SECRET and x_owntracks_secret != settings.OWNTRACKS_SECRET:
+    config = data_source_service.get_runtime_config("owntracks", db)
+    expected_username = config.get("username")
+    expected_password = config.get("password")
+
+    if expected_username and expected_password:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Missing OwnTracks credentials")
+        try:
+            import base64
+
+            scheme, encoded = authorization.split(" ", 1)
+            if scheme.lower() != "basic":
+                raise ValueError("Unsupported auth scheme")
+            decoded = base64.b64decode(encoded).decode("utf-8")
+            username, password = decoded.split(":", 1)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=401, detail="Invalid OwnTracks credentials") from exc
+        if not (secrets.compare_digest(username, expected_username) and secrets.compare_digest(password, expected_password)):
+            raise HTTPException(status_code=401, detail="Invalid OwnTracks credentials")
+    elif settings.OWNTRACKS_SECRET and x_owntracks_secret != settings.OWNTRACKS_SECRET:
         raise HTTPException(status_code=401, detail="Invalid OwnTracks secret")
 
     if payload.get("_type") != "location":

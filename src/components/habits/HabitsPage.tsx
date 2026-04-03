@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, Check } from 'lucide-react';
 import { TopBar } from '@/components/navigation/TopBar';
@@ -11,6 +11,8 @@ import { ProgressRing } from './ProgressRing';
 import { api, type HabitsOverview } from '@/lib/api';
 import { useApiQuery } from '@/hooks/useApiQuery';
 import { RetryNotice } from '@/components/ui/retry-notice';
+import { DateRangeControl, type DateRangeValue } from '@/components/ui/date-range-control';
+import { formatRangeLabel } from '@/lib/date';
 
 interface HabitsPageProps {
   onSettings: () => void;
@@ -20,17 +22,26 @@ export function HabitsPage({ onSettings }: HabitsPageProps) {
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [newHabitName, setNewHabitName] = useState('');
   const { data, isLoading, error, setData, refetch } = useApiQuery(api.getHabits, []);
-
-  const dateLabel = useMemo(
-    () => new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }),
-    []
-  );
   const habits = data?.habits ?? [];
-  const todayCompletions = data?.todayCompletions ?? {};
-  const weeklyPct = data?.weeklyCompletion ?? 0;
+  const availableDates = useMemo(() => data?.history.map((day) => day.date) ?? [], [data?.history]);
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [selectedRange, setSelectedRange] = useState<DateRangeValue>({ startDate: todayKey, endDate: todayKey });
+  const selectedDate = selectedRange.endDate;
+
+  useEffect(() => {
+    if (!selectedDate) {
+      setSelectedRange({ startDate: todayKey, endDate: todayKey });
+    }
+  }, [selectedDate, todayKey]);
+
+  const dateLabel = useMemo(() => formatRangeLabel(selectedDate, selectedDate), [selectedDate]);
+  const selectedDayValues = useMemo(
+    () => data?.history.find((day) => day.date === selectedDate)?.values ?? (selectedDate === todayKey ? data?.todayCompletions ?? {} : {}),
+    [data?.history, data?.todayCompletions, selectedDate, todayKey],
+  );
+  const weeklyPct = data?.weeklyCompletion ?? 0;
   const completedToday = habits.filter((habit) => {
-    const val = todayCompletions[habit.id];
+    const val = selectedDayValues[habit.id];
     if (val === undefined || val === null) return false;
     return typeof val === 'boolean' ? val : Number(val) > 0;
   }).length;
@@ -40,12 +51,13 @@ export function HabitsPage({ onSettings }: HabitsPageProps) {
     history: NonNullable<HabitsOverview['history']>,
     habitId: string,
     value: boolean | number,
+    targetDate: string,
   ) {
-    const existing = history.find((day) => day.date === todayKey);
+    const existing = history.find((day) => day.date === targetDate);
 
     if (existing) {
       return history.map((day) => (
-        day.date === todayKey
+        day.date === targetDate
           ? { ...day, values: { ...day.values, [habitId]: value } }
           : day
       ));
@@ -54,7 +66,7 @@ export function HabitsPage({ onSettings }: HabitsPageProps) {
     return [
       ...history,
       {
-        date: todayKey,
+        date: targetDate,
         values: { [habitId]: value },
       },
     ];
@@ -63,11 +75,11 @@ export function HabitsPage({ onSettings }: HabitsPageProps) {
   async function setCompletion(habitId: string, value: boolean | number) {
     setData((current) => current ? {
       ...current,
-      todayCompletions: { ...current.todayCompletions, [habitId]: value },
-      history: updateHistoryDay(current.history, habitId, value),
+      todayCompletions: selectedDate === todayKey ? { ...current.todayCompletions, [habitId]: value } : current.todayCompletions,
+      history: updateHistoryDay(current.history, habitId, value, selectedDate),
     } : current);
     try {
-      await api.saveHabitLog(habitId, value);
+      await api.saveHabitLog(habitId, value, selectedDate);
       await refetch();
     } catch {
       await refetch();
@@ -95,12 +107,20 @@ export function HabitsPage({ onSettings }: HabitsPageProps) {
           <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>Habit Tracker</h1>
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{dateLabel}</p>
         </div>
+        <DateRangeControl
+          mode="single"
+          value={selectedRange}
+          onChange={setSelectedRange}
+          availableDates={availableDates}
+          minDate={availableDates[0] ?? todayKey}
+          maxDate={todayKey}
+        />
 
         <div className="px-4 pb-3">
           <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Today</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedDate === todayKey ? 'Today' : 'Selected day'}</p>
                 <p className="text-3xl font-bold mt-0.5" style={{ color: 'var(--color-primary)' }}>
                   {completedToday}/{habits.length || 0}
                 </p>
@@ -115,7 +135,9 @@ export function HabitsPage({ onSettings }: HabitsPageProps) {
         </div>
 
         <div className="px-4 pb-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-muted)' }}>Today&apos;s habits</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-muted)' }}>
+            {selectedDate === todayKey ? 'Today&apos;s habits' : 'Habits on this day'}
+          </h2>
           {isLoading && (
             <div className="space-y-2">
               {[0, 1, 2].map((item) => (
@@ -135,7 +157,7 @@ export function HabitsPage({ onSettings }: HabitsPageProps) {
                 <HabitRow
                   key={habit.id}
                   habit={habit}
-                  value={todayCompletions[habit.id] ?? undefined}
+                  value={selectedDayValues[habit.id] ?? undefined}
                   onChange={(val) => void setCompletion(habit.id, val)}
                 />
               ))}

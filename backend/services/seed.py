@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from math import floor, sin
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..models import AIConversation, AIMessage, DailyCheckIn, DataSourceConnection, FinanceData, Habit, HabitLog, HealthData, MonthlyBudget, MusicData, NutritionLog, Relationship, RelationshipInteraction, UserProfile, WeatherData
@@ -51,11 +51,53 @@ def _lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
 
 
-def seed_demo_data(db: Session) -> None:
-    if db.scalar(select(HealthData.id).limit(1)):
-        return
+def _demo_window() -> tuple[date, date]:
+    end = date.today()
+    start = end - timedelta(days=89)
+    return start, end
 
-    start = date(2026, 1, 1)
+
+def _cleanup_demo_window(db: Session, start: date, end: date) -> None:
+    demo_tables = (
+        HealthData,
+        MusicData,
+        WeatherData,
+        NutritionLog,
+        DailyCheckIn,
+    )
+    for model in demo_tables:
+        db.execute(delete(model).where(model.is_demo.is_(True), (model.date < start) | (model.date > end)))
+
+    db.execute(delete(FinanceData).where(FinanceData.is_demo.is_(True), (FinanceData.date < start) | (FinanceData.date > end)))
+    db.execute(delete(HabitLog).where(HabitLog.is_demo.is_(True), (HabitLog.date < start) | (HabitLog.date > end)))
+    db.execute(delete(RelationshipInteraction).where(RelationshipInteraction.is_demo.is_(True), (RelationshipInteraction.date < start) | (RelationshipInteraction.date > end)))
+
+
+def _upsert_daily_demo(
+    db: Session,
+    model,
+    target_date: date,
+    **values,
+):
+    row = db.scalar(select(model).where(model.date == target_date))
+    if row and not getattr(row, "is_demo", False):
+        return row
+    if not row:
+        row = model(date=target_date)
+        db.add(row)
+    for key, value in values.items():
+        setattr(row, key, value)
+    row.is_demo = True
+    return row
+
+
+def seed_demo_data(db: Session) -> None:
+    start, end = _demo_window()
+    _cleanup_demo_window(db, start, end)
+
+    daily_categories: dict[date, dict[str, int]] = {}
+    daily_social_evenings: dict[date, bool] = {}
+
     for i in range(90):
         day = start + timedelta(days=i)
         dow = day.weekday()
@@ -74,18 +116,18 @@ def seed_demo_data(db: Session) -> None:
         hrv = max(28, min(72, round(_lerp(44, 52, progress) + (r5 - 0.5) * 20)))
         resting_hr = max(52, min(72, round(_lerp(64, 58, progress) + (r1 - 0.5) * 8)))
 
-        db.add(
-            HealthData(
-                date=day,
-                steps=steps,
-                sleep_duration_hours=round(sleep_duration, 1),
-                sleep_quality=float(sleep_quality),
-                hrv_ms=float(hrv),
-                resting_hr=resting_hr,
-                workout_logged=workout_logged,
-                workout_type="gym" if workout_logged else None,
-                workout_duration_minutes=45 if workout_logged else 0,
-            )
+        _upsert_daily_demo(
+            db,
+            HealthData,
+            day,
+            steps=steps,
+            sleep_duration_hours=round(sleep_duration, 1),
+            sleep_quality=float(sleep_quality),
+            hrv_ms=float(hrv),
+            resting_hr=resting_hr,
+            workout_logged=workout_logged,
+            workout_type="gym" if workout_logged else None,
+            workout_duration_minutes=45 if workout_logged else 0,
         )
 
         has_social_evening = r1 > (0.45 if is_weekend else 0.75)
@@ -98,46 +140,48 @@ def seed_demo_data(db: Session) -> None:
             "social": round(10 + r1 * 25) if has_social_evening else 0,
             "other": round(r2 * 15),
         }
+        daily_categories[day] = categories
+        daily_social_evenings[day] = has_social_evening
         for category, amount in categories.items():
-            db.add(
-                FinanceData(
-                    date=day,
-                    amount_pence=amount * 100,
-                    category=category,
-                    merchant=category.replace("_", " ").title(),
-                    description=f"Seeded {category} transaction",
-                    transaction_id=f"{day.isoformat()}-{category}",
-                )
-            )
+            record = db.scalar(select(FinanceData).where(FinanceData.transaction_id == f"demo-{day.isoformat()}-{category}"))
+            if not record:
+                record = FinanceData(transaction_id=f"demo-{day.isoformat()}-{category}")
+                db.add(record)
+            record.date = day
+            record.amount_pence = amount * 100
+            record.category = category
+            record.merchant = category.replace("_", " ").title()
+            record.description = f"Seeded {category} transaction"
+            record.is_demo = True
 
         sunrise_hour = 7 if day.month < 3 else 6
         sunset_hour = 17 if day.month < 3 else 19
-        db.add(
-            WeatherData(
-                date=day,
-                sunrise_time=datetime(day.year, day.month, day.day, sunrise_hour, 15).time(),
-                sunset_time=datetime(day.year, day.month, day.day, sunset_hour, 35).time(),
-                daylight_hours=round((sunset_hour + 0.33) - (sunrise_hour + 0.25), 1),
-                temperature_high_c=round(7 + progress * 8 + (r1 - 0.5) * 4, 1),
-                temperature_low_c=round(1 + progress * 5 + (r2 - 0.5) * 3, 1),
-                condition="cloudy" if r3 < 0.4 else "rainy" if r3 < 0.55 else "sunny",
-                uv_index=round(1 + progress * 4 + r4 * 2, 1),
-            )
+        _upsert_daily_demo(
+            db,
+            WeatherData,
+            day,
+            sunrise_time=datetime(day.year, day.month, day.day, sunrise_hour, 15).time(),
+            sunset_time=datetime(day.year, day.month, day.day, sunset_hour, 35).time(),
+            daylight_hours=round((sunset_hour + 0.33) - (sunrise_hour + 0.25), 1),
+            temperature_high_c=round(7 + progress * 8 + (r1 - 0.5) * 4, 1),
+            temperature_low_c=round(1 + progress * 5 + (r2 - 0.5) * 3, 1),
+            condition="cloudy" if r3 < 0.4 else "rainy" if r3 < 0.55 else "sunny",
+            uv_index=round(1 + progress * 4 + r4 * 2, 1),
         )
-        db.add(
-            MusicData(
-                date=day,
-                listening_hours=round(0.8 + r2 * 1.7, 2),
-                average_valence=round(0.35 + r3 * 0.4, 3),
-                average_energy=round(0.4 + r4 * 0.45, 3),
-                average_danceability=round(0.3 + r5 * 0.5, 3),
-                new_discoveries=2 if r1 > 0.65 else 1,
-                top_genres=["indie pop", "alt r&b", "ambient"] if r3 > 0.5 else ["indie rock", "electronic", "neo-soul"],
-                top_tracks=[
-                    {"name": "Seed Track A", "artist": "Artist One", "plays": 3},
-                    {"name": "Seed Track B", "artist": "Artist Two", "plays": 2},
-                ],
-            )
+        _upsert_daily_demo(
+            db,
+            MusicData,
+            day,
+            listening_hours=round(0.8 + r2 * 1.7, 2),
+            average_valence=round(0.35 + r3 * 0.4, 3),
+            average_energy=round(0.4 + r4 * 0.45, 3),
+            average_danceability=round(0.3 + r5 * 0.5, 3),
+            new_discoveries=2 if r1 > 0.65 else 1,
+            top_genres=["indie pop", "alt r&b", "ambient"] if r3 > 0.5 else ["indie rock", "electronic", "neo-soul"],
+            top_tracks=[
+                {"name": "Seed Track A", "artist": "Artist One", "plays": 3},
+                {"name": "Seed Track B", "artist": "Artist Two", "plays": 2},
+            ],
         )
 
         breakfast = r1 > (0.4 if is_weekend else 0.23)
@@ -148,38 +192,60 @@ def seed_demo_data(db: Session) -> None:
         caffeine_count = max(0, min(4, round(1.2 + (7.1 - sleep_duration) + (r5 - 0.5) * 1.4)))
         caffeine_before_noon = True if caffeine_count == 0 else r5 > 0.35
         food_quality = int(max(1, min(3, round(2 + (1 if breakfast else 0) + (0.5 if lunch else -0.5) + (-0.7 if is_weekend else 0) + progress * 0.75 + (r1 - 0.5) * 0.9))))
-        db.add(
-            NutritionLog(
-                date=day,
-                breakfast=breakfast,
-                lunch=lunch,
-                dinner=dinner,
-                heavy_snacking=heavy_snacking,
-                food_quality=food_quality,
-                caffeine_count=caffeine_count,
-                caffeine_last_before_noon=caffeine_before_noon,
-                alcohol_units=alcohol_units,
-            )
+        _upsert_daily_demo(
+            db,
+            NutritionLog,
+            day,
+            breakfast=breakfast,
+            lunch=lunch,
+            dinner=dinner,
+            heavy_snacking=heavy_snacking,
+            food_quality=food_quality,
+            caffeine_count=caffeine_count,
+            caffeine_last_before_noon=caffeine_before_noon,
+            alcohol_units=alcohol_units,
         )
 
         mood = int(max(1, min(5, round(3.2 + (0.8 if breakfast else -0.5) + (0.24 * (sleep_quality - 6.5)) + (-0.45 if alcohol_units > 2 else 0) + (0.35 if r3 > 0.62 else -0.3 if r3 < 0.25 else 0) + (-0.8 if dow == 0 else 0.7 if dow == 4 else 0) + (r4 - 0.5) * 0.7))))
         energy = int(max(1, min(5, round(3 + (sleep_duration - 6.8) * 0.55 + (food_quality - 2) * 0.5 + (0.35 if breakfast else -0.55) + (r2 - 0.5) * 0.5))))
         one_words = ["tired", "okay", "hopeful", "anxious", "good", "stressed", "calm"]
-        db.add(
-            DailyCheckIn(
-                date=day,
-                timestamp=int(datetime(day.year, day.month, day.day, 8, 0).timestamp() * 1000),
-                emotional_state=mood,
-                energy_level=energy,
-                one_word=one_words[i % len(one_words)] if r5 > 0.4 else None,
-            )
+        _upsert_daily_demo(
+            db,
+            DailyCheckIn,
+            day,
+            timestamp=int(datetime(day.year, day.month, day.day, 8, 0).timestamp() * 1000),
+            emotional_state=mood,
+            energy_level=energy,
+            one_word=one_words[i % len(one_words)] if r5 > 0.4 else None,
         )
 
     for person in RELATIONSHIP_PEOPLE:
-        db.add(Relationship(**person, active=True))
+        existing = db.get(Relationship, person["id"])
+        if existing and not existing.is_demo:
+            continue
+        if not existing:
+            existing = Relationship(id=person["id"])
+            db.add(existing)
+        existing.name = person["name"]
+        existing.type = person["type"]
+        existing.tier = person["tier"]
+        existing.desired_frequency_days = person["desired_frequency_days"]
+        existing.avatar_colour = person["avatar_colour"]
+        existing.active = True
+        existing.is_demo = True
 
     for habit in DEFAULT_HABITS:
-        db.add(Habit(**habit))
+        existing = db.get(Habit, habit["id"])
+        if existing:
+            existing.name = habit["name"]
+            existing.sub_label = habit.get("sub_label")
+            existing.category = habit["category"]
+            existing.category_icon = habit["category_icon"]
+            existing.habit_type = habit["habit_type"]
+            existing.unit = habit.get("unit")
+            existing.frequency = habit["frequency"]
+        else:
+            db.add(Habit(**habit))
 
     db.flush()
     habits = {habit.id: habit for habit in db.scalars(select(Habit)).all()}
@@ -222,93 +288,101 @@ def seed_demo_data(db: Session) -> None:
             "quit-snus": (r7 > 0.14, None, None),
         }
         for habit_id, (completed, numeric_value, scale_value) in values.items():
-            db.add(
-                HabitLog(
-                    habit_id=habits[habit_id].id,
-                    date=day,
-                    completed=completed,
-                    numeric_value=numeric_value,
-                    scale_value=scale_value,
-                )
-            )
+            log = db.scalar(select(HabitLog).where(HabitLog.habit_id == habits[habit_id].id, HabitLog.date == day))
+            if log and not log.is_demo:
+                continue
+            if not log:
+                log = HabitLog(habit_id=habits[habit_id].id, date=day)
+                db.add(log)
+            log.completed = completed
+            log.numeric_value = numeric_value
+            log.scale_value = scale_value
+            log.is_demo = True
 
         interaction_time = datetime(day.year, day.month, day.day, 18, 0)
+        categories = daily_categories[day]
+        has_social_evening = daily_social_evenings[day]
+        alex_id = f"demo-interaction-{day.isoformat()}-alex"
+        alex_interaction = db.get(RelationshipInteraction, alex_id)
         if r1 > (0.2 if i > 55 else 0.35) or categories["social"] > 12:
-            db.add(
-                RelationshipInteraction(
-                    id=f"interaction-{day.isoformat()}-alex",
-                    date=day,
-                    timestamp=int(interaction_time.timestamp() * 1000),
-                    person_ids=[people["alex"].id],
-                    interaction_type="in_person" if categories["social"] > 12 or is_weekend else "phone",
-                    presence_score=5 if categories["social"] > 12 or is_weekend else 4,
-                    feeling_word="grounded",
-                )
-            )
+            if not alex_interaction:
+                alex_interaction = RelationshipInteraction(id=alex_id)
+                db.add(alex_interaction)
+            alex_interaction.date = day
+            alex_interaction.timestamp = int(interaction_time.timestamp() * 1000)
+            alex_interaction.person_ids = [people["alex"].id]
+            alex_interaction.interaction_type = "in_person" if categories["social"] > 12 or has_social_evening or is_weekend else "phone"
+            alex_interaction.presence_score = 5 if categories["social"] > 12 or is_weekend else 4
+            alex_interaction.feeling_word = "grounded"
+            alex_interaction.is_demo = True
         if r2 > 0.52:
-            db.add(
-                RelationshipInteraction(
-                    id=f"interaction-{day.isoformat()}-mum",
-                    date=day,
-                    timestamp=int(datetime(day.year, day.month, day.day, 12, 0).timestamp() * 1000),
-                    person_ids=[people["mum"].id],
-                    interaction_type="phone" if is_weekend else "message",
-                    presence_score=4 if is_weekend else 3,
-                    feeling_word="steady" if r2 > 0.78 else None,
-                )
-            )
+            mum_id = f"demo-interaction-{day.isoformat()}-mum"
+            mum_interaction = db.get(RelationshipInteraction, mum_id)
+            if not mum_interaction:
+                mum_interaction = RelationshipInteraction(id=mum_id)
+                db.add(mum_interaction)
+            mum_interaction.date = day
+            mum_interaction.timestamp = int(datetime(day.year, day.month, day.day, 12, 0).timestamp() * 1000)
+            mum_interaction.person_ids = [people["mum"].id]
+            mum_interaction.interaction_type = "phone" if is_weekend else "message"
+            mum_interaction.presence_score = 4 if is_weekend else 3
+            mum_interaction.feeling_word = "steady" if r2 > 0.78 else None
+            mum_interaction.is_demo = True
 
-    conversation = AIConversation(
-        ai_provider="claude-sonnet",
-        ai_model="claude-sonnet-4-6",
-        total_tokens_used=860,
-        total_cost_pence=24,
-    )
-    db.add(conversation)
-    db.flush()
-    db.add_all(
-        [
-            AIMessage(conversation_id=conversation.id, role="assistant", content="Midweek check-in. Wednesday tends to be your lowest mood day in the data. Is that tracking with how you're feeling right now?", frameworks_referenced=["CBT"], cost_pence=0),
-            AIMessage(conversation_id=conversation.id, role="user", content="A bit flat, honestly.", cost_pence=0),
-            AIMessage(conversation_id=conversation.id, role="assistant", content="That fits the pattern in your recent week: shorter sleep on Tuesday night, then lower energy today. What feels most draining right now?", frameworks_referenced=["CBT"], cost_pence=12, tokens_used=430),
-        ]
-    )
+    if not db.scalar(select(AIConversation.id).limit(1)):
+        conversation = AIConversation(
+            ai_provider="local-qwen",
+            ai_model="qwen3.5:35b",
+            total_tokens_used=860,
+            total_cost_pence=0,
+        )
+        db.add(conversation)
+        db.flush()
+        db.add_all(
+            [
+                AIMessage(conversation_id=conversation.id, role="assistant", content="Midweek check-in. Wednesday tends to be your lowest mood day in the data. Is that tracking with how you're feeling right now?", frameworks_referenced=["CBT"], cost_pence=0),
+                AIMessage(conversation_id=conversation.id, role="user", content="A bit flat, honestly.", cost_pence=0),
+                AIMessage(conversation_id=conversation.id, role="assistant", content="That fits the pattern in your recent week: shorter sleep on Tuesday night, then lower energy today. What feels most draining right now?", frameworks_referenced=["CBT"], cost_pence=0, tokens_used=430),
+            ]
+        )
 
     month_start = date.today().replace(day=1)
-    db.add(
-        MonthlyBudget(
-            month=month_start,
-            limit_pence=1000,
-            spent_pence=240,
-            auto_switch_at_80=True,
-            disable_paid_at_limit=True,
+    if not db.scalar(select(MonthlyBudget).where(MonthlyBudget.month == month_start)):
+        db.add(
+            MonthlyBudget(
+                month=month_start,
+                limit_pence=1000,
+                spent_pence=240,
+                auto_switch_at_80=True,
+                disable_paid_at_limit=True,
+            )
         )
-    )
-    db.add(
-        UserProfile(
-            profile_document=(
-                "## Personal Context\nA reflective person using Therapist OS to build steadier routines across sleep, movement, spending, and self-check-ins.\n\n"
-                "## Core Patterns\nSleep quality improves when evenings are protected. Social movement boosts mood and next-day energy. Unplanned social spend is the main budget leak.\n\n"
-                "## Psychological Profile\nCBT lands well when tied to concrete patterns. SDT framing around autonomy and relatedness is motivating.\n\n"
-                "## Active Goals\nBuild sustainable sleep habits.\nStay more deliberate with social spending.\nProtect movement as a baseline.\n\n"
-                "## Important Relationships\nClose connection and movement reinforce each other strongly.\n\n"
-                "## What Works For Them\nWalking before demanding work. Morning check-ins. Structuring evenings.\n\n"
-                "## Current Focus Areas\nConsistency over intensity.\n\n"
-                "## Data Baselines\nSleep around 7.1h. Steps around 8,500. Mood roughly 6-7/10."
-            ),
-            key_themes=["sleep consistency", "social movement", "budget awareness"],
-            active_goals=["Protect sleep", "Stay deliberate with spending", "Keep workouts regular"],
-            notable_patterns=[
-                "Mood tends to dip midweek when sleep shortens the night before.",
-                "Social days tend to produce both higher steps and higher spend.",
-                "Movement is more stable when it is scheduled early.",
-            ],
-            health_baseline={"sleep_hours": 7.1, "steps": 8500, "resting_hr": 60},
-            mood_baseline=6.6,
+    if not db.scalar(select(UserProfile.id).limit(1)):
+        db.add(
+            UserProfile(
+                profile_document=(
+                    "## Personal Context\nA reflective person using Therapist OS to build steadier routines across sleep, movement, spending, and self-check-ins.\n\n"
+                    "## Core Patterns\nSleep quality improves when evenings are protected. Social movement boosts mood and next-day energy. Unplanned social spend is the main budget leak.\n\n"
+                    "## Psychological Profile\nCBT lands well when tied to concrete patterns. SDT framing around autonomy and relatedness is motivating.\n\n"
+                    "## Active Goals\nBuild sustainable sleep habits.\nStay more deliberate with social spending.\nProtect movement as a baseline.\n\n"
+                    "## Important Relationships\nClose connection and movement reinforce each other strongly.\n\n"
+                    "## What Works For Them\nWalking before demanding work. Morning check-ins. Structuring evenings.\n\n"
+                    "## Current Focus Areas\nConsistency over intensity.\n\n"
+                    "## Data Baselines\nSleep around 7.1h. Steps around 8,500. Mood roughly 6-7/10."
+                ),
+                key_themes=["sleep consistency", "social movement", "budget awareness"],
+                active_goals=["Protect sleep", "Stay deliberate with spending", "Keep workouts regular"],
+                notable_patterns=[
+                    "Mood tends to dip midweek when sleep shortens the night before.",
+                    "Social days tend to produce both higher steps and higher spend.",
+                    "Movement is more stable when it is scheduled early.",
+                ],
+                health_baseline={"sleep_hours": 7.1, "steps": 8500, "resting_hr": 60},
+                mood_baseline=6.6,
+            )
         )
-    )
-    db.add_all(
-        [
+    if not db.get(DataSourceConnection, "garmin"):
+        db.add(
             DataSourceConnection(
                 source_id="garmin",
                 display_name="Garmin Connect",
@@ -316,7 +390,10 @@ def seed_demo_data(db: Session) -> None:
                 connected=False,
                 available=False,
                 connection_hint="Add GARMIN_EMAIL and GARMIN_PASSWORD on the backend to enable sync.",
-            ),
+            )
+        )
+    if not db.get(DataSourceConnection, "truelayer"):
+        db.add(
             DataSourceConnection(
                 source_id="truelayer",
                 display_name="TrueLayer (Bank)",
@@ -324,7 +401,6 @@ def seed_demo_data(db: Session) -> None:
                 connected=False,
                 available=False,
                 connection_hint="Complete the TrueLayer OAuth setup on the backend to enable bank sync.",
-            ),
-        ]
-    )
+            )
+        )
     db.commit()

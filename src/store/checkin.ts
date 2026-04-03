@@ -3,15 +3,24 @@ import { persist } from 'zustand/middleware';
 import { checkInHistory, type DailyCheckIn } from '@/data/checkins';
 import { APP_TODAY, isSameDay } from '@/lib/date';
 import { api } from '@/lib/api';
+import type { DataMode } from '@/store/settings';
 
 interface CheckInState {
   history: DailyCheckIn[];
   todayCheckIn: DailyCheckIn | null;
   hydrated: boolean;
   hydrateFromApi: () => Promise<void>;
+  applyDataMode: (mode: DataMode) => Promise<void>;
   completeCheckIn: (checkIn: Omit<DailyCheckIn, 'date' | 'timestamp'>) => void;
   skipToday: () => void;
   hasCheckedInToday: () => boolean;
+}
+
+function getDemoCheckIns() {
+  return {
+    history: checkInHistory,
+    todayCheckIn: checkInHistory.find((entry) => isSameDay(entry.date, APP_TODAY)) ?? null,
+  };
 }
 
 export const useCheckInStore = create<CheckInState>()(
@@ -21,15 +30,31 @@ export const useCheckInStore = create<CheckInState>()(
       todayCheckIn: null,
       hydrated: false,
       hydrateFromApi: async () => {
-        const [history, today] = await Promise.all([
-          api.getCheckins('3-months'),
-          api.getTodayCheckin(),
-        ]);
-        set({
-          history,
-          todayCheckIn: today,
-          hydrated: true,
-        });
+        await get().applyDataMode('mixed');
+      },
+      applyDataMode: async (mode) => {
+        if (mode === 'demo-only') {
+          set({ ...getDemoCheckIns(), hydrated: true });
+          return;
+        }
+
+        try {
+          const [history, today] = await Promise.all([
+            api.getCheckins('3-months'),
+            api.getTodayCheckin(),
+          ]);
+          set({
+            history,
+            todayCheckIn: today,
+            hydrated: true,
+          });
+        } catch {
+          if (mode === 'real-only') {
+            set({ history: [], todayCheckIn: null, hydrated: true });
+            return;
+          }
+          set({ ...getDemoCheckIns(), hydrated: true });
+        }
       },
       completeCheckIn: (checkIn) =>
         set((state) => {

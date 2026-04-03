@@ -2,7 +2,6 @@
 
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import type { NutritionDay } from '@/data/nutrition';
-import type { Period } from '@/lib/mockDataUtils';
 
 function ChartWrap({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -13,23 +12,8 @@ function ChartWrap({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
-function sliceForPeriod(days: NutritionDay[], period: Period) {
-  switch (period) {
-    case 'this-week':
-      return days.slice(-7);
-    case 'last-week':
-      return days.slice(-14, -7);
-    case 'this-month':
-      return days.slice(-30);
-    case 'last-month':
-      return days.slice(-60, -30);
-    case '3-months':
-      return days.slice(-90);
-  }
-}
-
-export function NutritionCharts({ period, days }: { period: Period; days: NutritionDay[] }) {
-  const data = sliceForPeriod(days, period).map((day) => ({
+export function NutritionCharts({ days }: { days: NutritionDay[] }) {
+  const data = days.map((day) => ({
     label: day.date.slice(5),
     meals: Number(day.meals.breakfast) + Number(day.meals.lunch) + Number(day.meals.dinner),
     quality: day.foodQuality,

@@ -15,18 +15,27 @@ logger = get_logger(__name__)
 
 
 class GarminIngestionService:
-    def __init__(self) -> None:
+    def __init__(self, config: dict[str, str] | None = None) -> None:
         self._client: Garmin | None = None
+        self._config = config or {}
 
     @property
     def is_configured(self) -> bool:
-        return bool(settings.GARMIN_EMAIL and settings.GARMIN_PASSWORD)
+        return bool(self._email and self._password)
+
+    @property
+    def _email(self) -> str:
+        return self._config.get("email") or settings.GARMIN_EMAIL
+
+    @property
+    def _password(self) -> str:
+        return self._config.get("password") or settings.GARMIN_PASSWORD
 
     def _ensure_client(self) -> Garmin:
         if not self.is_configured:
             raise RuntimeError("Garmin credentials are not configured")
         if self._client is None:
-            client = Garmin(settings.GARMIN_EMAIL, settings.GARMIN_PASSWORD)
+            client = Garmin(self._email, self._password)
             client.login()
             self._client = client
         return self._client
@@ -121,6 +130,7 @@ class GarminIngestionService:
         record.workout_logged = had_workout
         record.workout_type = workout_type
         record.workout_duration_minutes = workout_duration or 0
+        record.is_demo = False
 
         db.commit()
         db.refresh(record)

@@ -31,6 +31,16 @@ export function DataRing({ label, value, unit, percentage, trend, trendPositive,
       transition={{ delay, duration: 0.4, ease: 'easeOut' }}
     >
       <div className="relative" style={{ width: size, height: size }}>
+        <motion.div
+          className="absolute inset-[14px] rounded-full"
+          style={{
+            background: `radial-gradient(circle, color-mix(in srgb, ${color} 24%, white 76%) 0%, rgba(255,255,255,0) 72%)`,
+            filter: 'blur(4px)',
+          }}
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: delay + 0.1, duration: 0.6, ease: 'easeOut' }}
+        />
         <svg width={size} height={size} className="-rotate-90">
           <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--color-border)" strokeWidth={strokeWidth} />
           <motion.circle
@@ -44,12 +54,22 @@ export function DataRing({ label, value, unit, percentage, trend, trendPositive,
             transition={{ duration: 1, ease: 'easeOut', delay: delay + 0.2 }}
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <motion.div
+          className="absolute inset-0 flex flex-col items-center justify-center"
+          initial={{ opacity: 0, scale: 0.86 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: delay + 0.32, duration: 0.4, ease: 'easeOut' }}
+        >
           <span className="text-sm font-bold leading-none" style={{ color: 'var(--color-text)' }}>{value}</span>
           <span className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)', fontSize: 9 }}>{unit}</span>
-        </div>
+        </motion.div>
       </div>
-      <div className="text-center">
+      <motion.div
+        className="text-center"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: delay + 0.36, duration: 0.35 }}
+      >
         <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{label}</p>
         <div className="flex items-center justify-center gap-0.5 mt-0.5">
           {trendPositive
@@ -60,7 +80,7 @@ export function DataRing({ label, value, unit, percentage, trend, trendPositive,
             {trend}
           </span>
         </div>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }

@@ -19,5 +19,6 @@ class NutritionLog(Base):
     caffeine_count: Mapped[int] = mapped_column(Integer, default=0)
     caffeine_last_before_noon: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     alcohol_units: Mapped[int] = mapped_column(Integer, default=0)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

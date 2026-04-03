@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
@@ -18,5 +18,7 @@ class DataSourceConnection(Base):
     last_sync_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     connection_hint: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    config_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    encrypted_config_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

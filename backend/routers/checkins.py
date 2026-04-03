@@ -48,6 +48,7 @@ def save_checkin(payload: DailyCheckInCreateSchema, db: Session = Depends(get_db
         row.emotional_state = payload.emotionalState
         row.energy_level = payload.energyLevel
         row.one_word = payload.oneWord
+    row.is_demo = False
     db.commit()
     db.refresh(row)
     return _serialize(row)

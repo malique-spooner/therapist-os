@@ -16,9 +16,16 @@ logger = get_logger(__name__)
 class WeatherIngestionService:
     BASE_URL = "https://api.openweathermap.org/data/3.0/onecall"
 
+    def __init__(self, config: dict[str, str] | None = None) -> None:
+        self._config = config or {}
+
+    @property
+    def _api_key(self) -> str:
+        return self._config.get("api_key") or settings.OPENWEATHER_API_KEY
+
     @property
     def is_configured(self) -> bool:
-        return bool(settings.OPENWEATHER_API_KEY)
+        return bool(self._api_key)
 
     async def sync_today(self, db: Session) -> WeatherData:
         return await self.sync_date(date.today(), db)
@@ -30,7 +37,7 @@ class WeatherIngestionService:
         params = {
             "lat": settings.USER_LATITUDE,
             "lon": settings.USER_LONGITUDE,
-            "appid": settings.OPENWEATHER_API_KEY,
+            "appid": self._api_key,
             "units": "metric",
         }
 
@@ -72,6 +79,7 @@ class WeatherIngestionService:
         record.temperature_low_c = day_payload.get("temp", {}).get("min")
         record.condition = condition
         record.uv_index = day_payload.get("uvi")
+        record.is_demo = False
         db.commit()
         db.refresh(record)
         logger.info(

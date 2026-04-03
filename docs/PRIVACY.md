@@ -38,6 +38,12 @@ When local inference is connected, the intended networking model is:
 
 The Mac should not be exposed as a public AI endpoint.
 
+## Connection Secrets
+
+- Data source secrets such as passwords, client secrets, refresh tokens, webhook passwords, and API keys should be stored encrypted at rest on the backend.
+- Non-sensitive setup values such as folder paths and usernames can stay in plain configuration storage.
+- Disconnecting a source should remove its saved setup from the active connection record.
+
 ## Operational Guidance
 
 - Use private ntfy topics.

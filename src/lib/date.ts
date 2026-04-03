@@ -1,5 +1,14 @@
-export const APP_TODAY = '2026-03-31';
-export const APP_START = '2026-01-01';
+function londonIsoToday() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+export const APP_TODAY = londonIsoToday();
+export const APP_START = addDays(APP_TODAY, -89);
 
 export function toIsoDate(date: Date): string {
   return date.toISOString().split('T')[0];
@@ -36,4 +45,18 @@ export function getDayLabel(value: string, options?: Intl.DateTimeFormatOptions)
 
 export function isSameDay(a?: string, b?: string) {
   return Boolean(a && b && a === b);
+}
+
+export function clampIsoDate(value: string, min: string, max: string) {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+export function formatRangeLabel(startDate: string, endDate: string) {
+  if (startDate === endDate) {
+    return getDayLabel(endDate, { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
+  return `${getDayLabel(startDate, { day: 'numeric', month: 'short' })} - ${getDayLabel(endDate, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }

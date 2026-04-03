@@ -3,38 +3,55 @@
 import { MealToggle } from './MealToggle';
 import { FoodQualitySelector } from './FoodQualitySelector';
 import { SubstanceLogger } from './SubstanceLogger';
-import { useNutritionStore } from '@/store/nutrition';
+import type { NutritionDay } from '@/data/nutrition';
 
-export function NutritionLog() {
-  const { todayLog, toggleMeal, setFoodQuality, setCaffeineCount, setAlcoholUnits, setCaffeineTiming } = useNutritionStore();
+interface NutritionLogProps {
+  value: NutritionDay;
+  onToggleMeal: (meal: 'breakfast' | 'lunch' | 'dinner' | 'heavySnacking') => void;
+  onFoodQualityChange: (value: 1 | 2 | 3) => void;
+  onCaffeineCountChange: (count: number) => void;
+  onAlcoholChange: (units: number) => void;
+  onTimingChange: (lastBeforeNoon: boolean) => void;
+  label?: string;
+}
+
+export function NutritionLog({
+  value,
+  onToggleMeal,
+  onFoodQualityChange,
+  onCaffeineCountChange,
+  onAlcoholChange,
+  onTimingChange,
+  label = 'Today',
+}: NutritionLogProps) {
 
   return (
     <div className="px-4 space-y-3 pb-4">
       <div className="rounded-[28px] p-4 space-y-3" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Today&apos;s Nutrition</p>
+        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{label}&apos;s Nutrition</p>
         <div className="space-y-2">
-          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Meals today</p>
-          <MealToggle label="Breakfast" active={todayLog.meals.breakfast} onToggle={() => toggleMeal('breakfast')} />
-          <MealToggle label="Lunch" active={todayLog.meals.lunch} onToggle={() => toggleMeal('lunch')} />
-          <MealToggle label="Dinner" active={todayLog.meals.dinner} onToggle={() => toggleMeal('dinner')} />
-          <MealToggle label="Snacking heavily today?" active={todayLog.meals.heavySnacking} onToggle={() => toggleMeal('heavySnacking')} />
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Meals</p>
+          <MealToggle label="Breakfast" active={value.meals.breakfast} onToggle={() => onToggleMeal('breakfast')} />
+          <MealToggle label="Lunch" active={value.meals.lunch} onToggle={() => onToggleMeal('lunch')} />
+          <MealToggle label="Dinner" active={value.meals.dinner} onToggle={() => onToggleMeal('dinner')} />
+          <MealToggle label="Snacking heavily?" active={value.meals.heavySnacking} onToggle={() => onToggleMeal('heavySnacking')} />
         </div>
       </div>
 
       <div className="rounded-[28px] p-4 space-y-3" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>How did you eat today?</p>
-        <FoodQualitySelector value={todayLog.foodQuality} onChange={setFoodQuality} />
+        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>How did you eat?</p>
+        <FoodQualitySelector value={value.foodQuality} onChange={onFoodQualityChange} />
       </div>
 
       <div className="rounded-[28px] p-4 space-y-3" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
         <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Caffeine &amp; Alcohol</p>
         <SubstanceLogger
-          caffeineCount={todayLog.caffeine.count}
-          alcoholUnits={todayLog.alcohol.units}
-          lastBeforeNoon={todayLog.caffeine.lastBeforeNoon}
-          onCaffeineCountChange={setCaffeineCount}
-          onAlcoholChange={setAlcoholUnits}
-          onTimingChange={setCaffeineTiming}
+          caffeineCount={value.caffeine.count}
+          alcoholUnits={value.alcohol.units}
+          lastBeforeNoon={value.caffeine.lastBeforeNoon}
+          onCaffeineCountChange={onCaffeineCountChange}
+          onAlcoholChange={onAlcoholChange}
+          onTimingChange={onTimingChange}
         />
       </div>
     </div>

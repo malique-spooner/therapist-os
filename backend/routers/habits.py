@@ -125,6 +125,7 @@ def upsert_habit_log(payload: HabitLogUpsert, db: Session = Depends(get_db)) -> 
         log.numeric_value = float(payload.value)
     else:
         log.scale_value = int(payload.value)
+    log.is_demo = False
 
     db.commit()
     return {"detail": "Habit log saved"}

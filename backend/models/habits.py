@@ -35,6 +35,7 @@ class HabitLog(Base):
     completed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     numeric_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     scale_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     habit: Mapped[Habit] = relationship(back_populates="logs")

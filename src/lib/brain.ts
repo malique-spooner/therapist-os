@@ -35,6 +35,24 @@ export interface BrainVersion {
   state: 'current' | 'previous' | 'planned';
 }
 
+export interface BrainOverview {
+  version: string;
+  status: string;
+  lastRefresh: string;
+  macStatus: string;
+  privacyMode: string;
+  candidateSignals: number;
+  surfacedInsights: number;
+  totalLayers: number;
+  activeSystems: number;
+}
+
+export interface BrainPayload {
+  overview: BrainOverview;
+  layers: BrainLayer[];
+  versions: BrainVersion[];
+}
+
 export const brainOverview = {
   version: 'Brain v3',
   status: 'Launch blueprint',

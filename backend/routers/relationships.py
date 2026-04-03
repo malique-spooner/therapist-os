@@ -75,6 +75,7 @@ def create_relationship(payload: RelationshipCreateSchema, db: Session = Depends
         desired_frequency_days=payload.desiredFrequencyDays,
         avatar_colour=TIER_COLOURS.get(payload.tier, "#52B788"),
         active=True,
+        is_demo=False,
     )
     db.add(row)
     db.commit()
@@ -96,14 +97,20 @@ def get_relationship_interactions(period: str = "this-week", db: Session = Depen
 @router.post("/interactions")
 def create_relationship_interaction(payload: RelationshipInteractionCreateSchema, db: Session = Depends(get_db)) -> dict:
     now = datetime.utcnow()
+    target_date = datetime.fromisoformat(payload.date).date() if payload.date else now.date()
+    timestamp = int(now.timestamp() * 1000)
+    if payload.date:
+        target_timestamp = datetime.combine(target_date, now.time())
+        timestamp = int(target_timestamp.timestamp() * 1000)
     row = RelationshipInteraction(
         id=str(uuid.uuid4()),
-        date=now.date(),
-        timestamp=int(now.timestamp() * 1000),
+        date=target_date,
+        timestamp=timestamp,
         person_ids=payload.personIds,
         interaction_type=payload.type,
         presence_score=payload.presenceScore,
         feeling_word=payload.feelingWord,
+        is_demo=False,
     )
     db.add(row)
     db.commit()

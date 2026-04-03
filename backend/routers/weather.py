@@ -5,11 +5,12 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..middleware.auth import verify_api_key
 from ..models import WeatherData
+from ..services.data_sources import DataSourceService
 from ..services.ingestion.weather import WeatherIngestionService
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/weather", tags=["weather"], dependencies=[Depends(verify_api_key)])
-service = WeatherIngestionService()
+data_source_service = DataSourceService()
 
 
 def _serialize(record: WeatherData) -> dict:
@@ -43,6 +44,7 @@ def get_weather(period: str = "this-week", db: Session = Depends(get_db)) -> lis
 @router.post("/sync")
 async def sync_weather(db: Session = Depends(get_db)) -> dict:
     try:
+        service = WeatherIngestionService(data_source_service.get_runtime_config("weather", db))
         record = await service.sync_today(db)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

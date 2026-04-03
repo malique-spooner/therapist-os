@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { TopBar } from '@/components/navigation/TopBar';
 import { LocationHero } from './LocationHero';
 import { LocationSummary } from './LocationSummary';
@@ -15,13 +15,8 @@ import { api } from '@/lib/api';
 import { useApiQuery } from '@/hooks/useApiQuery';
 import { RetryNotice } from '@/components/ui/retry-notice';
 import { useRelationshipsStore } from '@/store/relationships';
-
-const periods: { label: string; value: Period }[] = [
-  { label: 'This Week', value: 'this-week' },
-  { label: 'Last Week', value: 'last-week' },
-  { label: 'This Month', value: 'this-month' },
-  { label: 'Last Month', value: 'last-month' },
-];
+import { DateRangeControl, type DateRangeValue } from '@/components/ui/date-range-control';
+import { APP_TODAY, addDays, clampIsoDate, differenceInDays } from '@/lib/date';
 
 interface LocationPageProps {
   onBack: () => void;
@@ -30,21 +25,46 @@ interface LocationPageProps {
 }
 
 export function LocationPage({ onBack, onSettings, onTalkAboutThis }: LocationPageProps) {
-  const [period, setPeriod] = useState<Period>('this-week');
   const relationshipsHydrated = useRelationshipsStore((state) => state.hydrated);
   const hydrateRelationships = useRelationshipsStore((state) => state.hydrateFromApi);
   const relationshipPeople = useRelationshipsStore((state) => state.people);
-  const { data: summaries, isLoading, error, refetch } = useApiQuery(() => api.getLocationSummary(period), [period]);
-  const { data: today } = useApiQuery(() => api.getLocationToday(), []);
-  const { data: points } = useApiQuery(() => api.getLocation(period), [period]);
+  const { data: summaries, isLoading, error, refetch } = useApiQuery(() => api.getLocationSummary('3-months'), []);
+  const { data: points } = useApiQuery(() => api.getLocation('3-months'), []);
+  const availableDates = useMemo(() => (summaries ?? []).map((day) => day.date), [summaries]);
+  const latestDate = availableDates[availableDates.length - 1] ?? APP_TODAY;
+  const earliestDate = availableDates[0] ?? addDays(latestDate, -89);
+  const [range, setRange] = useState<DateRangeValue>(() => ({
+    startDate: addDays(latestDate, -6),
+    endDate: latestDate,
+  }));
   const { data: companionLog, refetch: refetchCompanionLog, setData: setCompanionLog } = useApiQuery(
-    () => today ? api.getLocationCompanions(today.date) : Promise.resolve(null),
-    [today?.date],
+    () => range.endDate ? api.getLocationCompanions(range.endDate) : Promise.resolve(null),
+    [range.endDate],
   );
-  const activationCard = getLocationActivationCard(period);
-  const insights = getLocationInsights(period);
-  const chartDays = summaries ?? [];
-  const recentPoints = (points ?? []).slice(-24);
+
+  useEffect(() => {
+    setRange((current) => {
+      const endDate = clampIsoDate(current.endDate, earliestDate, latestDate);
+      const startDate = clampIsoDate(current.startDate, earliestDate, endDate);
+      return { startDate, endDate };
+    });
+  }, [earliestDate, latestDate]);
+
+  const chartDays = useMemo(
+    () => (summaries ?? []).filter((day) => day.date >= range.startDate && day.date <= range.endDate),
+    [range.endDate, range.startDate, summaries],
+  );
+  const selectedDay = useMemo(
+    () => (summaries ?? []).find((day) => day.date === range.endDate) ?? null,
+    [range.endDate, summaries],
+  );
+  const recentPoints = useMemo(
+    () => (points ?? []).filter((point) => point.timestamp.slice(0, 10) >= range.startDate && point.timestamp.slice(0, 10) <= range.endDate).slice(-24),
+    [points, range.endDate, range.startDate],
+  );
+  const derivedPeriod: Period = differenceInDays(range.startDate, range.endDate) + 1 <= 7 ? 'this-week' : differenceInDays(range.startDate, range.endDate) + 1 <= 31 ? 'this-month' : '3-months';
+  const activationCard = getLocationActivationCard(derivedPeriod);
+  const insights = getLocationInsights(derivedPeriod);
 
   useEffect(() => {
     if (!relationshipsHydrated) {
@@ -59,34 +79,26 @@ export function LocationPage({ onBack, onSettings, onTalkAboutThis }: LocationPa
         {error && (
           <RetryNotice onRetry={refetch} className="mx-4 mb-4 w-[calc(100%-2rem)]" />
         )}
-        <LocationHero today={today ?? null} points={recentPoints} />
-        <LocationSummary today={today ?? null} />
+        <DateRangeControl
+          value={range}
+          onChange={setRange}
+          availableDates={availableDates}
+          minDate={earliestDate}
+          maxDate={latestDate}
+        />
+        <LocationHero today={selectedDay} points={recentPoints} />
+        <LocationSummary today={selectedDay} />
         <CompanionTagger
-          today={today ?? null}
+          today={selectedDay}
           people={relationshipPeople}
           saved={companionLog}
           onSave={async (payload) => {
-            if (!today) return;
-            const next = await api.saveLocationCompanions(today.date, payload);
+            if (!selectedDay) return;
+            const next = await api.saveLocationCompanions(selectedDay.date, payload);
             setCompanionLog(next);
             await refetchCompanionLog();
           }}
         />
-
-        <div className="px-4 pb-4">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {periods.map((item) => (
-              <button
-                key={item.value}
-                onClick={() => setPeriod(item.value)}
-                className="flex-shrink-0 rounded-full px-3 py-1.5 text-sm font-medium"
-                style={{ backgroundColor: period === item.value ? 'var(--color-primary)' : 'var(--color-surface-2)', color: period === item.value ? '#fff' : 'var(--color-text-muted)', border: `1px solid ${period === item.value ? 'transparent' : 'var(--color-border)'}` }}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
 
         <div className="mx-4 rounded-[28px] p-4 mb-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{activationCard.title}</p>
@@ -100,9 +112,9 @@ export function LocationPage({ onBack, onSettings, onTalkAboutThis }: LocationPa
             ))}
           </div>
         ) : (
-          <LocationCharts period={period} days={chartDays} />
+          <LocationCharts period={derivedPeriod} days={chartDays} />
         )}
-        <SignificantPlaces period={period} />
+        <SignificantPlaces period={derivedPeriod} />
 
         <div className="px-4 pb-4 space-y-3">
           {insights.map((insight, index) => (
@@ -110,7 +122,7 @@ export function LocationPage({ onBack, onSettings, onTalkAboutThis }: LocationPa
           ))}
         </div>
 
-        <RecommendedActions period={period} />
+        <RecommendedActions period={derivedPeriod} />
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, Sparkles, X } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 import { DashboardPage } from './dashboard/DashboardPage';
 import { TherapistPage } from './therapist/TherapistPage';
@@ -10,9 +11,10 @@ import { HabitsPage } from './habits/HabitsPage';
 import { SettingsPage } from './settings/SettingsPage';
 import { BrainPage } from './brain/BrainPage';
 import { BottomNav } from './navigation/BottomNav';
-import { DomainMenu } from './navigation/DomainMenu';
 import { DailyCheckIn } from './checkin/DailyCheckIn';
 import { useCheckInStore } from '@/store/checkin';
+import { useRelationshipsStore } from '@/store/relationships';
+import { useSettingsStore } from '@/store/settings';
 import { HealthPage } from './health/HealthPage';
 import { FinancePage } from './finance/FinancePage';
 import { ConsumptionPage } from './consumption/ConsumptionPage';
@@ -33,7 +35,6 @@ type PageId =
   | 'consumption'
   | 'location';
 
-const primaryPages: PageId[] = ['dashboard', 'health', 'therapist', 'habits'];
 const pageDepth: Record<PageId, number> = {
   dashboard: 0,
   health: 1,
@@ -48,27 +49,45 @@ const pageDepth: Record<PageId, number> = {
 };
 
 export function AppShell() {
+  const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
   const [direction, setDirection] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [therapistContext, setTherapistContext] = useState<string | null>(null);
   const [openPrompt, setOpenPrompt] = useState<AppOpenPromptPayload | null>(null);
   const [openPromptVisible, setOpenPromptVisible] = useState(false);
+  const [settingsSourceId, setSettingsSourceId] = useState<string | null>(null);
   const hasCheckedInToday = useCheckInStore((state) => state.hasCheckedInToday)();
   const checkInHydrated = useCheckInStore((state) => state.hydrated);
   const hydrateCheckIns = useCheckInStore((state) => state.hydrateFromApi);
+  const applyCheckInDataMode = useCheckInStore((state) => state.applyDataMode);
+  const applyRelationshipsDataMode = useRelationshipsStore((state) => state.applyDataMode);
+  const dataMode = useSettingsStore((state) => state.dataMode);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
+    const shouldOpenSettings = searchParams.get('settings') === '1';
+    const sourceId = searchParams.get('source');
+    if (shouldOpenSettings) {
+      setShowSettings(true);
+      setSettingsSourceId(sourceId);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!checkInHydrated) {
       void hydrateCheckIns();
     }
   }, [checkInHydrated, hydrateCheckIns]);
+
+  useEffect(() => {
+    void applyCheckInDataMode(dataMode);
+    void applyRelationshipsDataMode(dataMode);
+  }, [applyCheckInDataMode, applyRelationshipsDataMode, dataMode]);
 
   useEffect(() => {
     if (!mounted || !checkInHydrated || !hasCheckedInToday) return;
@@ -184,7 +203,7 @@ export function AppShell() {
       break;
   }
 
-  const showBottomNav = primaryPages.includes(currentPage);
+  const showBottomNav = true;
 
   return (
     <div className="flex flex-col w-full" style={{ height: '100dvh', backgroundColor: 'var(--color-surface)' }}>
@@ -205,13 +224,10 @@ export function AppShell() {
 
       {showBottomNav && (
         <BottomNav
-          current={currentPage === 'dashboard' || currentPage === 'health' || currentPage === 'therapist' || currentPage === 'habits' ? currentPage : 'dashboard'}
+          current={currentPage}
           onNavigate={(page) => navigateTo(page)}
-          onMore={() => setShowMoreMenu(true)}
         />
       )}
-
-      <DomainMenu open={showMoreMenu} onClose={() => setShowMoreMenu(false)} onSelect={(page) => navigateTo(page)} />
 
       <AnimatePresence>
         {showSettings && (
@@ -235,7 +251,15 @@ export function AppShell() {
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-10 h-1 rounded-full" style={{ backgroundColor: 'var(--color-border)' }} />
               </div>
-              <SettingsPage onBack={() => setShowSettings(false)} onOpenBrain={navigateToBrain} />
+              <SettingsPage
+                onBack={() => {
+                  setShowSettings(false);
+                  setSettingsSourceId(null);
+                }}
+                onOpenBrain={navigateToBrain}
+                requestedSourceId={settingsSourceId}
+                onSourceRequestHandled={() => setSettingsSourceId(null)}
+              />
             </motion.div>
           </>
         )}

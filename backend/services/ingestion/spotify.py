@@ -16,33 +16,50 @@ logger = get_logger(__name__)
 
 
 class SpotifyIngestionService:
-    def __init__(self) -> None:
+    def __init__(self, config: dict[str, str] | None = None) -> None:
         self._client: spotipy.Spotify | None = None
+        self._config = config or {}
 
     @property
     def is_configured(self) -> bool:
-        return bool(settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET and settings.SPOTIFY_REFRESH_TOKEN)
+        return bool(self._client_id and self._client_secret and self._refresh_token)
+
+    @property
+    def _client_id(self) -> str:
+        return self._config.get("client_id") or settings.SPOTIFY_CLIENT_ID
+
+    @property
+    def _client_secret(self) -> str:
+        return self._config.get("client_secret") or settings.SPOTIFY_CLIENT_SECRET
+
+    @property
+    def _refresh_token(self) -> str:
+        return self._config.get("refresh_token") or settings.SPOTIFY_REFRESH_TOKEN
+
+    @property
+    def _redirect_uri(self) -> str:
+        return f"{settings.FRONTEND_URL.rstrip('/').replace('://localhost', '://127.0.0.1')}/callback/spotify"
 
     def _ensure_client(self) -> spotipy.Spotify:
         if not self.is_configured:
             raise RuntimeError("Spotify credentials are not configured")
         if self._client is None:
             auth_manager = spotipy.oauth2.SpotifyOAuth(
-                client_id=settings.SPOTIFY_CLIENT_ID,
-                client_secret=settings.SPOTIFY_CLIENT_SECRET,
-                redirect_uri="http://localhost:3000/callback",
+                client_id=self._client_id,
+                client_secret=self._client_secret,
+                redirect_uri=self._redirect_uri,
                 scope="user-read-recently-played",
                 open_browser=False,
                 cache_handler=None,
             )
             token_info = {
                 "access_token": "",
-                "refresh_token": settings.SPOTIFY_REFRESH_TOKEN,
+                "refresh_token": self._refresh_token,
                 "expires_at": 0,
                 "token_type": "Bearer",
                 "scope": "user-read-recently-played",
             }
-            access_token = auth_manager.refresh_access_token(settings.SPOTIFY_REFRESH_TOKEN)["access_token"]
+            access_token = auth_manager.refresh_access_token(self._refresh_token)["access_token"]
             token_info["access_token"] = access_token
             self._client = spotipy.Spotify(auth=access_token, auth_manager=auth_manager)
         return self._client
@@ -101,9 +118,17 @@ class SpotifyIngestionService:
     def _fetch_audio_features(self, client: spotipy.Spotify, track_ids: list[str]) -> dict[str, dict[str, Any]]:
         if not track_ids:
             return {}
+        unique_track_ids = list(dict.fromkeys(track_ids))
         try:
-            features = client.audio_features(track_ids)
-        except Exception:
+            features = client.audio_features(unique_track_ids)
+        except Exception as exc:
+            logger.warning(
+                "spotify_audio_features_unavailable",
+                extra={
+                    "event": "spotify_audio_features_unavailable",
+                    "extra_data": {"reason": str(exc)},
+                },
+            )
             features = None
         return {
             feature["id"]: feature
@@ -175,5 +200,6 @@ class SpotifyIngestionService:
             {"name": name, "artist": artist, "plays": plays}
             for (name, artist), plays in top_tracks_counter.most_common(5)
         ]
+        record.is_demo = False
         db.flush()
         return record

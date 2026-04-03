@@ -1,15 +1,29 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import type { LocationSummaryPayload } from '@/lib/api';
 import type { Period } from '@/lib/mockDataUtils';
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mx-4 rounded-[28px] p-4 mb-3" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+    <motion.div
+      className="mx-4 rounded-[28px] p-4 mb-3"
+      style={{
+        background:
+          'linear-gradient(180deg, color-mix(in srgb, var(--color-surface-2) 88%, white 12%) 0%, var(--color-surface-2) 100%)',
+        border: '1px solid var(--color-border)',
+        boxShadow: '0 14px 28px rgba(15, 23, 42, 0.05)',
+      }}
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.25 }}
+      transition={{ duration: 0.35, ease: 'easeOut' }}
+      whileHover={{ y: -2 }}
+    >
       <p className="text-sm font-semibold mb-4" style={{ color: 'var(--color-text)' }}>{title}</p>
       <div style={{ width: '100%', height: 180 }}>{children}</div>
-    </div>
+    </motion.div>
   );
 }
 

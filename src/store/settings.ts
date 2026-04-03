@@ -3,11 +3,13 @@ import { persist } from 'zustand/middleware';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type AIProviderId = 'local-qwen';
+export type DataMode = 'mixed' | 'real-only' | 'demo-only';
 
 interface SettingsState {
   theme: Theme;
   textSize: 'small' | 'medium' | 'large';
   activeProvider: AIProviderId;
+  dataMode: DataMode;
   budgetEnabled: boolean;
   budgetLimit: number; // in pence
   budgetSpent: number; // in pence
@@ -21,6 +23,7 @@ interface SettingsState {
   setTheme: (theme: Theme) => void;
   setTextSize: (size: 'small' | 'medium' | 'large') => void;
   setActiveProvider: (id: AIProviderId) => void;
+  setDataMode: (mode: DataMode) => void;
   setBudgetEnabled: (v: boolean) => void;
   setBudgetLimit: (pence: number) => void;
   setBudgetSpent: (pence: number) => void;
@@ -38,6 +41,7 @@ export const useSettingsStore = create<SettingsState>()(
       theme: 'system',
       textSize: 'medium',
       activeProvider: 'local-qwen',
+      dataMode: 'mixed',
       budgetEnabled: true,
       budgetLimit: 1000, // £10.00 in pence
       budgetSpent: 240,  // £2.40 pre-populated for demo
@@ -48,6 +52,7 @@ export const useSettingsStore = create<SettingsState>()(
       setTheme: (theme) => set({ theme }),
       setTextSize: (textSize) => set({ textSize }),
       setActiveProvider: (activeProvider) => set({ activeProvider }),
+      setDataMode: (dataMode) => set({ dataMode }),
       setBudgetEnabled: (budgetEnabled) => set({ budgetEnabled }),
       setBudgetLimit: (budgetLimit) => set({ budgetLimit }),
       setBudgetSpent: (budgetSpent) => set({ budgetSpent }),

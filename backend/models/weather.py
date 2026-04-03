@@ -1,6 +1,6 @@
 from datetime import date, datetime, time
 
-from sqlalchemy import Date, DateTime, Float, String, Time
+from sqlalchemy import Boolean, Date, DateTime, Float, String, Time
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
@@ -18,4 +18,5 @@ class WeatherData(Base):
     temperature_low_c: Mapped[float | None] = mapped_column(Float, nullable=True)
     condition: Mapped[str | None] = mapped_column(String(50), nullable=True)
     uv_index: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

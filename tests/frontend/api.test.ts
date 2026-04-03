@@ -24,13 +24,27 @@ describe('api client', () => {
     expect(headers.get('X-API-Key')).toBeTruthy();
   });
 
+  it('calls the brain endpoint with the expected path', async () => {
+    await api.getBrain();
+
+    const [url] = vi.mocked(global.fetch).mock.calls[0];
+    expect(String(url)).toBe('http://localhost:8000/api/brain');
+  });
+
   it('calls the data source endpoints with the expected paths', async () => {
     await api.getDataSources();
+    await api.getDataSourceSetup('garmin');
+    await api.saveDataSourceSetup('garmin', { email: 'athlete@example.com' });
+    await api.beginDataSourceAuthorization('spotify');
+    await api.completeDataSourceAuthorization('spotify', { code: 'abc', state: 'xyz' });
     await api.connectDataSource('garmin');
     await api.syncDataSource('garmin');
 
     const calls = vi.mocked(global.fetch).mock.calls.map(([url]) => String(url));
     expect(calls).toContain('http://localhost:8000/api/data-sources');
+    expect(calls).toContain('http://localhost:8000/api/data-sources/garmin/setup');
+    expect(calls).toContain('http://localhost:8000/api/data-sources/spotify/authorize');
+    expect(calls).toContain('http://localhost:8000/api/data-sources/spotify/oauth/callback');
     expect(calls).toContain('http://localhost:8000/api/data-sources/garmin/connect');
     expect(calls).toContain('http://localhost:8000/api/data-sources/garmin/sync');
   });
