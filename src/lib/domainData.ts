@@ -45,6 +45,8 @@ export interface LocationCorrelation {
 
 export function getPeriodDays(period: Period) {
   switch (period) {
+    case 'today':
+      return 1;
     case 'last-week':
     case 'this-week':
       return 7;
@@ -119,7 +121,7 @@ export function getWellbeingRings(period: Period, checkIns: DailyCheckIn[] = che
     {
       label: 'Mood Score',
       value: moodAvg.toFixed(1),
-      unit: '7-day avg',
+      unit: period === 'today' ? 'today' : 'recent avg',
       percentage: Math.round((moodAvg / 5) * 100),
       trend: `${moods[moods.length - 1]?.oneWord ?? 'steady'} baseline`,
       trendPositive: moodAvg >= 3.5,

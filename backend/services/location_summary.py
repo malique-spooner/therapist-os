@@ -7,24 +7,24 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import LocationDailySummary, LocationData
+from ..models.life_data import LocationDailySummaryReal, LocationDataReal
 
 
 class LocationSummaryService:
     HOME_RADIUS_METRES = 100
 
-    async def summarise_day(self, target_date: date, db: Session) -> LocationDailySummary:
+    async def summarise_day(self, target_date: date, db: Session) -> LocationDailySummaryReal:
         start = datetime(target_date.year, target_date.month, target_date.day, tzinfo=UTC).replace(tzinfo=None)
         end = start.replace(hour=23, minute=59, second=59)
         points = db.scalars(
-            select(LocationData)
-            .where(LocationData.timestamp.between(start, end))
-            .order_by(LocationData.timestamp)
+            select(LocationDataReal)
+            .where(LocationDataReal.timestamp.between(start, end))
+            .order_by(LocationDataReal.timestamp)
         ).all()
 
-        record = db.scalar(select(LocationDailySummary).where(LocationDailySummary.date == target_date))
+        record = db.scalar(select(LocationDailySummaryReal).where(LocationDailySummaryReal.date == target_date))
         if not record:
-            record = LocationDailySummary(date=target_date)
+            record = LocationDailySummaryReal(date=target_date)
             db.add(record)
 
         if not points:

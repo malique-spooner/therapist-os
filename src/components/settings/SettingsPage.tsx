@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { TopBar } from '@/components/navigation/TopBar';
 import { useSettingsStore } from '@/store/settings';
 import { Brain, ExternalLink, Lock, Radar, Mic2, AudioLines, Laptop } from 'lucide-react';
-import { api, type DataSourcePayload, type DataSourceSetupPayload } from '@/lib/api';
+import { api, type AIRuntimeOptionsPayload, type DataSourcePayload, type DataSourceSetupPayload } from '@/lib/api';
 import { RetryNotice } from '@/components/ui/retry-notice';
 import { DataSourceSetupSheet } from '@/components/settings/DataSourceSetupSheet';
+import { SyncActivityPage } from '@/components/settings/SyncActivityPage';
 
 
 interface SettingsPageProps {
@@ -26,8 +27,11 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     available: false,
     lastSync: null,
     lastSyncStatus: null,
-    connectionHint: 'Save your Garmin Connect login, then run a sync to pull steps, sleep, HRV, and workouts.',
+    connectionHint: 'Save your Garmin Connect login so Therapist OS can run the daily background health sync.',
     lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: false,
   },
   {
     id: 'truelayer',
@@ -40,6 +44,9 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     lastSyncStatus: null,
     connectionHint: 'Save your TrueLayer app credentials, then finish bank sign-in to enable finance sync.',
     lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
   },
   {
     id: 'spotify',
@@ -52,6 +59,9 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     lastSyncStatus: null,
     connectionHint: 'Add Spotify credentials on the backend to enable sync.',
     lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
   },
   {
     id: 'google_drive',
@@ -65,6 +75,9 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     folderPath: 'Therapist OS / Google Takeout',
     connectionHint: 'Planned import source for Google Takeout. Point recurring exports at the Therapist OS / Google Takeout folder.',
     lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
   },
   {
     id: 'owntracks',
@@ -77,6 +90,9 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     lastSyncStatus: null,
     connectionHint: 'Save a webhook username and password, then paste the generated webhook URL into OwnTracks on your phone.',
     lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
   },
   {
     id: 'weather',
@@ -89,6 +105,9 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     lastSyncStatus: null,
     connectionHint: 'Save your OpenWeather API key, then run a sync to add weather and daylight context.',
     lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
   },
   {
     id: 'youtube',
@@ -101,6 +120,9 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     lastSyncStatus: null,
     connectionHint: 'YouTube is still a manual import path in Phase 2.',
     lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
   },
   {
     id: 'google_calendar',
@@ -113,6 +135,9 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     lastSyncStatus: null,
     connectionHint: 'Calendar integration is planned but not wired yet in this repo.',
     lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
   },
   {
     id: 'google_photos',
@@ -125,6 +150,9 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     lastSyncStatus: null,
     connectionHint: 'Photos integration is planned but not wired yet in this repo.',
     lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
   },
   {
     id: 'voice_journal',
@@ -137,6 +165,9 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     lastSyncStatus: null,
     connectionHint: 'Voice journaling depends on the Whisper flow.',
     lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
   },
 ];
 
@@ -175,6 +206,9 @@ function getSourceActionLabel(source: DataSourcePayload) {
 }
 
 function getSourceStatusLabel(source: DataSourcePayload) {
+  if (source.syncBlocked) return 'Cooldown';
+  if (source.lastSyncStatus === 'failed') return 'Sync failed';
+  if (source.lastSyncStatus === 'automatic-only') return 'Auto only';
   if (source.connected) return 'Connected';
   if (source.connectionState === 'authorization-required') return 'Finish sign-in';
   if (source.available) return 'Ready';
@@ -183,13 +217,28 @@ function getSourceStatusLabel(source: DataSourcePayload) {
 
 
 export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceRequestHandled }: SettingsPageProps) {
-  const { theme, setTheme, textSize, setTextSize, dataMode, setDataMode } = useSettingsStore();
+  const {
+    theme,
+    setTheme,
+    textSize,
+    setTextSize,
+    dataMode,
+    setDataMode,
+    localModel,
+    setLocalModel,
+    ttsProvider,
+    setTtsProvider,
+    ttsVoice,
+    setTtsVoice,
+  } = useSettingsStore();
   const [dataSources, setDataSources] = useState<DataSourcePayload[]>(DEFAULT_DATA_SOURCES);
   const [dataSourcesError, setDataSourcesError] = useState<string | null>(null);
+  const [runtimeOptions, setRuntimeOptions] = useState<AIRuntimeOptionsPayload | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [setupSource, setSetupSource] = useState<DataSourcePayload | null>(null);
   const [setupDetails, setSetupDetails] = useState<DataSourceSetupPayload | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [showSyncActivity, setShowSyncActivity] = useState(false);
 
   async function refreshDataSources() {
     const sources = await api.getDataSources();
@@ -202,8 +251,25 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
     void refreshDataSources().catch(() => {
       if (active) setDataSourcesError(DATA_SOURCES_FALLBACK_MESSAGE);
     });
+    void api.getAiRuntimeOptions().then((options) => {
+      if (!active) return;
+      setRuntimeOptions(options);
+      if (!localModel && options.defaultModel) setLocalModel(options.defaultModel);
+      if (!ttsVoice && options.defaultTtsVoice) setTtsVoice(options.defaultTtsVoice);
+    }).catch(() => {
+      if (active) {
+        setRuntimeOptions({
+          localModels: ['qwen2.5:3b'],
+          defaultModel: 'qwen2.5:3b',
+          ttsProviders: ['kokoro', 'piper'],
+          defaultTtsProvider: 'kokoro',
+          defaultTtsVoice: 'af_heart',
+          ttsVoices: { kokoro: ['af_heart'], piper: ['en_US-lessac-medium'] },
+        });
+      }
+    });
     return () => { active = false; };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!requestedSourceId || setupOpen || activeActionId) return;
@@ -315,6 +381,15 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
     }
   }
 
+  if (showSyncActivity) {
+    return (
+      <SyncActivityPage
+        initialMode={dataMode}
+        onBack={() => setShowSyncActivity(false)}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
       <TopBar showBack onBack={onBack} title="Settings" />
@@ -365,48 +440,102 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
         <SectionHeader title="Local Intelligence" />
         <div className="px-4">
           <div className="rounded-[28px] overflow-hidden" style={{ border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
-            {[
-              {
-                icon: <Laptop size={16} style={{ color: 'var(--color-accent)' }} />,
-                title: 'Local LLM on Mac',
-                desc: 'Primary model: Qwen3 30B, running locally on your Mac for private therapist chat, daily insight refreshes, and profile writing. It is the single-model setup for now, chosen for deeper pattern synthesis while keeping everything private on your machine.',
-                status: 'Qwen3 30B',
-              },
-              {
-                icon: <Mic2 size={16} style={{ color: 'var(--color-accent)' }} />,
-                title: 'Local Whisper',
-                desc: 'Voice is transcribed locally first so you can review and edit before anything is sent onward.',
-                status: 'Private',
-              },
-              {
-                icon: <AudioLines size={16} style={{ color: 'var(--color-accent)' }} />,
-                title: 'Local TTS',
-                desc: 'When enabled, spoken replies are generated on your Mac and sent back to the app after the response is ready.',
-                status: 'Planned',
-              },
-            ].map((item, index, arr) => (
-              <div key={item.title} className="px-4 py-4" style={{ borderBottom: index < arr.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex gap-3">
-                    <div className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'var(--color-surface)' }}>
-                      {item.icon}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{item.title}</p>
-                      <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>{item.desc}</p>
-                    </div>
-                  </div>
-                  <div className="px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-muted)' }}>
-                    {item.status}
-                  </div>
+            <div className="px-4 py-4" style={{ borderBottom: '1px solid var(--color-border)' }}>
+              <div className="flex gap-3">
+                <div className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'var(--color-surface)' }}>
+                  <Laptop size={16} style={{ color: 'var(--color-accent)' }} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Therapist LLM</p>
+                  <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                    Choose the Ollama model used for live therapist chat. Keep the fast model here and save larger models for slower Brain work.
+                  </p>
+                  <select
+                    value={localModel}
+                    onChange={(event) => setLocalModel(event.target.value)}
+                    className="mt-3 h-11 w-full rounded-2xl px-3 text-sm font-semibold outline-none"
+                    style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+                  >
+                    {(runtimeOptions?.localModels?.length ? runtimeOptions.localModels : ['qwen2.5:3b']).map((model) => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            ))}
+            </div>
+
+            <div className="px-4 py-4" style={{ borderBottom: '1px solid var(--color-border)' }}>
+              <div className="flex gap-3">
+                <div className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'var(--color-surface)' }}>
+                  <Mic2 size={16} style={{ color: 'var(--color-accent)' }} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Local Whisper</p>
+                  <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                    Mic input is transcribed locally first, then sent as text to the selected therapist model.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-4 py-4">
+              <div className="flex gap-3">
+                <div className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'var(--color-surface)' }}>
+                  <AudioLines size={16} style={{ color: 'var(--color-accent)' }} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Therapist Voice</p>
+                  <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                    Kokoro is the default warm/calm read-aloud voice. Piper stays as the backup if Kokoro cannot synthesize.
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <select
+                      value={ttsProvider}
+                      onChange={(event) => setTtsProvider(event.target.value === 'piper' ? 'piper' : 'kokoro')}
+                      className="h-11 rounded-2xl px-3 text-sm font-semibold outline-none"
+                      style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+                    >
+                      <option value="kokoro">Kokoro</option>
+                      <option value="piper">Piper fallback</option>
+                    </select>
+                    <select
+                      value={ttsVoice}
+                      onChange={(event) => setTtsVoice(event.target.value)}
+                      className="h-11 rounded-2xl px-3 text-sm font-semibold outline-none"
+                      style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+                    >
+                      {((runtimeOptions?.ttsVoices?.[ttsProvider]) ?? (ttsProvider === 'kokoro' ? ['af_heart'] : ['en_US-lessac-medium'])).map((voice) => (
+                        <option key={voice} value={voice}>{voice}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="mt-2 text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                    Recommended: Kokoro · af_heart for the closest warm/calm default.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Data Sources */}
         <SectionHeader title="Connected Data Sources" />
+        <div className="px-4 pb-3">
+          <button
+            type="button"
+            onClick={() => setShowSyncActivity(true)}
+            className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left"
+            style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
+          >
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Sync Activity Log</p>
+              <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                Review demo vs real update history, row counts, and recent collection attempts across all connections.
+              </p>
+            </div>
+            <span className="text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>Open</span>
+          </button>
+        </div>
         <div className="mx-4 rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
           {dataSources.map((source, i) => (
             <div key={source.name} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: i < dataSources.length - 1 ? '1px solid var(--color-border)' : 'none', backgroundColor: 'var(--color-surface-2)' }}>
@@ -414,6 +543,9 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{source.name}</p>
                 <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{source.category}</p>
+                {source.intendedSync && (
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Intended sync: {source.intendedSync}</p>
+                )}
                 {source.connected && source.lastSync && (
                   <p className="text-xs" style={{ color: 'var(--color-accent)' }}>Synced {source.lastSync}</p>
                 )}
@@ -423,7 +555,10 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
                 {source.folderPath && (
                   <p className="text-xs" style={{ color: 'var(--color-accent)' }}>Folder: {source.folderPath}</p>
                 )}
-                {source.lastError && (
+                {source.syncGuardMessage && (
+                  <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{source.syncGuardMessage}</p>
+                )}
+                {!source.syncGuardMessage && source.lastError && (
                   <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{source.lastError}</p>
                 )}
               </div>
@@ -471,12 +606,11 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
           <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
             <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>Data mode</p>
             <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
-              Temporary wiring switch for Phase 2. Use this to compare seeded demo views against live connected data.
+              Compare the 90-day demo dataset against only real records saved in the app. Real mode will now show empty states when a domain does not have enough real data yet.
             </p>
             <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
               {([
                 { value: 'demo-only', label: 'Demo' },
-                { value: 'mixed', label: 'Mixed' },
                 { value: 'real-only', label: 'Real only' },
               ] as const).map((item) => (
                 <button
@@ -529,25 +663,6 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
               ))}
             </div>
           </div>
-        </div>
-
-        <SectionHeader title="Brain Frameworks" />
-        <div className="px-4">
-          <button
-            onClick={onOpenBrain}
-            className="w-full rounded-[24px] p-4 text-left active:scale-[0.99] transition-transform"
-            style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Framework logic lives in Brain</p>
-                <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                  CBT, SDT, behaviourism, evidence matching, and research selection are now part of the Brain system rather than separate settings toggles.
-                </p>
-              </div>
-              <Brain size={18} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
-            </div>
-          </button>
         </div>
 
         {/* Privacy */}

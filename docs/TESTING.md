@@ -61,6 +61,51 @@ This catches:
 - Next.js compile issues
 - static generation regressions
 
+## Browser Screenshot QA
+
+The repo also supports Playwright-based screenshot regression checks for the main app pages in both:
+- `real-only`
+- `demo-only`
+
+Install the browser tooling once:
+
+```bash
+npm install
+npx playwright install chromium
+```
+
+Start the backend first:
+
+```bash
+docker compose up -d --build
+```
+
+Start the frontend in another terminal:
+
+```bash
+npm run dev -- --hostname 127.0.0.1 --port 3001
+```
+
+Then run the visual suite:
+
+```bash
+npm run test:e2e
+```
+
+To accept intentional visual changes:
+
+```bash
+npm run test:e2e:update
+```
+
+Notes:
+- the Playwright config expects a running app and points at `http://127.0.0.1:3001` by default
+- if you want to target a different running frontend, set `PLAYWRIGHT_BASE_URL`
+- the backend should already be available on `127.0.0.1:8000`
+- the suite stubs daily check-in API calls so screenshot runs are not blocked by the modal
+- snapshots are stored under `tests/e2e/*-snapshots`
+- runtime artifacts go to `playwright-report` and `test-results`, which are gitignored
+
 ## Recommended Release Check
 
 Before pushing or deploying:
@@ -69,6 +114,7 @@ Before pushing or deploying:
 npm test
 docker compose run --rm backend-tests
 npm run build
+npm run test:e2e
 ```
 
 ## Notes

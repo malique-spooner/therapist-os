@@ -1,5 +1,7 @@
 'use client';
 
+import { motion } from 'framer-motion';
+
 import { getSignificantPlaces } from '@/lib/domainData';
 import type { Period } from '@/lib/mockDataUtils';
 
@@ -22,10 +24,25 @@ export function SignificantPlaces({ period }: { period: Period }) {
 
   return (
     <div className="px-4 pb-4">
-      <p className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Significant places</p>
+      <div className="mb-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--color-text-muted)' }}>Place memory</p>
+        <p className="mt-2 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Places that keep showing up in the story</p>
+      </div>
       <div className="space-y-3">
-        {places.map((place) => (
-          <div key={place.id} className="rounded-[24px] p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+        {places.map((place, index) => (
+          <motion.div
+            key={place.id}
+            className="rounded-[28px] p-4"
+            style={{
+              background:
+                'linear-gradient(180deg, color-mix(in srgb, var(--color-surface-2) 88%, white 12%) 0%, var(--color-surface-2) 100%)',
+              border: '1px solid var(--color-border)',
+            }}
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.25 }}
+            transition={{ delay: 0.06 * index, duration: 0.32, ease: 'easeOut' }}
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{place.label}</p>
@@ -41,6 +58,13 @@ export function SignificantPlaces({ period }: { period: Period }) {
                 {toneLabels[place.tone]}
               </span>
             </div>
+            <p className="mt-3 text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+              {place.tone === 'positive'
+                ? 'This place looks regulating in the recent pattern and is worth deliberately keeping in rotation.'
+                : place.tone === 'draining'
+                  ? 'This place may not be bad in itself, but it is currently associated with more depletion than recovery.'
+                  : 'This place appears frequently, but the effect looks mixed and probably depends on why you were there.'}
+            </p>
             <div className="grid grid-cols-3 gap-3 mt-4">
               <div>
                 <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Visit frequency</p>
@@ -57,7 +81,7 @@ export function SignificantPlaces({ period }: { period: Period }) {
                 </p>
               </div>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>

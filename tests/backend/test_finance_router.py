@@ -11,6 +11,8 @@ def test_finance_today_returns_latest_summary(client):
     assert payload["totalSpend"] >= 0
     assert "groceries" in payload
     assert "social" in payload
+    assert payload["bankBreakdown"]
+    assert all("name" in bank for bank in payload["bankBreakdown"])
 
 
 def test_finance_period_accepts_month_alias(client):

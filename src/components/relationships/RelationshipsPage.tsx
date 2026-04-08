@@ -13,6 +13,7 @@ import { useRelationshipsStore } from '@/store/relationships';
 import { api, type RelationshipImportPayload } from '@/lib/api';
 import { DateRangeControl, type DateRangeValue } from '@/components/ui/date-range-control';
 import { APP_TODAY, addDays, clampIsoDate } from '@/lib/date';
+import { useSettingsStore } from '@/store/settings';
 
 interface RelationshipsPageProps {
   onBack: () => void;
@@ -21,6 +22,7 @@ interface RelationshipsPageProps {
 }
 
 export function RelationshipsPage({ onBack, onSettings, onTalkAboutThis }: RelationshipsPageProps) {
+  const dataMode = useSettingsStore((state) => state.dataMode);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [preselectedPersonId, setPreselectedPersonId] = useState<string | null>(null);
   const [imports, setImports] = useState<RelationshipImportPayload[]>([]);
@@ -28,6 +30,8 @@ export function RelationshipsPage({ onBack, onSettings, onTalkAboutThis }: Relat
   const hydrateFromApi = useRelationshipsStore((state) => state.hydrateFromApi);
   const people = useRelationshipsStore((state) => state.people);
   const interactions = useRelationshipsStore((state) => state.interactions);
+  const hasPeople = people.length > 0;
+  const hasInteractions = interactions.length > 0;
   const availableDates = useMemo(() => interactions.map((interaction) => interaction.date).sort(), [interactions]);
   const latestDate = availableDates[availableDates.length - 1] ?? APP_TODAY;
   const earliestDate = availableDates[0] ?? addDays(latestDate, -89);
@@ -38,6 +42,10 @@ export function RelationshipsPage({ onBack, onSettings, onTalkAboutThis }: Relat
       void hydrateFromApi();
     }
   }, [hydrateFromApi, hydrated]);
+
+  useEffect(() => {
+    void hydrateFromApi();
+  }, [dataMode, hydrateFromApi]);
 
   useEffect(() => {
     setSelectedRange((current) => {
@@ -53,7 +61,15 @@ export function RelationshipsPage({ onBack, onSettings, onTalkAboutThis }: Relat
       setImports(rows.filter((row) => row.source === 'snapchat_best_friends'));
     }).catch(() => {});
     return () => { active = false; };
-  }, []);
+  }, [dataMode]);
+  const visibleImports = useMemo(
+    () =>
+      dataMode === 'demo-only'
+        ? imports
+        : imports.filter((row) => row.matchedPersonIds.some((id) => people.some((person) => person.id === id))),
+    [dataMode, imports, people],
+  );
+  const showEmptyRealState = dataMode === 'real-only' && hydrated && !hasPeople && !hasInteractions;
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
@@ -67,22 +83,42 @@ export function RelationshipsPage({ onBack, onSettings, onTalkAboutThis }: Relat
           minDate={earliestDate}
           maxDate={latestDate}
         />
-        <RelationshipMap onAdd={() => setSheetOpen(true)} />
+        {showEmptyRealState && (
+          <div className="mx-4 mb-4 rounded-[24px] px-4 py-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Not enough real relationship data yet</p>
+            <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+              Real mode is now hiding demo people and demo interactions. Add real people, log interactions, or import message screenshots to build this view.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSheetOpen(true)}
+              className="mt-4 rounded-2xl px-4 py-3 text-sm font-semibold"
+              style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}
+            >
+              Add your first real person
+            </button>
+          </div>
+        )}
+        {!showEmptyRealState && <RelationshipMap onAdd={() => setSheetOpen(true)} />}
         <SnapchatImportCard
           people={people}
-          imports={imports}
+          imports={visibleImports}
           onImport={async (payload) => {
             const next = await api.importSnapchatBestFriendsScreenshot(payload);
             setImports((current) => [next, ...current]);
           }}
         />
-        <InteractionLogger preselectedPersonId={preselectedPersonId} selectedDate={selectedRange.endDate} />
-        <ConnectionStatus onSelectPerson={setPreselectedPersonId} />
-        <div className="px-4 pb-2">
-          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>What your connections show</p>
-        </div>
-        <RelationshipInsights onTalkAboutThis={onTalkAboutThis} />
-        <ScienceCard />
+        {(hasPeople || dataMode === 'demo-only') && <InteractionLogger preselectedPersonId={preselectedPersonId} selectedDate={selectedRange.endDate} />}
+        {hasPeople && <ConnectionStatus onSelectPerson={setPreselectedPersonId} />}
+        {dataMode === 'demo-only' && (
+          <>
+            <div className="px-4 pb-2">
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>What your connections show</p>
+            </div>
+            <RelationshipInsights onTalkAboutThis={onTalkAboutThis} />
+          </>
+        )}
+        {(dataMode === 'demo-only' || people.length > 0 || interactions.length > 0) && <ScienceCard />}
       </div>
       <AddRelationshipSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
     </div>

@@ -15,6 +15,7 @@ class LocationData(Base):
     longitude: Mapped[float] = mapped_column(Float)
     accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
     battery_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -29,5 +30,6 @@ class LocationDailySummary(Base):
     new_places_visited: Mapped[int] = mapped_column(Integer, default=0)
     commute_detected: Mapped[bool] = mapped_column(Boolean, default=False)
     time_outdoors_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

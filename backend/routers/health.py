@@ -4,17 +4,14 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models import HealthData
-from ..services.data_sources import DataSourceService
-from ..services.ingestion.garmin import GarminIngestionService
+from ..models.life_data import HealthDataDemo, HealthDataReal
+from ..services.data_mode import dataset_model
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/health", tags=["health"], dependencies=[Depends(verify_api_key)])
-service = GarminIngestionService()
-data_source_service = DataSourceService()
 
 
-def _serialize(row: HealthData) -> dict:
+def _serialize(row) -> dict:
     return {
         "date": row.date.isoformat(),
         "steps": row.steps or 0,
@@ -29,15 +26,21 @@ def _serialize(row: HealthData) -> dict:
 
 
 @router.get("")
-def get_health(period: str = "this-week", db: Session = Depends(get_db)) -> list[dict]:
+def get_health(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
-    rows = db.scalars(select(HealthData).where(HealthData.date.between(start, end)).order_by(HealthData.date)).all()
+    model = dataset_model(mode, HealthDataReal, HealthDataDemo)
+    rows = db.scalars(
+        select(model)
+        .where(model.date.between(start, end))
+        .order_by(model.date)
+    ).all()
     return [_serialize(row) for row in rows]
 
 
 @router.get("/today")
-def get_health_today(db: Session = Depends(get_db)) -> dict:
-    row = db.scalar(select(HealthData).order_by(HealthData.date.desc()))
+def get_health_today(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
+    model = dataset_model(mode, HealthDataReal, HealthDataDemo)
+    row = db.scalar(select(model).order_by(model.date.desc()))
     if not row:
         raise HTTPException(status_code=404, detail="Health data not available")
     return _serialize(row)
@@ -45,14 +48,7 @@ def get_health_today(db: Session = Depends(get_db)) -> dict:
 
 @router.post("/sync")
 async def sync_health(db: Session = Depends(get_db)) -> dict:
-    try:
-        records = await service.sync_last_7_days(db)
-    except RuntimeError as exc:
-        data_source_service.mark_sync_result("garmin", success=False, db=db, error=str(exc))
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    data_source_service.mark_sync_result("garmin", success=True, db=db)
-    return {
-        "detail": "Health synced",
-        "daysSynced": len(records),
-        "latestDate": records[-1].date.isoformat() if records else None,
-    }
+    raise HTTPException(
+        status_code=405,
+        detail="Garmin sync is automatic only. Therapist OS runs it once per day in the background.",
+    )

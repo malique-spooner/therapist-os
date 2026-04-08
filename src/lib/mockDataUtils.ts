@@ -2,7 +2,7 @@ import { getHealthForPeriod } from '@/data/health';
 import { getFinanceForPeriod } from '@/data/finance';
 import { habitsHistory } from '@/data/habits';
 
-export type Period = 'this-week' | 'last-week' | 'this-month' | 'last-month' | '3-months';
+export type Period = 'today' | 'this-week' | 'last-week' | 'this-month' | 'last-month' | '3-months';
 
 export function avg(arr: number[]): number {
   if (!arr.length) return 0;
@@ -30,10 +30,12 @@ export function getDashboardRings(period: Period) {
   const spendPercent = Math.min(100, Math.round((totalSpend / (weeklyBudget * (health.length / 7))) * 100));
   const spendTrend = period === 'this-week' ? -8 : 0;
 
+  const isToday = period === 'today';
+
   return [
-    { label: 'Movement', value: avgSteps.toLocaleString(), unit: 'steps/day', percentage: stepsPercent, trend: `${stepsTrend >= 0 ? '+' : ''}${stepsTrend}% vs last week`, trendPositive: stepsTrend >= 0 },
-    { label: 'Sleep Quality', value: avgSleepQ.toString(), unit: 'out of 10', percentage: sleepPercent, trend: '+0.4 vs last week', trendPositive: true },
-    { label: 'Weekly Spend', value: `£${totalSpend}`, unit: `vs £${weeklyBudget} avg`, percentage: spendPercent, trend: `${spendTrend}% vs avg`, trendPositive: spendTrend <= 0 },
+    { label: 'Movement', value: avgSteps.toLocaleString(), unit: 'daily movement', percentage: stepsPercent, trend: isToday ? 'today focus' : `${stepsTrend >= 0 ? '+' : ''}${stepsTrend}% vs recent baseline`, trendPositive: stepsTrend >= 0 },
+    { label: 'Sleep Quality', value: avgSleepQ.toString(), unit: 'out of 10', percentage: sleepPercent, trend: isToday ? 'last sleep block' : 'recent daily pattern', trendPositive: true },
+    { label: isToday ? 'Today Spend' : 'Window Spend', value: `£${totalSpend}`, unit: `vs £${weeklyBudget} avg`, percentage: spendPercent, trend: isToday ? 'daily spend signal' : `${spendTrend}% vs avg`, trendPositive: spendTrend <= 0 },
   ];
 }
 

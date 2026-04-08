@@ -11,7 +11,13 @@ class Habit(Base):
     __tablename__ = "habits"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name: Mapped[str] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(255))
+    action_text: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    when_text: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    why_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    habit_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    cadence_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    target_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sub_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
     category: Mapped[str] = mapped_column(String(50))
     category_icon: Mapped[str] = mapped_column(String(10))

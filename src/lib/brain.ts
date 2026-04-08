@@ -58,7 +58,7 @@ export const brainOverview = {
   status: 'Launch blueprint',
   lastRefresh: 'Research pass complete',
   macStatus: 'Mac available',
-  privacyMode: 'Private inference with Qwen3 30B on your Mac, with local Whisper and optional local TTS',
+  privacyMode: 'Private inference with Qwen 3.5 35B on your Mac through Ollama, with local Whisper and optional local TTS',
   candidateSignals: 114,
   surfacedInsights: 4,
   totalLayers: 10,
@@ -208,7 +208,7 @@ export const brainLayers: BrainLayer[] = [
     status: 'live',
     recentContribution: 'Selected four signals from 114 candidates and wrote today’s insight snapshot.',
     models: [
-      { id: 'local-llm', name: 'Qwen3 30B Composer', purpose: 'Runs locally on your Mac as the primary model for daily snapshots, weekly reflections, and therapist responses.', status: 'active', versionAdded: 'v3' },
+      { id: 'local-llm', name: 'Qwen 3.5 35B Composer', purpose: 'Runs locally on your Mac through Ollama as the primary model for daily snapshots, weekly reflections, and therapist responses.', status: 'active', versionAdded: 'v3' },
       { id: 'ranking-engine', name: 'Insight Ranker', purpose: 'Chooses what is most novel, relevant, and worth showing today.', status: 'experimental', versionAdded: 'v2.2' },
       { id: 'local-whisper', name: 'Local Whisper', purpose: 'Transcribes voice before you confirm and send it to the therapist.', status: 'active', versionAdded: 'v2.2' },
       { id: 'local-tts', name: 'Local TTS', purpose: 'Speaks the final reply back after you confirm the transcript and the answer is ready.', status: 'planned', versionAdded: 'v2.3' },

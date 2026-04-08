@@ -10,8 +10,8 @@ interface SpendingDonutProps {
 }
 
 export function SpendingDonut({ days }: SpendingDonutProps) {
-  const week = days.slice(-7);
-  const totals = week.reduce(
+  const windowDays = days.length <= 1 ? days : days.slice(-7);
+  const totals = windowDays.reduce(
     (acc, day) => {
       acc[0].value += day.eatingOut;
       acc[1].value += day.groceries;
@@ -33,7 +33,7 @@ export function SpendingDonut({ days }: SpendingDonutProps) {
 
   return (
     <div className="mx-4 rounded-[28px] p-4 mb-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-      <p className="text-sm font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Spending categories</p>
+      <p className="text-sm font-semibold mb-4" style={{ color: 'var(--color-text)' }}>{days.length <= 1 ? 'Selected day breakdown' : 'Recent category mix'}</p>
       <div className="grid grid-cols-[1.1fr,0.9fr] gap-3 items-center">
         <div style={{ width: '100%', height: 200 }}>
           <ResponsiveContainer>

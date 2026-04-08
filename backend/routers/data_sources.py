@@ -5,6 +5,7 @@ from ..database import get_db
 from ..middleware.auth import verify_api_key
 from ..schemas.data_sources import (
     DataSourceActionSchema,
+    DataSourceActivityResponseSchema,
     DataSourceAuthorizeSchema,
     DataSourceOAuthCallbackSchema,
     DataSourceSchema,
@@ -20,6 +21,11 @@ service = DataSourceService()
 @router.get("", response_model=list[DataSourceSchema])
 def get_data_sources(db: Session = Depends(get_db)) -> list[dict]:
     return service.list_sources(db)
+
+
+@router.get("/activity", response_model=DataSourceActivityResponseSchema)
+def get_data_source_activity(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
+    return service.get_activity(mode, db)
 
 
 @router.get("/{source_id}/setup", response_model=DataSourceSetupSchema)
@@ -78,7 +84,7 @@ def connect_data_source(source_id: str, db: Session = Depends(get_db)) -> dict:
 @router.post("/{source_id}/sync", response_model=DataSourceActionSchema)
 async def sync_data_source(source_id: str, db: Session = Depends(get_db)) -> dict:
     try:
-        source = await service.sync(source_id, db)
+        source = await service.sync(source_id, db, trigger="manual")
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Unknown data source") from exc
 

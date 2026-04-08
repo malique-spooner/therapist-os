@@ -75,7 +75,7 @@ def test_location_companion_tags_can_be_saved_and_loaded(client):
     assert update.json()["personIds"] == ["alex-id", "mum-id"]
 
     response = client.get(
-        "/api/location/companions?date=2026-03-31",
+        "/api/location/companions?date=2026-03-31&mode=real-only",
         headers={"X-API-Key": "dev-secret-key"},
     )
 

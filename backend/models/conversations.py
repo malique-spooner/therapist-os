@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -18,6 +18,7 @@ class AIConversation(Base):
     ai_model: Mapped[str] = mapped_column(String(100))
     total_tokens_used: Mapped[int] = mapped_column(Integer, default=0)
     total_cost_pence: Mapped[int] = mapped_column(Integer, default=0)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     messages: Mapped[list["AIMessage"]] = relationship(back_populates="conversation", cascade="all, delete-orphan")

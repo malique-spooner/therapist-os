@@ -21,9 +21,9 @@ class AnthropicProvider(AIProvider):
     def is_available(self) -> bool:
         return bool(settings.ANTHROPIC_API_KEY)
 
-    async def send_message(self, message: str, conversation_history: list[dict[str, str]], system_prompt: str) -> AIResponse:
+    async def send_message(self, message: str, conversation_history: list[dict[str, str]], system_prompt: str, model_override: str | None = None) -> AIResponse:
         response = await self._client.messages.create(
-            model=self.model,
+            model=model_override or self.model,
             system=system_prompt,
             max_tokens=500,
             messages=[
@@ -38,7 +38,7 @@ class AnthropicProvider(AIProvider):
         return AIResponse(
             content=content,
             provider=self.id,
-            model=self.model,
+            model=model_override or self.model,
             tokens_used=tokens_used,
             cost_pence=self.cost_raw,
             frameworks_referenced=[],

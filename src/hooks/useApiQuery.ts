@@ -7,10 +7,13 @@ export function useApiQuery<T>(fetcher: () => Promise<T>, deps: unknown[] = []) 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refetch = useCallback(async () => {
+  const refetch = useCallback(async (options?: { reset?: boolean }) => {
     try {
       setIsLoading(true);
       setError(null);
+      if (options?.reset) {
+        setData(null);
+      }
       const next = await fetcher();
       setData(next);
       return next;
@@ -23,7 +26,7 @@ export function useApiQuery<T>(fetcher: () => Promise<T>, deps: unknown[] = []) 
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    void refetch();
+    void refetch({ reset: true });
   }, [refetch]);
 
   return { data, isLoading, error, refetch, setData };

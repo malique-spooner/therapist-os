@@ -1,5 +1,6 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { LocationCompanionPayload, LocationSummaryPayload } from '@/lib/api';
@@ -41,12 +42,25 @@ export function CompanionTagger({ today, people, saved, onSave }: CompanionTagge
 
   return (
     <div className="px-4 pb-4">
-      <div className="rounded-[28px] p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+      <motion.div
+        className="rounded-[30px] p-4"
+        style={{
+          background:
+            'linear-gradient(180deg, color-mix(in srgb, var(--color-surface-2) 90%, white 10%) 0%, var(--color-surface-2) 100%)',
+          border: '1px solid var(--color-border)',
+          boxShadow: '0 14px 30px rgba(15, 23, 42, 0.05)',
+        }}
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.2 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Who were you with?</p>
-            <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-              Add people to this location day so the brain can connect places, relationships, and mood more accurately.
+            <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--color-text-muted)' }}>Relationship context</p>
+            <p className="text-lg font-semibold mt-2" style={{ color: 'var(--color-text)' }}>Who shaped this day with you?</p>
+            <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+              Tagging companions makes the location story far more useful. It helps the app separate solo reset time from social energy, family time, work friction, and shared routines.
             </p>
           </div>
           <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-muted)' }}>
@@ -61,11 +75,12 @@ export function CompanionTagger({ today, people, saved, onSave }: CompanionTagge
               <button
                 key={person.id}
                 onClick={() => togglePerson(person.id)}
-                className="px-3 py-2 rounded-full text-sm font-medium transition-colors"
+                className="px-3 py-2 rounded-full text-sm font-medium transition-all"
                 style={{
                   backgroundColor: selected ? 'var(--color-primary)' : 'var(--color-surface)',
                   color: selected ? '#fff' : 'var(--color-text-muted)',
                   border: `1px solid ${selected ? 'transparent' : 'var(--color-border)'}`,
+                  boxShadow: selected ? '0 10px 18px rgba(46, 125, 50, 0.16)' : 'none',
                 }}
               >
                 {person.name}
@@ -101,9 +116,14 @@ export function CompanionTagger({ today, people, saved, onSave }: CompanionTagge
         />
 
         {selectedPeople.length > 0 && (
-          <p className="text-xs mt-3" style={{ color: 'var(--color-text-muted)' }}>
-            Tagged: {selectedPeople.map((person) => person.name).join(', ')}
-          </p>
+          <div className="mt-3 rounded-[20px] px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.5)' }}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-text-muted)' }}>
+              Tagged people
+            </p>
+            <p className="text-sm mt-2" style={{ color: 'var(--color-text)' }}>
+              {selectedPeople.map((person) => person.name).join(', ')}
+            </p>
+          </div>
         )}
 
         <button
@@ -125,7 +145,7 @@ export function CompanionTagger({ today, people, saved, onSave }: CompanionTagge
         >
           {saving ? 'Saving...' : 'Save location tags'}
         </button>
-      </div>
+      </motion.div>
     </div>
   );
 }

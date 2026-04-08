@@ -25,6 +25,19 @@ class Settings(BaseSettings):
     SEED_DEMO_DATA: bool = Field(default=True)
     AUTO_RUN_MIGRATIONS: bool = Field(default=False)
     DATA_SOURCE_ENCRYPTION_KEY: str = ""
+    OLLAMA_BASE_URL: str = Field(default="http://host.docker.internal:11434")
+    LOCAL_QWEN_MODEL: str = Field(default="qwen3.5:35b")
+    LOCAL_CHAT_MODEL: str = Field(default="")
+    OLLAMA_REQUEST_TIMEOUT_SECONDS: int = Field(default=45)
+    OLLAMA_KEEP_ALIVE: str = Field(default="8h")
+    OLLAMA_PREWARM_ON_STARTUP: bool = Field(default=True)
+    OLLAMA_NUM_CTX: int = Field(default=8192)
+    OLLAMA_THINK: bool = Field(default=False)
+    GARMIN_MIN_SYNC_INTERVAL_MINUTES: int = Field(default=360)
+    GARMIN_RATE_LIMIT_BACKOFF_MINUTES: int = Field(default=1440)
+    GARMIN_SYNC_HOUR: int = Field(default=4)
+    GARMIN_SYNC_MINUTE: int = Field(default=15)
+    SPOTIFY_SYNC_INTERVAL_MINUTES: int = Field(default=5)
 
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
@@ -43,6 +56,16 @@ class Settings(BaseSettings):
     OWNTRACKS_SECRET: str = ""
 
     WHISPER_MODEL: str = "base.en"
+    THERAPIST_DEFAULT_MODEL: str = "qwen2.5:3b"
+    THERAPIST_DEFAULT_TTS_PROVIDER: str = "kokoro"
+    THERAPIST_DEFAULT_TTS_VOICE: str = "af_heart"
+    PIPER_BINARY: str = "piper"
+    PIPER_VOICE_DIR: str = "/models/piper"
+    PIPER_VOICE_MODEL_URL: str = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+    PIPER_VOICE_CONFIG_URL: str = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+    KOKORO_MODEL_DIR: str = "/models/kokoro"
+    KOKORO_MODEL_URL: str = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx"
+    KOKORO_VOICES_URL: str = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
     NTFY_TOPIC: str = ""
     NTFY_SERVER: str = "https://ntfy.sh"
     BACKUP_DIR: str = "/backups"

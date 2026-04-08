@@ -6,7 +6,23 @@ from statistics import mean
 
 from sqlalchemy.orm import Session
 
-from ..models import FinanceData, HabitLog, HealthData, LocationDailySummary, MusicData, UserProfile, WeatherData
+from ..models.life_data import (
+    FinanceDataDemo,
+    FinanceDataReal,
+    HabitLogDemo,
+    HabitLogReal,
+    HealthDataDemo,
+    HealthDataReal,
+    LocationDailySummaryDemo,
+    LocationDailySummaryReal,
+    MusicDataDemo,
+    MusicDataReal,
+    UserProfileDemo,
+    UserProfileReal,
+    WeatherDataDemo,
+    WeatherDataReal,
+)
+from .data_mode import dataset_model
 from .periods import date_window
 
 
@@ -21,20 +37,31 @@ class InsightCard:
 
 
 class InsightsService:
-    def load_period_data(self, db: Session, period: str) -> dict:
+    def _window_phrase(self, period: str) -> str:
+        return "today" if period == "today" else "this window"
+
+    def load_period_data(self, db: Session, period: str, mode: str | None = None) -> dict:
         start, end = date_window(period)
+        health_model = dataset_model(mode, HealthDataReal, HealthDataDemo)
+        finance_model = dataset_model(mode, FinanceDataReal, FinanceDataDemo)
+        habit_model = dataset_model(mode, HabitLogReal, HabitLogDemo)
+        weather_model = dataset_model(mode, WeatherDataReal, WeatherDataDemo)
+        music_model = dataset_model(mode, MusicDataReal, MusicDataDemo)
+        location_model = dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
+        profile_model = dataset_model(mode, UserProfileReal, UserProfileDemo)
         return {
-            "health": db.query(HealthData).filter(HealthData.date.between(start, end)).order_by(HealthData.date).all(),
-            "finance": db.query(FinanceData).filter(FinanceData.date.between(start, end)).order_by(FinanceData.date).all(),
-            "habits": db.query(HabitLog).filter(HabitLog.date.between(start, end)).order_by(HabitLog.date).all(),
-            "weather": db.query(WeatherData).filter(WeatherData.date.between(start, end)).order_by(WeatherData.date).all(),
-            "music": db.query(MusicData).filter(MusicData.date.between(start, end)).order_by(MusicData.date).all(),
-            "location": db.query(LocationDailySummary).filter(LocationDailySummary.date.between(start, end)).order_by(LocationDailySummary.date).all(),
-            "profile": db.query(UserProfile).limit(1).one_or_none(),
+            "health": db.query(health_model).filter(health_model.date.between(start, end)).order_by(health_model.date).all(),
+            "finance": db.query(finance_model).filter(finance_model.date.between(start, end)).order_by(finance_model.date).all(),
+            "habits": db.query(habit_model).filter(habit_model.date.between(start, end)).order_by(habit_model.date).all(),
+            "weather": db.query(weather_model).filter(weather_model.date.between(start, end)).order_by(weather_model.date).all(),
+            "music": db.query(music_model).filter(music_model.date.between(start, end)).order_by(music_model.date).all(),
+            "location": db.query(location_model).filter(location_model.date.between(start, end)).order_by(location_model.date).all(),
+            "profile": db.query(profile_model).limit(1).one_or_none(),
         }
 
-    def generate_dashboard_insights(self, period: str, db: Session) -> list[dict]:
-        data = self.load_period_data(db, period)
+    def generate_dashboard_insights(self, period: str, db: Session, mode: str | None = None) -> list[dict]:
+        data = self.load_period_data(db, period, mode)
+        window_phrase = self._window_phrase(period)
         health: list[HealthData] = data["health"]
         finance: list[FinanceData] = data["finance"]
         habits: list[HabitLog] = data["habits"]
@@ -52,8 +79,8 @@ class InsightsService:
                 category="Movement",
                 categoryIcon="🏃",
                 lens="SDT",
-                narrative=f"You logged {len(workout_logs)} workout days in this window, and your average step count was {avg_steps:,}. Movement still looks strongest when it is planned before the week gets noisy.",
-                action="Protect one movement slot early in the week.",
+                narrative=f"You logged {len(workout_logs)} workout days in {window_phrase}, and your average step count was {avg_steps:,}. Movement still looks strongest when it is planned before the day gets noisy.",
+                action="Protect one movement cue early in the day.",
             )
         )
 
@@ -64,7 +91,7 @@ class InsightsService:
                 category="Sleep",
                 categoryIcon="🌙",
                 lens="CBT",
-                narrative=f"Sleep quality averaged {avg_sleep_quality}/10. When sleep slips, the rest of the dashboard tends to flatten too, which makes sleep one of your highest-leverage inputs.",
+                narrative=f"Sleep quality averaged {avg_sleep_quality}/10 in {window_phrase}. When sleep slips, the rest of the dashboard tends to flatten too, which makes sleep one of your highest-leverage daily inputs.",
                 action="Treat tonight as support for tomorrow instead of an isolated task.",
             )
         )
@@ -80,8 +107,8 @@ class InsightsService:
                 category="Finance",
                 categoryIcon="💷",
                 lens="Behaviourism",
-                narrative=f"Total spend for this period was £{total_spend}. The largest category was {largest_category}, which suggests the main reinforcement loop is still convenience and social momentum rather than careful planning.",
-                action="Make one spend this week deliberate before it becomes automatic.",
+                narrative=f"Total spend in {window_phrase} was £{total_spend}. The largest category was {largest_category}, which suggests the main reinforcement loop is still convenience and social momentum rather than careful planning.",
+                action="Make one spend today deliberate before it becomes automatic.",
             )
         )
 
@@ -93,7 +120,7 @@ class InsightsService:
                     category="Mind",
                     categoryIcon="🧠",
                     lens="CBT",
-                    narrative=f"Your mood check-ins averaged {mean(mood_logs):.1f}/10. Naming the state still seems to help you catch patterns earlier instead of only noticing them after the week has drifted.",
+                    narrative=f"Your mood check-ins averaged {mean(mood_logs):.1f}/10 in {window_phrase}. Naming the state still seems to help you catch patterns earlier instead of only noticing them after the day has drifted.",
                     action="Keep the check-in short, but keep it daily.",
                 )
             )
@@ -107,7 +134,7 @@ class InsightsService:
                     category="Environment",
                     categoryIcon="⛅",
                     lens="SDT",
-                    narrative=f"Recent weather has been mostly {latest.condition} with around {avg_daylight} hours of daylight. Environment is not the whole story, but it clearly changes how easy it feels to get outside and build momentum.",
+                    narrative=f"Recent weather has been mostly {latest.condition} with around {avg_daylight} hours of daylight. Environment is not the whole story, but it clearly changes how easy it feels to get outside and build momentum in the day.",
                     action="Use the brighter part of the day deliberately instead of waiting to feel like it.",
                 )
             )
@@ -135,15 +162,16 @@ class InsightsService:
                     category="Location",
                     categoryIcon="📍",
                     lens="SDT",
-                    narrative=f"You spent about {avg_home_hours} hours at home on an average tracked day, with outside time recorded on {away_days} days. Place still looks tightly linked to both energy and social momentum.",
+                    narrative=f"You spent about {avg_home_hours} hours at home on an average tracked day, with outside time recorded on {away_days} days in {window_phrase}. Place still looks tightly linked to both energy and social momentum.",
                     action="Plan one reason to leave the house before the day chooses inertia for you.",
                 )
             )
 
         return [card.__dict__ for card in cards]
 
-    def generate_hero_headline(self, period: str, db: Session) -> str:
-        data = self.load_period_data(db, period)
+    def generate_hero_headline(self, period: str, db: Session, mode: str | None = None) -> str:
+        data = self.load_period_data(db, period, mode)
+        window_phrase = "today" if period == "today" else "this recent window"
         health: list[HealthData] = data["health"]
         weather: list[WeatherData] = data["weather"]
         music: list[MusicData] = data["music"]
@@ -157,6 +185,6 @@ class InsightsService:
         if music:
             music_phrase = f" Your music tended toward an energy score of {round(mean(item.average_energy or 0 for item in music), 2):.2f}."
         return (
-            f"Your sleep quality averaged {avg_sleep}/10 over this period, and your movement stayed around {avg_steps:,} steps a day."
+            f"Your sleep quality averaged {avg_sleep}/10 across {window_phrase}, and your movement stayed around {avg_steps:,} steps a day."
             f"{weather_phrase}{music_phrase}"
         )

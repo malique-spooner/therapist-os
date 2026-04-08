@@ -86,7 +86,7 @@ export function AppShell() {
 
   useEffect(() => {
     void applyCheckInDataMode(dataMode);
-    void applyRelationshipsDataMode(dataMode);
+    void applyRelationshipsDataMode();
   }, [applyCheckInDataMode, applyRelationshipsDataMode, dataMode]);
 
   useEffect(() => {

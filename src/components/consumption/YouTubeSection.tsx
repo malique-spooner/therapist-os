@@ -8,25 +8,38 @@ interface YouTubeSectionProps {
 }
 
 export function YouTubeSection({ days }: YouTubeSectionProps) {
-  const week = days.slice(-7);
-  const avg = days.length ? days.reduce((sum, day) => sum + day.listeningHours, 0) / days.length : 0;
-  const total = week.reduce((sum, day) => sum + day.listeningHours, 0);
+  if (!days.length) {
+    return (
+      <div className="mx-4 rounded-[28px] p-5 mb-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>YouTube</p>
+        <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+          No YouTube data is available in this range yet.
+        </p>
+      </div>
+    );
+  }
+
+  const windowDays = days;
+  const entries = windowDays.map((day) => day.providerBreakdown?.youtube).filter(Boolean);
+  const avg = entries.length ? entries.reduce((sum, day) => sum + (day?.totalHours ?? 0), 0) / entries.length : 0;
+  const total = entries.reduce((sum, day) => sum + (day?.totalHours ?? 0), 0);
+  const isSingleDay = days.length <= 1;
   const breakdown = [
-    { label: 'Discovery', value: week.reduce((sum, day) => sum + day.newDiscoveries, 0) },
-    { label: 'Energy', value: Number((week.reduce((sum, day) => sum + (day.averageEnergy ?? 0), 0) / Math.max(week.length, 1) * 10).toFixed(1)) },
-    { label: 'Danceability', value: Number((week.reduce((sum, day) => sum + (day.averageDanceability ?? 0), 0) / Math.max(week.length, 1) * 10).toFixed(1)) },
-    { label: 'Genres', value: new Set(week.flatMap((day) => day.topGenres)).size },
+    { label: 'Educational', value: Number(entries.reduce((sum, day) => sum + (day?.educational ?? 0), 0).toFixed(1)) },
+    { label: 'Entertainment', value: Number(entries.reduce((sum, day) => sum + (day?.entertainment ?? 0), 0).toFixed(1)) },
+    { label: 'Music', value: Number(entries.reduce((sum, day) => sum + (day?.music ?? 0), 0).toFixed(1)) },
+    { label: 'Other', value: Number(entries.reduce((sum, day) => sum + (day?.other ?? 0), 0).toFixed(1)) },
   ];
 
   return (
     <div className="mx-4 rounded-[28px] p-4 mb-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
-          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Screen time</p>
-          <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>{total.toFixed(1)}h this week vs {avg.toFixed(1)}h average</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>YouTube watch pattern</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>{total.toFixed(1)}h in {isSingleDay ? 'the selected day' : 'this selected range'} vs {avg.toFixed(1)}h daily average</p>
         </div>
-        <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: 'rgba(231,111,81,0.12)', color: 'var(--color-warning)' }}>
-          YouTube detail is still lightweight here while Spotify powers the richer part of this page
+        <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: 'rgba(82,183,136,0.12)', color: 'var(--color-primary)' }}>
+          Provider view
         </span>
       </div>
       <div style={{ width: '100%', height: 180 }}>

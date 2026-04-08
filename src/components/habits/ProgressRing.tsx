@@ -28,6 +28,14 @@ export function ProgressRing({
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="relative" style={{ width: size, height: size }}>
+        <div
+          className="absolute rounded-full"
+          style={{
+            inset: strokeWidth + 5,
+            backgroundColor: 'var(--color-surface)',
+            border: '1px solid color-mix(in srgb, var(--color-border) 82%, white 18%)',
+          }}
+        />
         <svg width={size} height={size} className="-rotate-90">
           <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--color-border)" strokeWidth={strokeWidth} />
           <motion.circle

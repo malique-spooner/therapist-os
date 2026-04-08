@@ -21,9 +21,10 @@ class GroqProvider(AIProvider):
     def is_available(self) -> bool:
         return bool(settings.GROQ_API_KEY)
 
-    async def send_message(self, message: str, conversation_history: list[dict[str, str]], system_prompt: str) -> AIResponse:
+    async def send_message(self, message: str, conversation_history: list[dict[str, str]], system_prompt: str, model_override: str | None = None) -> AIResponse:
+        model_name = model_override or self.model
         response = await self._client.chat.completions.create(
-            model=self.model,
+            model=model_name,
             messages=[
                 {"role": "system", "content": system_prompt},
                 *[
@@ -39,7 +40,7 @@ class GroqProvider(AIProvider):
         return AIResponse(
             content=(choice.content or "").strip(),
             provider=self.id,
-            model=self.model,
+            model=model_name,
             tokens_used=tokens_used,
             cost_pence=self.cost_raw,
             frameworks_referenced=[],

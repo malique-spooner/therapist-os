@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...core.logging import get_logger
-from ...models import MusicData
+from ...models.life_data import MusicDataReal, SpotifyPlayEventReal
 
 logger = get_logger(__name__)
 
@@ -40,6 +40,16 @@ class SpotifyIngestionService:
     def _redirect_uri(self) -> str:
         return f"{settings.FRONTEND_URL.rstrip('/').replace('://localhost', '://127.0.0.1')}/callback/spotify"
 
+    @property
+    def _recent_after_ms(self) -> int | None:
+        raw = self._config.get("spotify_recent_after_ms")
+        if not raw:
+            return None
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+
     def _ensure_client(self) -> spotipy.Spotify:
         if not self.is_configured:
             raise RuntimeError("Spotify credentials are not configured")
@@ -64,25 +74,28 @@ class SpotifyIngestionService:
             self._client = spotipy.Spotify(auth=access_token, auth_manager=auth_manager)
         return self._client
 
-    async def sync_recent_listening(self, db: Session) -> list[MusicData]:
+    async def sync_recent_listening(self, db: Session) -> dict[str, Any]:
         client = self._ensure_client()
         cutoff = datetime.now(UTC) - timedelta(days=7)
-        recent = client.current_user_recently_played(limit=50, after=int(cutoff.timestamp() * 1000))
-        items = recent.get("items", [])
+        items = self._fetch_recent_items(client, cutoff)
         if not items:
-            return []
+            return {"rows_synced": 0, "cursor_ms": self._recent_after_ms, "days_synced": 0}
 
         track_ids = [item["track"]["id"] for item in items if item.get("track", {}).get("id")]
         audio_features = self._fetch_audio_features(client, track_ids)
         artists = self._collect_artist_ids(items)
         genres_by_artist = self._fetch_artist_genres(client, artists)
 
+        inserted_events = 0
         by_date: dict[date, list[dict[str, Any]]] = defaultdict(list)
+        newest_played_at_ms = self._recent_after_ms or 0
         for item in items:
             played_at = datetime.fromisoformat(item["played_at"].replace("Z", "+00:00"))
             played_date = played_at.astimezone(UTC).date()
             track = item.get("track") or {}
             features = audio_features.get(track.get("id"), {})
+            newest_played_at_ms = max(newest_played_at_ms, int(played_at.timestamp() * 1000))
+            inserted_events += self._upsert_play_event(played_at, track, item.get("context"), features, db)
             by_date[played_date].append(
                 {
                     "played_at": played_at,
@@ -95,9 +108,10 @@ class SpotifyIngestionService:
                 }
             )
 
-        records: list[MusicData] = []
+        records: list[MusicDataReal] = []
         for target_date, entries in sorted(by_date.items()):
-            records.append(self._upsert_summary(target_date, entries, genres_by_artist, db))
+            day_entries = self._entries_for_date(target_date, db)
+            records.append(self._upsert_summary(target_date, day_entries, genres_by_artist, db))
 
         db.commit()
         logger.info(
@@ -107,13 +121,122 @@ class SpotifyIngestionService:
                 "extra_data": {
                     "days": len(records),
                     "plays": len(items),
+                    "inserted_events": inserted_events,
                 },
             },
         )
-        return records
+        return {
+            "rows_synced": inserted_events,
+            "cursor_ms": newest_played_at_ms or None,
+            "days_synced": len(records),
+            "latest_date": records[-1].date.isoformat() if records else None,
+        }
 
-    async def get_daily_summary(self, target_date: date, db: Session) -> MusicData | None:
-        return db.scalar(select(MusicData).where(MusicData.date == target_date))
+    async def get_daily_summary(self, target_date: date, db: Session) -> MusicDataReal | None:
+        return db.scalar(select(MusicDataReal).where(MusicDataReal.date == target_date))
+
+    def _fetch_recent_items(self, client: spotipy.Spotify, cutoff: datetime) -> list[dict[str, Any]]:
+        after_ms = self._recent_after_ms
+        if after_ms is not None:
+            recent = client.current_user_recently_played(limit=50, after=after_ms)
+            return recent.get("items", [])
+
+        before_ms: int | None = None
+        items: list[dict[str, Any]] = []
+        seen_keys: set[tuple[str, str | None]] = set()
+
+        while True:
+            params: dict[str, Any] = {"limit": 50}
+            if before_ms is not None:
+                params["before"] = before_ms
+            recent = client.current_user_recently_played(**params)
+            batch = recent.get("items", [])
+            if not batch:
+                break
+            stop = False
+            for item in batch:
+                played_at = datetime.fromisoformat(item["played_at"].replace("Z", "+00:00"))
+                if played_at < cutoff:
+                    stop = True
+                    continue
+                track_id = (item.get("track") or {}).get("id")
+                key = (item["played_at"], track_id)
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                items.append(item)
+            oldest_ms = int(datetime.fromisoformat(batch[-1]["played_at"].replace("Z", "+00:00")).timestamp() * 1000)
+            before_ms = oldest_ms - 1
+            if stop or len(batch) < 50 or len(items) >= 1000:
+                break
+        return items
+
+    def _upsert_play_event(
+        self,
+        played_at: datetime,
+        track: dict[str, Any],
+        context: dict[str, Any] | None,
+        features: dict[str, Any],
+        db: Session,
+    ) -> int:
+        track_id = track.get("id")
+        existing = db.scalar(
+            select(SpotifyPlayEventReal).where(
+                SpotifyPlayEventReal.played_at == played_at,
+                SpotifyPlayEventReal.track_id == track_id,
+            )
+        )
+        if existing:
+            return 0
+        db.add(
+            SpotifyPlayEventReal(
+                played_at=played_at,
+                played_date=played_at.astimezone(UTC).date(),
+                track_id=track_id,
+                track_name=track.get("name"),
+                artist_name=", ".join(artist.get("name", "") for artist in track.get("artists", [])),
+                album_name=(track.get("album") or {}).get("name"),
+                duration_ms=track.get("duration_ms"),
+                track_uri=track.get("uri"),
+                context_type=(context or {}).get("type"),
+                context_uri=(context or {}).get("uri"),
+                external_url=((track.get("external_urls") or {}).get("spotify")),
+                explicit=track.get("explicit"),
+                popularity=track.get("popularity"),
+                preview_url=track.get("preview_url"),
+                valence=features.get("valence"),
+                energy=features.get("energy"),
+                danceability=features.get("danceability"),
+                metadata_json={
+                    "album_id": (track.get("album") or {}).get("id"),
+                    "artist_ids": [artist.get("id") for artist in track.get("artists", []) if artist.get("id")],
+                },
+            )
+        )
+        return 1
+
+    def _entries_for_date(self, target_date: date, db: Session) -> list[dict[str, Any]]:
+        rows = db.scalars(
+            select(SpotifyPlayEventReal)
+            .where(SpotifyPlayEventReal.played_date == target_date)
+            .order_by(SpotifyPlayEventReal.played_at)
+        ).all()
+        return [
+            {
+                "played_at": row.played_at,
+                "duration_ms": row.duration_ms or 0,
+                "track_id": row.track_id,
+                "track_name": row.track_name,
+                "artist_name": row.artist_name or "",
+                "artist_ids": list((row.metadata_json or {}).get("artist_ids") or []),
+                "features": {
+                    "valence": row.valence,
+                    "energy": row.energy,
+                    "danceability": row.danceability,
+                },
+            }
+            for row in rows
+        ]
 
     def _fetch_audio_features(self, client: spotipy.Spotify, track_ids: list[str]) -> dict[str, dict[str, Any]]:
         if not track_ids:
@@ -167,10 +290,10 @@ class SpotifyIngestionService:
         entries: list[dict[str, Any]],
         genres_by_artist: dict[str, list[str]],
         db: Session,
-    ) -> MusicData:
-        record = db.scalar(select(MusicData).where(MusicData.date == target_date))
+    ) -> MusicDataReal:
+        record = db.scalar(select(MusicDataReal).where(MusicDataReal.date == target_date))
         if not record:
-            record = MusicData(date=target_date)
+            record = MusicDataReal(date=target_date)
             db.add(record)
 
         duration_hours = sum(entry["duration_ms"] for entry in entries) / 3_600_000
@@ -200,6 +323,17 @@ class SpotifyIngestionService:
             {"name": name, "artist": artist, "plays": plays}
             for (name, artist), plays in top_tracks_counter.most_common(5)
         ]
-        record.is_demo = False
+        record.provider_breakdown = {
+            "spotify": {
+                "label": "Spotify",
+                "listeningHours": record.listening_hours,
+                "averageValence": record.average_valence,
+                "averageEnergy": record.average_energy,
+                "averageDanceability": record.average_danceability,
+                "newDiscoveries": record.new_discoveries,
+                "topGenres": record.top_genres or [],
+                "topTracks": record.top_tracks or [],
+            }
+        }
         db.flush()
         return record

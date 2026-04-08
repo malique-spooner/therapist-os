@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, Integer, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
@@ -21,16 +21,19 @@ class UserProfile(Base):
     health_baseline: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     mood_baseline: Mapped[float | None] = mapped_column(Float, nullable=True)
     notable_patterns: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
 
 class MonthlyBudget(Base):
     __tablename__ = "monthly_budget"
+    __table_args__ = (UniqueConstraint("month", "is_demo", name="uq_monthly_budget_month_is_demo"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    month: Mapped[date] = mapped_column(Date, unique=True, index=True)
+    month: Mapped[date] = mapped_column(Date, index=True)
     limit_pence: Mapped[int] = mapped_column(Integer, default=1000)
     spent_pence: Mapped[int] = mapped_column(Integer, default=0)
     auto_switch_at_80: Mapped[bool] = mapped_column(Boolean, default=True)
     disable_paid_at_limit: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

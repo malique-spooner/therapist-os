@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
@@ -18,4 +18,5 @@ class RelationshipScreenshotImport(Base):
     matched_person_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     detected_labels: Mapped[list[str]] = mapped_column(JSON, default=list)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     imported_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

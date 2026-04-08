@@ -3,32 +3,97 @@ from __future__ import annotations
 from datetime import date, timedelta
 from statistics import mean
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import AIConversation, FinanceData, HabitLog, HealthData, LocationDailySummary, MusicData, UserProfile
+from ..models.life_data import (
+    AIConversationDemo,
+    AIConversationReal,
+    DailyCheckInDemo,
+    DailyCheckInReal,
+    FinanceDataDemo,
+    FinanceDataReal,
+    HabitLogDemo,
+    HabitLogReal,
+    HealthDataDemo,
+    HealthDataReal,
+    LocationDailySummaryDemo,
+    LocationDailySummaryReal,
+    MusicDataDemo,
+    MusicDataReal,
+    UserProfileDemo,
+    UserProfileReal,
+)
+from .data_mode import dataset_model, normalize_data_mode
 
 
 class ProfileService:
-    def _profile(self, db: Session) -> UserProfile:
-        profile = db.scalar(select(UserProfile).limit(1))
+    def has_profile_inputs(self, db: Session, mode: str | None = None) -> bool:
+        normalized_mode = normalize_data_mode(mode)
+        health_model = dataset_model(normalized_mode, HealthDataReal, HealthDataDemo)
+        finance_model = dataset_model(normalized_mode, FinanceDataReal, FinanceDataDemo)
+        habit_model = dataset_model(normalized_mode, HabitLogReal, HabitLogDemo)
+        music_model = dataset_model(normalized_mode, MusicDataReal, MusicDataDemo)
+        location_model = dataset_model(normalized_mode, LocationDailySummaryReal, LocationDailySummaryDemo)
+        checkin_model = dataset_model(normalized_mode, DailyCheckInReal, DailyCheckInDemo)
+        counts = [
+            db.scalar(select(func.count()).select_from(health_model)) or 0,
+            db.scalar(select(func.count()).select_from(finance_model)) or 0,
+            db.scalar(select(func.count()).select_from(habit_model)) or 0,
+            db.scalar(select(func.count()).select_from(music_model)) or 0,
+            db.scalar(select(func.count()).select_from(location_model)) or 0,
+            db.scalar(select(func.count()).select_from(checkin_model)) or 0,
+        ]
+        return sum(counts) > 0
+
+    @staticmethod
+    def empty_profile_payload() -> dict:
+        return {
+            "profileDocument": (
+                "## Personal Context\nNo real profile has been built yet.\n\n"
+                "## What This Means\nTherapist OS needs more real check-ins, synced domains, or therapist sessions before it can describe your actual patterns confidently."
+            ),
+            "keyThemes": [],
+            "activeGoals": [],
+            "notablePatterns": [],
+        }
+
+    def _profile(self, db: Session, mode: str | None = None):
+        normalized_mode = normalize_data_mode(mode)
+        profile_model = dataset_model(normalized_mode, UserProfileReal, UserProfileDemo)
+        profile = db.scalar(select(profile_model).limit(1))
         if profile is None:
-            profile = UserProfile(profile_document="## Personal Context\nNo profile has been built yet.")
+            profile = profile_model(
+                profile_document="## Personal Context\nNo profile has been built yet.",
+            )
             db.add(profile)
             db.flush()
         return profile
 
-    async def update_profile(self, db: Session) -> UserProfile:
-        profile = self._profile(db)
+    async def update_profile(self, db: Session, mode: str | None = None) -> UserProfile:
+        normalized_mode = normalize_data_mode(mode)
+        profile = self._profile(db, normalized_mode)
+        health_model = dataset_model(normalized_mode, HealthDataReal, HealthDataDemo)
+        finance_model = dataset_model(normalized_mode, FinanceDataReal, FinanceDataDemo)
+        habit_model = dataset_model(normalized_mode, HabitLogReal, HabitLogDemo)
+        music_model = dataset_model(normalized_mode, MusicDataReal, MusicDataDemo)
+        location_model = dataset_model(normalized_mode, LocationDailySummaryReal, LocationDailySummaryDemo)
+        conversation_model = dataset_model(normalized_mode, AIConversationReal, AIConversationDemo)
         today = date.today()
         start = today - timedelta(days=29)
 
-        health = db.scalars(select(HealthData).where(HealthData.date >= start).order_by(HealthData.date)).all()
-        finance = db.scalars(select(FinanceData).where(FinanceData.date >= start)).all()
-        habits = db.scalars(select(HabitLog).where(HabitLog.date >= start)).all()
-        music = db.scalars(select(MusicData).where(MusicData.date >= start)).all()
-        location = db.scalars(select(LocationDailySummary).where(LocationDailySummary.date >= start)).all()
-        sessions = db.scalars(select(AIConversation).order_by(AIConversation.started_at.desc()).limit(10)).all()
+        health = db.scalars(
+            select(health_model).where(health_model.date >= start).order_by(health_model.date)
+        ).all()
+        finance = db.scalars(select(finance_model).where(finance_model.date >= start)).all()
+        habits = db.scalars(select(habit_model).where(habit_model.date >= start)).all()
+        music = db.scalars(select(music_model).where(music_model.date >= start)).all()
+        location = db.scalars(
+            select(location_model).where(location_model.date >= start)
+        ).all()
+        sessions = db.scalars(
+            select(conversation_model).order_by(conversation_model.started_at.desc()).limit(10)
+        ).all()
 
         avg_sleep_hours = round(mean(item.sleep_duration_hours or 0 for item in health), 1) if health else 0
         avg_steps = round(mean(item.steps or 0 for item in health)) if health else 0

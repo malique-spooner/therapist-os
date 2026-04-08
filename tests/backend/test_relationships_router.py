@@ -51,6 +51,6 @@ def test_snapchat_relationship_import_can_be_created(client):
     assert payload["matchedPersonIds"] == ["alex", "mum"]
     assert payload["detectedLabels"] == ["Alex", "Mum"]
 
-    listing = client.get("/api/relationships/imports", headers={"X-API-Key": "dev-secret-key"})
+    listing = client.get("/api/relationships/imports?mode=real-only", headers={"X-API-Key": "dev-secret-key"})
     assert listing.status_code == 200
     assert listing.json()

@@ -12,6 +12,20 @@ export interface HabitHistoryDay {
   values: Record<string, boolean | number | null>;
 }
 
+export interface HabitUpsertPayload {
+  actionText: string;
+  whenText: string;
+  whyText: string;
+  habitMode: 'good' | 'bad';
+  cadenceType: 'daily' | 'weekly-count' | 'trigger' | 'time-of-day' | 'custom';
+  targetCount?: number | null;
+  category?: string | null;
+  categoryIcon?: string | null;
+  type?: 'boolean' | 'numeric' | 'scale' | null;
+  unit?: string | null;
+  maxValue?: number | null;
+}
+
 export interface HabitsOverview {
   habits: HabitDef[];
   todayCompletions: Record<string, boolean | number | null>;
@@ -32,6 +46,8 @@ export interface DashboardInsightCard {
 export interface DashboardPayload {
   greeting: string;
   dateLabel: string;
+  windowLabel?: string;
+  status?: 'ready' | 'demo' | 'waiting-for-data';
   heroInsight: {
     weekOf: string;
     heroHeadline: string;
@@ -63,6 +79,27 @@ export type HealthPayload = DayHealth & {
 
 export type FinancePayload = DayFinance;
 
+export interface MediaProviderBreakdown {
+  spotify?: {
+    label: string;
+    listeningHours: number;
+    averageValence: number | null;
+    averageEnergy: number | null;
+    averageDanceability: number | null;
+    newDiscoveries: number;
+    topGenres: string[];
+    topTracks: Array<{ name?: string; artist?: string; plays?: number }>;
+  };
+  youtube?: {
+    label: string;
+    totalHours: number;
+    educational: number;
+    entertainment: number;
+    music: number;
+    other: number;
+  };
+}
+
 export interface ConsumptionPayload {
   date: string;
   listeningHours: number;
@@ -71,7 +108,8 @@ export interface ConsumptionPayload {
   averageDanceability: number | null;
   newDiscoveries: number;
   topGenres: string[];
-  topTracks: Array<{ name?: string; artist?: string; valence?: number; energy?: number }>;
+  topTracks: Array<{ name?: string; artist?: string; plays?: number; valence?: number; energy?: number }>;
+  providerBreakdown?: MediaProviderBreakdown;
 }
 
 export interface LocationSummaryPayload {
@@ -149,6 +187,10 @@ export interface DataSourcePayload {
   folderPath?: string | null;
   connectionHint: string | null;
   lastError: string | null;
+  syncBlocked?: boolean;
+  syncGuardMessage?: string | null;
+  intendedSync?: string | null;
+  manualSyncAllowed?: boolean;
 }
 
 export interface DataSourceSetupFieldPayload {
@@ -160,6 +202,30 @@ export interface DataSourceSetupFieldPayload {
   helpText?: string | null;
   hasValue: boolean;
   value?: string | null;
+}
+
+export interface DataSourceSyncAttemptPayload {
+  id: number;
+  status: string;
+  trigger: string;
+  dataMode?: string | null;
+  rowsSynced?: number | null;
+  detail?: string | null;
+  attemptedAt: string;
+  cooldownUntil?: string | null;
+}
+
+export interface DataSourceActivityItemPayload extends DataSourcePayload {
+  recordsAvailable: number;
+  lastCollectedAt?: string | null;
+  latestDataDate?: string | null;
+  recentAttempts: DataSourceSyncAttemptPayload[];
+}
+
+export interface DataSourceActivityPayload {
+  mode: DataMode;
+  generatedAt: string;
+  items: DataSourceActivityItemPayload[];
 }
 
 export interface DataSourceSetupPayload {
@@ -178,6 +244,9 @@ export interface DataSourceSetupPayload {
   folderPath?: string | null;
   canAuthorize: boolean;
   authActionLabel?: string | null;
+  recentAttempts: DataSourceSyncAttemptPayload[];
+  intendedSync?: string | null;
+  manualSyncAllowed?: boolean;
 }
 
 export interface TranscriptionPayload {
@@ -190,6 +259,15 @@ export interface LiveSessionPayload {
   voice: string;
   estimatedCostPerMinutePence: number;
   warning: string;
+}
+
+export interface AIRuntimeOptionsPayload {
+  localModels: string[];
+  defaultModel: string;
+  ttsProviders: Array<'kokoro' | 'piper'>;
+  defaultTtsProvider: 'kokoro' | 'piper';
+  defaultTtsVoice: string;
+  ttsVoices: Record<string, string[]>;
 }
 
 export interface ConversationMessagePayload {
@@ -213,6 +291,26 @@ export interface ConversationPayload {
   messages: ConversationMessagePayload[];
 }
 
+export interface ConversationStartPayload {
+  id: string;
+  openingMessage: ConversationMessagePayload | null;
+}
+
+export interface StreamDonePayload {
+  type: 'done';
+  conversationId: string;
+  sessionCostPence: number;
+  costPence: number;
+  frameworksReferenced: string[];
+  model: string;
+}
+
+type StreamEventPayload =
+  | { type: 'delta'; content?: string }
+  | { type: 'error'; detail?: string }
+  | StreamDonePayload
+  | { type: string; content?: string; detail?: string };
+
 export type BrainOverviewPayload = BrainOverview;
 export type BrainLayerPayload = BrainLayer;
 export type BrainVersionPayload = BrainVersion;
@@ -223,6 +321,8 @@ export interface DateQuery {
   startDate?: string;
   endDate?: string;
 }
+
+type DataMode = 'demo-only' | 'real-only';
 
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? 'dev-secret-key';
 
@@ -236,6 +336,25 @@ function getApiBase() {
   }
 
   return 'http://127.0.0.1:8000';
+}
+
+function getDataMode(): DataMode {
+  if (typeof window === 'undefined') return 'demo-only';
+  try {
+    const raw = window.localStorage.getItem('therapist-os-settings');
+    if (!raw) return 'demo-only';
+    const parsed = JSON.parse(raw);
+    const mode = parsed?.state?.dataMode ?? parsed?.dataMode;
+    return mode === 'real-only' ? 'real-only' : 'demo-only';
+  } catch {
+    return 'demo-only';
+  }
+}
+
+function withDataMode(path: string) {
+  const mode = getDataMode();
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}mode=${mode}`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -253,6 +372,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      try {
+        const payload = await response.json() as { detail?: string };
+        throw new Error(payload.detail || `Request failed with ${response.status}`);
+      } catch (error) {
+        if (error instanceof Error) throw error;
+      }
+    }
+
     const text = await response.text();
     throw new Error(text || `Request failed with ${response.status}`);
   }
@@ -270,52 +399,75 @@ function withDateQuery(path: string, query?: DateQuery) {
   return suffix ? `${path}?${suffix}` : path;
 }
 
+function handleStreamEvent(
+  payload: StreamEventPayload,
+  handlers: {
+    onDelta: (delta: string) => void;
+    onDone?: (payload: StreamDonePayload) => void;
+  },
+): StreamDonePayload | null {
+  switch (payload.type) {
+    case 'delta':
+      if (payload.content) handlers.onDelta(payload.content);
+      return null;
+    case 'error':
+      throw new Error(payload.detail || 'Streaming failed');
+    case 'done': {
+      const donePayload = payload as StreamDonePayload;
+      handlers.onDone?.(donePayload);
+      return donePayload;
+    }
+    default:
+      return null;
+  }
+}
+
 export const api = {
-  getDashboard: (period: string) => request<DashboardPayload>(`/api/dashboard?period=${period}`),
-  getBrain: () => request<BrainPayloadResponse>('/api/brain'),
+  getDashboard: (period: string) => request<DashboardPayload>(withDataMode(`/api/dashboard?period=${period}`)),
+  getBrain: () => request<BrainPayloadResponse>(withDataMode('/api/brain')),
   getHealth: (query: string | DateQuery) =>
-    request<HealthPayload[]>(withDateQuery('/api/health', typeof query === 'string' ? { period: query } : query)),
-  getHealthToday: () => request<HealthPayload>('/api/health/today'),
+    request<HealthPayload[]>(withDataMode(withDateQuery('/api/health', typeof query === 'string' ? { period: query } : query))),
+  getHealthToday: () => request<HealthPayload>(withDataMode('/api/health/today')),
   syncHealth: () => request<{ detail: string; daysSynced: number; latestDate: string | null }>('/api/health/sync', { method: 'POST' }),
   getFinance: (query: string | DateQuery) =>
-    request<FinancePayload[]>(withDateQuery('/api/finance', typeof query === 'string' ? { period: query } : query)),
-  getFinanceToday: () => request<FinancePayload>('/api/finance/today'),
+    request<FinancePayload[]>(withDataMode(withDateQuery('/api/finance', typeof query === 'string' ? { period: query } : query))),
+  getFinanceToday: () => request<FinancePayload>(withDataMode('/api/finance/today')),
   syncFinance: () => request<{ detail: string; transactionsSynced: number }>('/api/finance/sync', { method: 'POST' }),
   getConsumption: (query: string | DateQuery) =>
-    request<ConsumptionPayload[]>(withDateQuery('/api/consumption', typeof query === 'string' ? { period: query } : query)),
-  getConsumptionToday: () => request<ConsumptionPayload>('/api/consumption/today'),
+    request<ConsumptionPayload[]>(withDataMode(withDateQuery('/api/consumption', typeof query === 'string' ? { period: query } : query))),
+  getConsumptionToday: () => request<ConsumptionPayload>(withDataMode('/api/consumption/today')),
   syncConsumption: () => request<{ detail: string; daysSynced: number; latestDate: string | null }>('/api/consumption/sync', { method: 'POST' }),
   getLocation: (query: string | DateQuery) =>
-    request<LocationPointPayload[]>(withDateQuery('/api/location', typeof query === 'string' ? { period: query } : query)),
-  getLocationToday: () => request<LocationSummaryPayload>('/api/location/today'),
+    request<LocationPointPayload[]>(withDataMode(withDateQuery('/api/location', typeof query === 'string' ? { period: query } : query))),
+  getLocationToday: () => request<LocationSummaryPayload>(withDataMode('/api/location/today')),
   getLocationSummary: (query: string | DateQuery) =>
-    request<LocationSummaryPayload[]>(withDateQuery('/api/location/summary', typeof query === 'string' ? { period: query } : query)),
-  getLocationCompanions: (date: string) => request<LocationCompanionPayload>(`/api/location/companions?date=${date}`),
+    request<LocationSummaryPayload[]>(withDataMode(withDateQuery('/api/location/summary', typeof query === 'string' ? { period: query } : query))),
+  getLocationCompanions: (date: string) => request<LocationCompanionPayload>(withDataMode(`/api/location/companions?date=${date}`)),
   saveLocationCompanions: (date: string, payload: Omit<LocationCompanionPayload, 'date'>) =>
     request<LocationCompanionPayload>(`/api/location/companions?date=${date}`, { method: 'PUT', body: JSON.stringify(payload) }),
   getNutrition: (query: string | DateQuery) =>
-    request<NutritionPayload[]>(withDateQuery('/api/nutrition', typeof query === 'string' ? { period: query } : query)),
-  getNutritionForDate: (date: string) => request<NutritionPayload>(`/api/nutrition/day?date=${date}`),
-  getTodayNutrition: () => request<NutritionPayload>('/api/nutrition/today'),
+    request<NutritionPayload[]>(withDataMode(withDateQuery('/api/nutrition', typeof query === 'string' ? { period: query } : query))),
+  getNutritionForDate: (date: string) => request<NutritionPayload>(withDataMode(`/api/nutrition/day?date=${date}`)),
+  getTodayNutrition: () => request<NutritionPayload>(withDataMode('/api/nutrition/today')),
   saveTodayNutrition: (payload: Omit<NutritionPayload, 'date'>) =>
     request<NutritionPayload>('/api/nutrition/today', { method: 'POST', body: JSON.stringify(payload) }),
   updateTodayNutrition: (payload: Omit<NutritionPayload, 'date'>) =>
     request<NutritionPayload>('/api/nutrition/today', { method: 'PUT', body: JSON.stringify(payload) }),
   saveNutritionForDate: (date: string, payload: Omit<NutritionPayload, 'date'>) =>
     request<NutritionPayload>(`/api/nutrition/day?date=${date}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  getRelationships: () => request<RelationshipPayload[]>('/api/relationships'),
+  getRelationships: () => request<RelationshipPayload[]>(withDataMode('/api/relationships')),
   createRelationship: (payload: Omit<RelationshipPayload, 'id' | 'avatarColour'>) =>
     request<RelationshipPayload>('/api/relationships', { method: 'POST', body: JSON.stringify(payload) }),
   getRelationshipInteractions: (query: string | DateQuery) =>
-    request<RelationshipInteractionPayload[]>(withDateQuery('/api/relationships/interactions', typeof query === 'string' ? { period: query } : query)),
+    request<RelationshipInteractionPayload[]>(withDataMode(withDateQuery('/api/relationships/interactions', typeof query === 'string' ? { period: query } : query))),
   createRelationshipInteraction: (payload: Omit<RelationshipInteractionPayload, 'id' | 'timestamp' | 'date'> & { date?: string }) =>
     request<RelationshipInteractionPayload>('/api/relationships/interactions', { method: 'POST', body: JSON.stringify(payload) }),
   deleteRelationshipInteraction: (interactionId: string) =>
     request<{ detail: string }>(`/api/relationships/interactions/${interactionId}`, { method: 'DELETE' }),
   getRelationshipsDue: () =>
-    request<Array<{ person: RelationshipPayload; daysAgo: number }>>('/api/relationships/due'),
+    request<Array<{ person: RelationshipPayload; daysAgo: number }>>(withDataMode('/api/relationships/due')),
   getRelationshipImports: () =>
-    request<RelationshipImportPayload[]>('/api/relationships/imports'),
+    request<RelationshipImportPayload[]>(withDataMode('/api/relationships/imports')),
   importSnapchatBestFriendsScreenshot: async (payload: {
     file: File;
     capturedAt?: string | null;
@@ -334,7 +486,7 @@ export const api = {
     const headers = new Headers();
     headers.set('X-API-Key', API_KEY);
 
-    const response = await fetch(`${apiBase}/api/relationships/imports/snapchat`, {
+    const response = await fetch(`${apiBase}${withDataMode('/api/relationships/imports/snapchat')}`, {
       method: 'POST',
       headers,
       body: formData,
@@ -353,13 +505,14 @@ export const api = {
     request<{ detail: string }>(`/api/open-prompts/${promptKey}/dismiss`, { method: 'POST' }),
   completeOpenPrompt: (promptKey: string) =>
     request<{ detail: string }>(`/api/open-prompts/${promptKey}/complete`, { method: 'POST' }),
-  getCheckins: (period: string) => request<DailyCheckInPayload[]>(`/api/checkins?period=${period}`),
-  getTodayCheckin: () => request<DailyCheckInPayload | null>('/api/checkins/today'),
+  getCheckins: (period: string) => request<DailyCheckInPayload[]>(withDataMode(`/api/checkins?period=${period}`)),
+  getTodayCheckin: () => request<DailyCheckInPayload | null>(withDataMode('/api/checkins/today')),
   saveCheckin: (payload: Omit<DailyCheckInPayload, 'date' | 'timestamp'>) =>
     request<DailyCheckInPayload>('/api/checkins', { method: 'POST', body: JSON.stringify(payload) }),
-  getCheckinStreak: () => request<{ streak: number }>('/api/checkins/streak'),
-  getHabits: () => request<HabitsOverview>('/api/habits'),
+  getCheckinStreak: () => request<{ streak: number }>(withDataMode('/api/checkins/streak')),
+  getHabits: () => request<HabitsOverview>(withDataMode('/api/habits')),
   getDataSources: () => request<DataSourcePayload[]>('/api/data-sources'),
+  getDataSourceActivity: (mode: DataMode) => request<DataSourceActivityPayload>(`/api/data-sources/activity?mode=${mode}`),
   getDataSourceSetup: (sourceId: string) =>
     request<DataSourceSetupPayload>(`/api/data-sources/${sourceId}/setup`),
   saveDataSourceSetup: (sourceId: string, values: Record<string, string>) =>
@@ -383,11 +536,25 @@ export const api = {
   disconnectDataSource: (sourceId: string) =>
     request<{ detail: string; source: DataSourcePayload }>(`/api/data-sources/${sourceId}`, { method: 'DELETE' }),
   saveHabitLog: (habitId: string, value: boolean | number, date?: string) =>
-    request<{ detail: string }>('/api/habits/logs', {
+    request<{ detail: string }>(withDataMode('/api/habits/logs'), {
       method: 'POST',
       body: JSON.stringify({ habitId, value, date }),
     }),
-  getOpeningMessage: () => request<{ message: string }>('/api/ai/opening-message'),
+  createHabit: (payload: HabitUpsertPayload) =>
+    request<HabitDef>(withDataMode('/api/habits'), {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateHabit: (habitId: string, payload: HabitUpsertPayload) =>
+    request<HabitDef>(withDataMode(`/api/habits/${habitId}`), {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteHabit: (habitId: string) =>
+    request<{ detail: string }>(withDataMode(`/api/habits/${habitId}`), {
+      method: 'DELETE',
+    }),
+  getOpeningMessage: () => request<{ message: string }>(withDataMode('/api/ai/opening-message')),
   transcribeAudio: async (audioBlob: Blob) => {
     const apiBase = getApiBase();
     const formData = new FormData();
@@ -410,29 +577,107 @@ export const api = {
 
     return response.json() as Promise<TranscriptionPayload>;
   },
-  createLiveSession: () => request<LiveSessionPayload>('/api/ai/live/session', { method: 'POST' }),
+  synthesizeSpeech: async (text: string, options?: { provider?: string; voice?: string }) => {
+    const apiBase = getApiBase();
+    const response = await fetch(`${apiBase}/api/ai/tts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': API_KEY,
+      },
+      body: JSON.stringify({ text, provider: options?.provider, voice: options?.voice }),
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      const textBody = await response.text();
+      throw new Error(textBody || `Request failed with ${response.status}`);
+    }
+
+    return response.blob();
+  },
+  createLiveSession: () => request<LiveSessionPayload>(withDataMode('/api/ai/live/session'), { method: 'POST' }),
   getProviders: () => request<AIProvider[]>('/api/ai/providers'),
-  getBudgetCurrent: () => request<BudgetPayload>('/api/budget/current'),
+  getAiRuntimeOptions: () => request<AIRuntimeOptionsPayload>('/api/ai/runtime-options'),
+  getBudgetCurrent: () => request<BudgetPayload>(withDataMode('/api/budget/current')),
   updateBudget: (payload: Omit<BudgetPayload, 'month' | 'spentPence'>) =>
-    request<BudgetPayload>('/api/budget', {
+    request<BudgetPayload>(withDataMode('/api/budget'), {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
-  getConversations: () => request<ConversationPayload[]>('/api/ai/conversations'),
+  getConversations: () => request<ConversationPayload[]>(withDataMode('/api/ai/conversations')),
   getConversationMessages: (conversationId: string) =>
-    request<ConversationMessagePayload[]>(`/api/ai/conversations/${conversationId}/messages`),
-  startConversation: (provider = 'local-qwen') =>
-    request<{ id: string }>('/api/ai/conversations', {
+    request<ConversationMessagePayload[]>(withDataMode(`/api/ai/conversations/${conversationId}/messages`)),
+  startConversation: (provider = 'local-qwen', context?: string | null, modelOverride?: string | null) =>
+    request<ConversationStartPayload>(withDataMode('/api/ai/conversations'), {
       method: 'POST',
-      body: JSON.stringify({ provider }),
+      body: JSON.stringify({ provider, context, model: modelOverride || undefined }),
     }),
-  sendMessage: (message: string, provider = 'local-qwen', conversationId?: string) =>
-    request<AIResponse & { conversationId: string; sessionCostPence: number }>('/api/ai/message', {
+  sendMessageStream: async (
+    message: string,
+    provider = 'local-qwen',
+    conversationId: string | undefined,
+    handlers: {
+      onDelta: (delta: string) => void;
+      onDone?: (payload: StreamDonePayload) => void;
+    },
+    modelOverride?: string | null,
+  ): Promise<StreamDonePayload | null> => {
+    const apiBase = getApiBase();
+    const response = await fetch(`${apiBase}${withDataMode('/api/ai/message/stream')}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': API_KEY,
+      },
+      body: JSON.stringify({
+        message,
+        provider,
+        conversation_id: conversationId,
+        model: modelOverride || undefined,
+      }),
+      cache: 'no-store',
+    });
+
+    if (!response.ok || !response.body) {
+      const textBody = await response.text();
+      throw new Error(textBody || `Request failed with ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalPayload: StreamDonePayload | null = null;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n');
+      buffer = parts.pop() ?? '';
+      for (const line of parts) {
+        if (!line.trim()) continue;
+        const payload = JSON.parse(line) as StreamEventPayload;
+        finalPayload = handleStreamEvent(payload, handlers) ?? finalPayload;
+      }
+    }
+
+    const remainder = buffer + decoder.decode();
+    if (remainder.trim()) {
+      const payload = JSON.parse(remainder) as StreamEventPayload;
+      finalPayload = handleStreamEvent(payload, handlers) ?? finalPayload;
+    }
+
+    return finalPayload;
+  },
+  sendMessage: (message: string, provider = 'local-qwen', conversationId?: string, modelOverride?: string | null) =>
+    request<AIResponse & { conversationId: string; sessionCostPence: number }>(withDataMode('/api/ai/message'), {
       method: 'POST',
       body: JSON.stringify({
         message,
         provider,
         conversation_id: conversationId,
+        model: modelOverride || undefined,
       }),
     }),
 };

@@ -42,3 +42,12 @@ Run restores only against a stopped or disposable environment first.
 - confirm frontend still matches backend contracts
 - confirm Brain-facing UI still matches product direction
 - verify local inference architecture once Mac integration is connected
+
+## Local AI Checks
+
+When using local inference:
+
+- confirm Ollama is running on the Mac host
+- confirm `OLLAMA_BASE_URL` points to the right runtime
+- confirm the configured model exists locally
+- confirm therapist responses are coming from `local-qwen` rather than the deterministic fallback

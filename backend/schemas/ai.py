@@ -18,12 +18,30 @@ class OpeningMessageSchema(BaseModel):
 
 class ConversationCreateSchema(BaseModel):
     provider: str
+    context: str | None = None
+    model: str | None = None
 
 
 class MessageRequestSchema(BaseModel):
     message: str
     conversation_id: str | None = None
     provider: str
+    model: str | None = None
+
+
+class TTSRequestSchema(BaseModel):
+    text: str
+    provider: str | None = None
+    voice: str | None = None
+
+
+class AIRuntimeOptionsSchema(BaseModel):
+    localModels: list[str]
+    defaultModel: str
+    ttsProviders: list[str]
+    defaultTtsProvider: str
+    defaultTtsVoice: str
+    ttsVoices: dict[str, list[str]]
 
 
 class MessageSchema(BaseModel):
@@ -45,6 +63,11 @@ class ConversationSchema(BaseModel):
     totalTokensUsed: int
     totalCostPence: int
     messages: list[MessageSchema]
+
+
+class ConversationStartSchema(BaseModel):
+    id: str
+    openingMessage: MessageSchema | None = None
 
 
 class AIResponseSchema(BaseModel):

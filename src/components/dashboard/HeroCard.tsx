@@ -36,7 +36,7 @@ export function HeroCard({ insight, onTalkAboutThis }: HeroCardProps) {
           >
             {insight.heroFramework}
           </span>
-          <span className="text-xs opacity-60" style={{ color: '#fff' }}>This week&apos;s insight</span>
+          <span className="text-xs opacity-60" style={{ color: '#fff' }}>Daily signal</span>
         </div>
 
         <p className="text-base font-medium leading-snug mb-4" style={{ color: '#fff' }}>

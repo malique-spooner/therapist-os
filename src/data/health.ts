@@ -56,6 +56,7 @@ export const healthData: DayHealth[] = Array.from({ length: 90 }, (_, i) => {
 });
 
 export function getHealthForPeriod(period: string): DayHealth[] {
+  if (period === 'today') return healthData.slice(-1);
   let days = 7;
   if (period === 'last-week') { return healthData.slice(Math.max(0, healthData.length - 14), healthData.length - 7); }
   if (period === 'this-month') days = 31;

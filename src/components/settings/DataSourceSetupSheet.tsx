@@ -14,6 +14,18 @@ import {
 } from '@/components/ui/sheet';
 import type { DataSourcePayload, DataSourceSetupPayload } from '@/lib/api';
 
+function relativeDateLabel(timestamp: string) {
+  const millis = new Date(timestamp).getTime();
+  const deltaSeconds = Math.max(0, Math.floor((Date.now() - millis) / 1000));
+  if (deltaSeconds < 60) return 'just now';
+  const minutes = Math.floor(deltaSeconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
 interface DataSourceSetupSheetProps {
   source: DataSourcePayload | null;
   setup: DataSourceSetupPayload | null;
@@ -40,6 +52,8 @@ export function DataSourceSetupSheet({
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const instructions = setup?.instructions ?? [];
+  const recentAttempts = setup?.recentAttempts ?? [];
 
   useEffect(() => {
     if (!setup) {
@@ -65,6 +79,9 @@ export function DataSourceSetupSheet({
   const statusLabel = useMemo(() => {
     const currentSource = source;
     if (!currentSource) return 'Setup required';
+    if (currentSource.syncBlocked) return 'Cooldown';
+    if (currentSource.lastSyncStatus === 'failed') return 'Sync failed';
+    if (currentSource.lastSyncStatus === 'automatic-only') return 'Automatic only';
     if (currentSource.connected) return 'Connected';
     if (currentSource.connectionState === 'authorization-required') return 'Finish sign-in';
     if (currentSource.available) return 'Ready to sync';
@@ -91,7 +108,7 @@ export function DataSourceSetupSheet({
         return [
           'Use the same Garmin Connect email and password you use normally.',
           'Save the login here.',
-          'Tap Sync now to test steps, sleep, HRV, and workout import.',
+          'Therapist OS will sync Garmin automatically once per day in the background.',
         ];
       case 'truelayer':
         return [
@@ -213,6 +230,11 @@ export function DataSourceSetupSheet({
                 {source.connectionHint}
               </p>
             )}
+            {setup.intendedSync && (
+              <p className="mt-3 text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                Intended sync: <span style={{ color: 'var(--color-text)' }}>{setup.intendedSync}</span>
+              </p>
+            )}
           </div>
 
           {nextSteps.length > 0 && (
@@ -241,16 +263,53 @@ export function DataSourceSetupSheet({
             </div>
           )}
 
-          {setup.instructions.length > 0 && (
+          {instructions.length > 0 && (
             <div className="mt-4 rounded-[24px] p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
               <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--color-text-muted)' }}>
                 Instructions
               </p>
               <div className="mt-3 space-y-2">
-                {setup.instructions.map((instruction) => (
+                {instructions.map((instruction) => (
                   <p key={instruction} className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
                     {instruction}
                   </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {recentAttempts.length > 0 && (
+            <div className="mt-4 rounded-[24px] p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--color-text-muted)' }}>
+                Recent Sync Attempts
+              </p>
+              <div className="mt-3 space-y-3">
+                {recentAttempts.map((attempt) => (
+                  <div key={attempt.id} className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold capitalize" style={{ color: 'var(--color-text)' }}>
+                          {attempt.status}
+                        </p>
+                        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                          {relativeDateLabel(attempt.attemptedAt)} · {attempt.trigger}
+                        </p>
+                      </div>
+                      {attempt.cooldownUntil && (
+                        <span
+                          className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                          style={{ backgroundColor: 'rgba(208, 0, 0, 0.08)', color: 'var(--color-warning)' }}
+                        >
+                          cooldown
+                        </span>
+                      )}
+                    </div>
+                    {attempt.detail && (
+                      <p className="mt-2 text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                        {attempt.detail}
+                      </p>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -294,7 +353,13 @@ export function DataSourceSetupSheet({
               </div>
             )}
 
-            {source.lastError && (
+            {source.syncGuardMessage && (
+              <div className="rounded-2xl px-4 py-3 text-sm" style={{ backgroundColor: 'rgba(208, 0, 0, 0.08)', color: 'var(--color-warning)' }}>
+                {source.syncGuardMessage}
+              </div>
+            )}
+
+            {!source.syncGuardMessage && source.lastError && (
               <div className="rounded-2xl px-4 py-3 text-sm" style={{ backgroundColor: 'rgba(208, 0, 0, 0.08)', color: 'var(--color-warning)' }}>
                 {source.lastError}
               </div>
@@ -310,7 +375,13 @@ export function DataSourceSetupSheet({
                 {saving ? 'Saving...' : setup.actionLabel}
               </button>
 
-              <div className={`grid gap-3 ${setup.canAuthorize ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              <div
+                className={`grid gap-3 ${
+                  setup.canAuthorize
+                    ? setup.manualSyncAllowed === false ? 'grid-cols-2' : 'grid-cols-3'
+                    : setup.manualSyncAllowed === false ? 'grid-cols-1' : 'grid-cols-2'
+                }`}
+              >
                 {setup.canAuthorize && (
                   <button
                     type="button"
@@ -325,26 +396,28 @@ export function DataSourceSetupSheet({
                     {setup.authActionLabel ?? 'Continue'}
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => void onSync(source)}
-                  disabled={saving || !source.connected}
-                  className="h-11 rounded-2xl text-sm font-semibold"
-                  style={{
-                    backgroundColor: source.connected ? 'var(--color-dark)' : 'var(--color-border)',
-                    color: source.connected ? '#fff' : 'var(--color-text-muted)',
-                  }}
-                >
-                  Sync now
-                </button>
+                {setup.manualSyncAllowed !== false && (
+                  <button
+                    type="button"
+                    onClick={() => void onSync(source)}
+                    disabled={saving || !source.available || Boolean(source.syncBlocked)}
+                    className="h-11 rounded-2xl text-sm font-semibold"
+                    style={{
+                      backgroundColor: source.available && !source.syncBlocked ? 'var(--color-dark)' : 'var(--color-border)',
+                      color: source.available && !source.syncBlocked ? '#fff' : 'var(--color-text-muted)',
+                    }}
+                  >
+                    {source.syncBlocked ? 'Cooling down' : 'Sync now'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => void onDisconnect(source)}
-                  disabled={saving || !source.connected}
+                  disabled={saving || (!source.connected && !source.available)}
                   className="h-11 rounded-2xl text-sm font-semibold"
                   style={{
-                    backgroundColor: source.connected ? 'var(--color-surface-2)' : 'var(--color-border)',
-                    color: source.connected ? 'var(--color-text)' : 'var(--color-text-muted)',
+                    backgroundColor: source.connected || source.available ? 'var(--color-surface-2)' : 'var(--color-border)',
+                    color: source.connected || source.available ? 'var(--color-text)' : 'var(--color-text-muted)',
                     border: '1px solid var(--color-border)',
                   }}
                 >

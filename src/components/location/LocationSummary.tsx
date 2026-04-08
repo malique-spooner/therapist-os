@@ -1,5 +1,7 @@
 'use client';
 
+import { motion } from 'framer-motion';
+
 import type { LocationSummaryPayload } from '@/lib/api';
 
 function formatMinutes(totalMinutes: number) {
@@ -24,19 +26,54 @@ function getRoutineType(today: LocationSummaryPayload | null) {
 
 export function LocationSummary({ today }: LocationSummaryProps) {
   const cards = [
-    { label: 'Time out', value: formatMinutes(today?.timeOutdoorsMinutes ?? 0) },
-    { label: 'Places', value: `${(today?.newPlacesVisited ?? 0) + 1}` },
-    { label: 'Gym visits', value: `${today?.gymVisits ?? 0}` },
-    { label: 'Routine type', value: getRoutineType(today) },
+    {
+      label: 'Outside time',
+      value: formatMinutes(today?.timeOutdoorsMinutes ?? 0),
+      context: 'Exposure to light, movement, and novelty',
+    },
+    {
+      label: 'Places held',
+      value: `${(today?.newPlacesVisited ?? 0) + 1}`,
+      context: 'How many settings shaped the day',
+    },
+    {
+      label: 'Social stops',
+      value: `${today?.socialVenueVisits ?? 0}`,
+      context: 'Places likely to carry interpersonal energy',
+    },
+    {
+      label: 'Pattern',
+      value: getRoutineType(today),
+      context: today?.commuteDetected ? 'A commute-shaped day was detected' : 'No strong commute pattern showed up',
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 px-4 pb-4">
-      {cards.map((card) => (
-        <div key={card.label} className="rounded-[24px] p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-          <p className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>{card.label}</p>
-          <p className="text-lg font-semibold mt-2 capitalize" style={{ color: 'var(--color-text)' }}>{card.value}</p>
-        </div>
+    <div className="grid grid-cols-1 gap-3 px-4 pb-4 md:grid-cols-2">
+      {cards.map((card, index) => (
+        <motion.div
+          key={card.label}
+          className="rounded-[26px] p-4"
+          style={{
+            background:
+              'linear-gradient(180deg, color-mix(in srgb, var(--color-surface-2) 88%, white 12%) 0%, var(--color-surface-2) 100%)',
+            border: '1px solid var(--color-border)',
+          }}
+          initial={{ opacity: 0, y: 14 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.35 }}
+          transition={{ delay: 0.05 * index, duration: 0.28, ease: 'easeOut' }}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-text-muted)' }}>
+            {card.label}
+          </p>
+          <p className="mt-2 text-xl font-semibold capitalize" style={{ color: 'var(--color-text)' }}>
+            {card.value}
+          </p>
+          <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+            {card.context}
+          </p>
+        </motion.div>
       ))}
     </div>
   );

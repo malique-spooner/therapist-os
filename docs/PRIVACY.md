@@ -25,7 +25,7 @@ The product is moving toward:
 
 The intended privacy-first model is:
 - data stored on the VPS
-- Brain and therapist inference run on the Mac with `Qwen3 30B` as the planned primary local model
+- Brain and therapist inference run on the Mac with `Qwen 3.5 35B` through Ollama as the planned primary local model
 - phone reads stored results from the VPS
 
 Until that is fully wired, any cloud-provider-era code should be treated as transitional.

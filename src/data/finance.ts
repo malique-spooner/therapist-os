@@ -7,6 +7,16 @@ export interface DayFinance {
   entertainment: number;
   social: number;
   other: number;
+  bankBreakdown?: Array<{
+    name: string;
+    totalSpend: number;
+    eatingOut: number;
+    groceries: number;
+    transport: number;
+    entertainment: number;
+    social: number;
+    other: number;
+  }>;
 }
 
 function seed(n: number) { const x = Math.sin(n) * 10000; return x - Math.floor(x); }
@@ -45,6 +55,7 @@ export const financeData: DayFinance[] = Array.from({ length: 90 }, (_, i) => {
 });
 
 export function getFinanceForPeriod(period: string): DayFinance[] {
+  if (period === 'today') return financeData.slice(-1);
   if (period === 'last-week') return financeData.slice(Math.max(0, financeData.length - 14), financeData.length - 7);
   if (period === 'last-month') return financeData.slice(Math.max(0, financeData.length - 62), financeData.length - 31);
   const days = period === 'this-month' ? 31 : period === '3-months' ? 90 : 7;

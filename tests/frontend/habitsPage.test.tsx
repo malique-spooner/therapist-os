@@ -11,7 +11,7 @@ describe('HabitsPage', () => {
       ok: true,
       json: async () => ({
         habits: [
-          { id: 'workout', name: 'Read 10 pages', subLabel: 'reading habit', category: 'Mind', categoryIcon: '📚', type: 'boolean', frequency: 'daily' },
+          { id: 'workout', name: 'I will read 10 pages after lunch because I want my mind to keep growing.', subLabel: null, category: 'Mind', categoryIcon: '📚', type: 'boolean', frequency: 'daily' },
         ],
         todayCompletions: {},
         history: [],
@@ -26,10 +26,13 @@ describe('HabitsPage', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders the classic habits layout with simple row interactions', async () => {
+  it('renders the simplified good and bad habits tracker', async () => {
     render(<HabitsPage onSettings={() => {}} />);
 
-    expect(await screen.findByText('Read 10 pages')).toBeInTheDocument();
-    expect(screen.getByText('Habit Tracker')).toBeInTheDocument();
+    expect((await screen.findAllByText('I will read 10 pages after lunch because I want my mind to keep growing.')).length).toBeGreaterThan(0);
+    expect(screen.getByText('Habits')).toBeInTheDocument();
+    expect(screen.getByText('Good habits')).toBeInTheDocument();
+    expect(screen.getByText('Bad habits')).toBeInTheDocument();
+    expect(screen.getByText('Habit calendar')).toBeInTheDocument();
   });
 });

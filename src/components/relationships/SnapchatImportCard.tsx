@@ -95,6 +95,11 @@ export function SnapchatImportCard({ people, imports, onImport }: SnapchatImport
 
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-muted)' }}>Match to people</p>
+          {!people.length && (
+            <p className="text-sm mb-2" style={{ color: 'var(--color-text-muted)' }}>
+              Add real people first if you want these screenshot matches to map into the relationship graph cleanly.
+            </p>
+          )}
           <div className="flex gap-2 overflow-x-auto pb-1">
             {people.map((person) => {
               const selected = selectedIds.includes(person.id);

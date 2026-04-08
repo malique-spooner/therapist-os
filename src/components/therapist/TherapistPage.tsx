@@ -2,12 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Mic, MicOff, Radio, MessagesSquare, Plus, X } from 'lucide-react';
+import { Send, Mic, MicOff, MessagesSquare, Plus, X } from 'lucide-react';
 import { TopBar } from '@/components/navigation/TopBar';
 import { MessageBubble, TypingIndicator } from './MessageBubble';
-import { Waveform } from './Waveform';
 import { BudgetBanner } from './BudgetBanner';
-import { useSessionStore } from '@/store/session';
+import { useSessionStore, type Message } from '@/store/session';
 import { useSettingsStore } from '@/store/settings';
 import { api, type ConversationPayload, type ConversationMessagePayload } from '@/lib/api';
 import { formatCost } from '@/lib/costCalculator';
@@ -21,8 +20,8 @@ interface TherapistPageProps {
 }
 
 export function TherapistPage({ onBack, onSettings, preloadedContext, onClearContext }: TherapistPageProps) {
-  const { messages, isTyping, mode, liveState, addMessage, replaceMessages, setTyping, setMode, setLiveState, clearSession } = useSessionStore();
-  const { addBudgetSpent } = useSettingsStore();
+  const { messages, isTyping, addMessage, updateMessage, replaceMessages, setTyping, setLiveState, clearSession } = useSessionStore();
+  const { addBudgetSpent, activeProvider, localModel, ttsProvider, ttsVoice } = useSettingsStore();
 
   const [input, setInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -33,25 +32,35 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const openingInjected = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
-  const liveClientSecretRef = useRef<string | null>(null);
-  const livePeerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const liveDataChannelRef = useRef<RTCDataChannel | null>(null);
-  const liveAudioRef = useRef<HTMLAudioElement | null>(null);
-  const liveTranscriptIdsRef = useRef<Set<string>>(new Set());
-  const liveResponseIdsRef = useRef<Set<string>>(new Set());
+  const speechAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  async function injectOpeningMessage() {
+  async function loadOrStartConversation(context?: string | null) {
     try {
-      const { message } = await api.getOpeningMessage();
-      addMessage({ id: `opening-${Date.now()}`, role: 'ai', content: message, timestamp: new Date() });
-    } catch {
-      addMessage({ id: `opening-${Date.now()}`, role: 'ai', content: 'I’m here with your recent patterns in mind. What feels most worth exploring today?', timestamp: new Date() });
+      const started = await api.startConversation(activeProvider, context, localModel);
+      replaceMessages(started.openingMessage ? mapConversationMessages([started.openingMessage]) : []);
+      setConversationId(started.id);
+      setSessionCost(0);
+      openingInjected.current = true;
+      if (context) {
+        onClearContext();
+        await sendMessage(`I wanted to explore this insight: "${context}"`, started.id);
+      }
+      await loadConversations();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Therapist setup failed.';
+      replaceMessages([{
+        id: `opening-error-${Date.now()}`,
+        role: 'ai',
+        content: `Therapist could not load properly yet. ${message}`,
+        timestamp: new Date(),
+      }]);
     }
   }
 
@@ -60,7 +69,7 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
     setConversationId(null);
     setSessionCost(0);
     openingInjected.current = false;
-    void injectOpeningMessage();
+    void loadOrStartConversation();
   }
 
   function summariseConversation(conversation: ConversationPayload) {
@@ -118,24 +127,16 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
     if (openingInjected.current) return;
     openingInjected.current = true;
     if (messages.length === 0) {
-      void api.getOpeningMessage().then(({ message }) => {
-        const opening = preloadedContext
-          ? `${message}\n\nI noticed you wanted to explore: "${preloadedContext}"`
-          : message;
-        addMessage({ id: 'opening', role: 'ai', content: opening, timestamp: new Date() });
-        if (preloadedContext) onClearContext();
-      }).catch(() => {
-        addMessage({ id: 'opening', role: 'ai', content: 'I’m here with your recent patterns in mind. What feels most worth exploring today?', timestamp: new Date() });
-      });
+      void loadOrStartConversation(preloadedContext);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When navigating here with context from Dashboard mid-session, inject it as a prompt
   useEffect(() => {
-    if (!preloadedContext || messages.length === 0) return;
+    if (!preloadedContext || messages.length === 0 || !conversationId) return;
     const prompt = `I wanted to explore this insight: "${preloadedContext}"`;
     onClearContext();
-    sendMessage(prompt);
+    void sendMessage(prompt);
   }, [preloadedContext]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll to bottom on new message
@@ -152,8 +153,11 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
 
     return () => {
       mediaRecorderRef.current?.stop();
-      cleanupLiveSession();
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      speechAudioRef.current?.pause();
+      if (speechAudioRef.current?.src) {
+        URL.revokeObjectURL(speechAudioRef.current.src);
+      }
     };
   }, []);
 
@@ -161,133 +165,7 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
     void loadConversations();
   }, []);
 
-  function extractLiveResponseText(event: Record<string, unknown>): string {
-    const response = event.response as { output?: Array<{ id?: string; content?: Array<{ type?: string; text?: string; transcript?: string }> }> } | undefined;
-    if (!response?.output) return '';
-
-    const parts = response.output.flatMap((item) => item.content ?? []);
-    return parts
-      .map((part) => part.text ?? part.transcript ?? '')
-      .filter(Boolean)
-      .join(' ')
-      .trim();
-  }
-
-  function cleanupLiveSession() {
-    liveDataChannelRef.current?.close();
-    liveDataChannelRef.current = null;
-    livePeerConnectionRef.current?.close();
-    livePeerConnectionRef.current = null;
-    liveAudioRef.current?.pause();
-    if (liveAudioRef.current) {
-      liveAudioRef.current.srcObject = null;
-    }
-    liveAudioRef.current = null;
-    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-    mediaStreamRef.current = null;
-    liveClientSecretRef.current = null;
-  }
-
-  function handleLiveEvent(rawEvent: MessageEvent<string>) {
-    let event: Record<string, unknown>;
-    try {
-      event = JSON.parse(rawEvent.data);
-    } catch {
-      return;
-    }
-
-    const eventType = String(event.type ?? '');
-    if (eventType === 'input_audio_buffer.speech_started') {
-      setLiveState('listening');
-      return;
-    }
-    if (eventType === 'input_audio_buffer.speech_stopped') {
-      setLiveState('processing');
-      return;
-    }
-    if (eventType === 'conversation.item.input_audio_transcription.completed') {
-      const itemId = String(event.item_id ?? '');
-      const transcript = String(event.transcript ?? '').trim();
-      if (transcript && !liveTranscriptIdsRef.current.has(itemId)) {
-        liveTranscriptIdsRef.current.add(itemId);
-        addMessage({
-          id: itemId || `live-user-${Date.now()}`,
-          role: 'user',
-          content: transcript,
-          timestamp: new Date(),
-          isVoice: true,
-        });
-      }
-      return;
-    }
-    if (eventType === 'response.done') {
-      const responseId = String(event.response_id ?? (event.response as { id?: string } | undefined)?.id ?? '');
-      const content = extractLiveResponseText(event);
-      if (content && !liveResponseIdsRef.current.has(responseId)) {
-        if (responseId) liveResponseIdsRef.current.add(responseId);
-        addMessage({
-          id: responseId || `live-ai-${Date.now()}`,
-          role: 'ai',
-          content,
-          timestamp: new Date(),
-        });
-      }
-      setLiveState('listening');
-    }
-  }
-
-  async function connectLiveSession(clientSecret: string) {
-    if (typeof RTCPeerConnection === 'undefined') {
-      throw new Error('Realtime audio is not supported in this browser');
-    }
-
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaStreamRef.current = stream;
-
-    const peerConnection = new RTCPeerConnection();
-    livePeerConnectionRef.current = peerConnection;
-
-    const audioEl = new Audio();
-    audioEl.autoplay = true;
-    audioEl.onplay = () => setLiveState('speaking');
-    audioEl.onpause = () => setLiveState('listening');
-    audioEl.onended = () => setLiveState('listening');
-    liveAudioRef.current = audioEl;
-
-    peerConnection.ontrack = (event) => {
-      const [remoteStream] = event.streams;
-      if (remoteStream) {
-        audioEl.srcObject = remoteStream;
-      }
-    };
-
-    stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
-
-    const dataChannel = peerConnection.createDataChannel('oai-events');
-    liveDataChannelRef.current = dataChannel;
-    dataChannel.addEventListener('message', handleLiveEvent);
-
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-
-    const response = await fetch('https://api.openai.com/v1/realtime/calls', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${clientSecret}`,
-        'Content-Type': 'application/sdp',
-      },
-      body: offer.sdp ?? '',
-    });
-
-    if (!response.ok) {
-      throw new Error(`Realtime connection failed with ${response.status}`);
-    }
-
-    const answer = await response.text();
-    await peerConnection.setRemoteDescription({ type: 'answer', sdp: answer });
-  }
-
-  async function sendMessage(text?: string) {
+  async function sendMessage(text?: string, forcedConversationId?: string) {
     const content = (text ?? input).trim();
     if (!content) return;
 
@@ -301,22 +179,57 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
     });
 
     setTyping(true);
+    const aiMessageId = (Date.now() + 1).toString();
 
     try {
-      const response = await api.sendMessage(content, 'local-qwen', conversationId ?? undefined);
-      setConversationId(response.conversationId);
-      setSessionCost(response.sessionCostPence);
+      let nextConversationId = forcedConversationId ?? conversationId;
+      if (!nextConversationId) {
+        const started = await api.startConversation(activeProvider, undefined, localModel);
+        nextConversationId = started.id;
+        setConversationId(started.id);
+      }
       addMessage({
-        id: (Date.now() + 1).toString(),
+        id: aiMessageId,
         role: 'ai',
-        content: response.content,
+        content: '',
         timestamp: new Date(),
-        frameworksReferenced: response.frameworksReferenced,
-        costPence: response.costPence,
       });
-      if (response.costPence) addBudgetSpent(response.costPence);
-    } catch {
-      addMessage({ id: (Date.now() + 1).toString(), role: 'ai', content: 'Something went wrong. Please try again.', timestamp: new Date() });
+      const finalPayload = await api.sendMessageStream(content, activeProvider, nextConversationId ?? undefined, {
+        onDelta: (delta) => {
+          const current = useSessionStore.getState().messages.find((message) => message.id === aiMessageId)?.content ?? '';
+          updateMessage(aiMessageId, { content: current + delta });
+        },
+      }, localModel);
+      const finalMessage = useSessionStore.getState().messages.find((message) => message.id === aiMessageId);
+      if (!finalMessage?.content?.trim()) {
+        updateMessage(aiMessageId, { content: 'I could not generate a reply just now. Please try again.' });
+      }
+      if (finalPayload !== null) {
+        setConversationId(finalPayload.conversationId);
+        setSessionCost(finalPayload.sessionCostPence);
+        updateMessage(aiMessageId, {
+          frameworksReferenced: finalPayload.frameworksReferenced,
+          costPence: finalPayload.costPence,
+        });
+        if (finalPayload.costPence) addBudgetSpent(finalPayload.costPence);
+        const persistedMessages = await api.getConversationMessages(finalPayload.conversationId);
+        replaceMessages(mapConversationMessages(persistedMessages));
+      }
+      await loadConversations();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Something went wrong. Please try again.';
+      const content =
+        message.includes('ReadTimeout') || message.includes('timed out')
+          ? 'Your local model took too long to answer. Qwen 3.5 35B is reachable, but it is currently too slow for this chat path. Try again, or switch the local chat model to a smaller Ollama model like qwen3.5:27b or qwen3.5:9b.'
+          : message.includes('Local Ollama model is not available')
+            ? 'The app could not reach your local Ollama model. Check that Ollama is running and that the configured model is installed.'
+            : message || 'Something went wrong. Please try again.';
+      const existing = useSessionStore.getState().messages.find((item) => item.id === aiMessageId);
+      if (existing) {
+        updateMessage(aiMessageId, { content });
+      } else {
+        addMessage({ id: aiMessageId, role: 'ai', content, timestamp: new Date() });
+      }
     } finally {
       setTyping(false);
     }
@@ -329,66 +242,7 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
     }
   }
 
-  async function toggleLive() {
-    if (mode === 'live') {
-      setMode('async');
-      setLiveState('idle');
-      setIsRecording(false);
-      mediaRecorderRef.current?.stop();
-      cleanupLiveSession();
-      return;
-    }
-
-    const confirmed = window.confirm(
-      "Live voice currently uses a hosted realtime bridge while local voice is being finished.\nEstimated cost: ~£0.06 per minute.\nA 10-minute session costs approximately £0.60.\n\nContinue?"
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      const session = await api.createLiveSession();
-      await connectLiveSession(session.clientSecret);
-      liveClientSecretRef.current = session.clientSecret;
-      liveTranscriptIdsRef.current.clear();
-      liveResponseIdsRef.current.clear();
-      setMode('live');
-      setLiveState('listening');
-      setIsRecording(true);
-      addMessage({
-        id: `live-session-${Date.now()}`,
-        role: 'ai',
-        content: `Live session ready with ${session.model}. ${session.warning} Use the mic button to mute or unmute yourself.`,
-        timestamp: new Date(),
-      });
-    } catch {
-      cleanupLiveSession();
-      addMessage({
-        id: `live-session-error-${Date.now()}`,
-        role: 'ai',
-        content: 'Live mode is not available right now. Check the realtime voice setup and try again.',
-        timestamp: new Date(),
-      });
-    }
-  }
-
   async function toggleRecording() {
-    if (mode === 'live') {
-      const tracks = mediaStreamRef.current?.getAudioTracks() ?? [];
-      if (tracks.length === 0) {
-        addMessage({ id: `live-audio-missing-${Date.now()}`, role: 'ai', content: 'Live audio is not connected right now.', timestamp: new Date() });
-        return;
-      }
-
-      const currentlyEnabled = tracks.some((track) => track.enabled);
-      tracks.forEach((track) => {
-        track.enabled = !currentlyEnabled;
-      });
-      setIsRecording(!currentlyEnabled);
-      setLiveState(currentlyEnabled ? 'idle' : 'listening');
-      return;
-    }
-
     if (!recordingSupported) {
       addMessage({ id: `voice-unavailable-${Date.now()}`, role: 'ai', content: 'Voice recording is not available in this browser.', timestamp: new Date() });
       return;
@@ -443,6 +297,51 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
       setLiveState('listening');
     } catch {
       addMessage({ id: `voice-permission-${Date.now()}`, role: 'ai', content: 'Microphone access is unavailable, so voice input could not start.', timestamp: new Date() });
+    }
+  }
+
+  async function speakMessage(message: Message) {
+    const alreadySpeaking = speakingMessageId === message.id;
+    if (alreadySpeaking) {
+      speechAudioRef.current?.pause();
+      if (speechAudioRef.current?.src) {
+        URL.revokeObjectURL(speechAudioRef.current.src);
+      }
+      speechAudioRef.current = null;
+      setSpeakingMessageId(null);
+      return;
+    }
+
+    try {
+      const audioBlob = await api.synthesizeSpeech(message.content, { provider: ttsProvider, voice: ttsVoice });
+      const nextAudio = new Audio(URL.createObjectURL(audioBlob));
+      nextAudio.onended = () => {
+        URL.revokeObjectURL(nextAudio.src);
+        setSpeakingMessageId(null);
+      };
+      nextAudio.onpause = () => {
+        if (nextAudio.ended) return;
+        URL.revokeObjectURL(nextAudio.src);
+        setSpeakingMessageId(null);
+      };
+      speechAudioRef.current?.pause();
+      if (speechAudioRef.current?.src) {
+        URL.revokeObjectURL(speechAudioRef.current.src);
+      }
+      speechAudioRef.current = nextAudio;
+      setSpeakingMessageId(message.id);
+      await nextAudio.play();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Local TTS is not available right now.';
+      addMessage({
+        id: `tts-error-${Date.now()}`,
+        role: 'ai',
+        content: detail.includes('Piper')
+          ? 'Piper read-aloud is not available yet on this machine.'
+          : 'Read-aloud is not available right now.',
+        timestamp: new Date(),
+      });
+      setSpeakingMessageId(null);
     }
   }
 
@@ -571,50 +470,22 @@ export function TherapistPage({ onBack, onSettings, preloadedContext, onClearCon
         )}
       </AnimatePresence>
 
-      {/* Model + mode bar */}
+      {/* Model bar */}
       <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
         <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          Local Mind · Qwen3 30B{sessionCost > 0 ? ` · Session: ${formatCost(sessionCost)}` : ''}
+          Local Mind · {localModel} · {ttsProvider === 'kokoro' ? 'Kokoro voice' : 'Piper voice'} · Whisper{sessionCost > 0 ? ` · Session: ${formatCost(sessionCost)}` : ''}
         </span>
-        <button
-          onClick={() => { void toggleLive(); }}
-          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full transition-colors"
-          style={{
-            backgroundColor: mode === 'live' ? 'var(--color-primary)' : 'var(--color-border)',
-            color: mode === 'live' ? '#fff' : 'var(--color-text-muted)',
-          }}
-        >
-          <Radio size={10} />
-          {mode === 'live' ? 'Live session' : 'Async mode'}
-        </button>
+        <span className="text-[11px] font-medium px-3 py-1 rounded-full" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}>
+          Text reply
+        </span>
       </div>
 
       <BudgetBanner />
 
-      {/* Live mode waveform banner */}
-      <AnimatePresence>
-        {mode === 'live' && (
-          <motion.div
-            className="mx-4 mt-2 mb-1 rounded-2xl px-4 py-3 flex items-center gap-3"
-            style={{ backgroundColor: liveState === 'listening' ? '#FFF3E0' : 'var(--color-surface-2)', border: `1px solid ${liveState === 'listening' ? '#FFCC80' : 'var(--color-border)'}` }}
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
-            <div className="flex-1">
-              <Waveform isActive={liveState === 'listening' || liveState === 'speaking'} mode={liveState === 'processing' ? 'listening' : liveState === 'idle' ? 'idle' : liveState} />
-            </div>
-            <span className="text-xs font-medium" style={{ color: liveState === 'listening' ? '#D97706' : 'var(--color-text-muted)' }}>
-              {liveState === 'listening' ? 'Listening...' : liveState === 'speaking' ? 'Speaking...' : 'Ready'}
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 pt-4">
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble key={msg.id} message={msg} onSpeak={(message) => { void speakMessage(message); }} isSpeaking={speakingMessageId === msg.id} />
         ))}
         <AnimatePresence>
           {isTyping && <TypingIndicator />}

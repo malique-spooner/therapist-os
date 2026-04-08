@@ -5,7 +5,31 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import AIConversation, DataSourceConnection, DailyCheckIn, Habit, Relationship, RelationshipInteraction, UserProfile
+from ..models.life_data import (
+    AIConversationDemo,
+    AIConversationReal,
+    DailyCheckInDemo,
+    DailyCheckInReal,
+    FinanceDataDemo,
+    FinanceDataReal,
+    HabitLogDemo,
+    HabitLogReal,
+    HealthDataDemo,
+    HealthDataReal,
+    LocationDailySummaryDemo,
+    LocationDailySummaryReal,
+    MusicDataDemo,
+    MusicDataReal,
+    RelationshipDemo,
+    RelationshipInteractionDemo,
+    RelationshipInteractionReal,
+    RelationshipReal,
+    UserProfileDemo,
+    UserProfileReal,
+    WeatherDataDemo,
+    WeatherDataReal,
+)
+from .data_mode import dataset_model, normalize_data_mode
 
 
 DEFAULT_LAYERS = [
@@ -132,9 +156,9 @@ DEFAULT_LAYERS = [
         "description": "Chooses the strongest supported signals and turns them into a fresh daily perspective using private local AI on your Mac.",
         "category": "composition",
         "status": "live",
-        "recentContribution": "Ranking the best candidate signals and routing them toward the local Qwen3 30B plan.",
+        "recentContribution": "Ranking the best candidate signals and routing them toward the local Qwen 3.5 35B plan.",
         "models": [
-            {"id": "local-llm", "name": "Qwen3 30B Composer", "purpose": "Primary local model for snapshots, reflections, and therapist responses.", "status": "active", "versionAdded": "v3"},
+            {"id": "local-llm", "name": "Qwen 3.5 35B Composer", "purpose": "Primary local Ollama model for snapshots, reflections, and therapist responses.", "status": "active", "versionAdded": "v3"},
             {"id": "ranking-engine", "name": "Insight Ranker", "purpose": "Chooses what is most novel, relevant, and worth showing today.", "status": "experimental", "versionAdded": "v2.2"},
             {"id": "local-whisper", "name": "Local Whisper", "purpose": "Transcribes voice before you confirm and send it onward.", "status": "active", "versionAdded": "v2.2"},
         ],
@@ -195,37 +219,63 @@ DEFAULT_VERSIONS = [
 
 
 class BrainService:
-    def get_payload(self, db: Session) -> dict:
-        connected_sources = db.scalar(select(func.count()).select_from(DataSourceConnection).where(DataSourceConnection.connected.is_(True))) or 0
-        active_habits = db.scalar(select(func.count()).select_from(Habit).where(Habit.active.is_(True))) or 0
-        conversations = db.scalar(select(func.count()).select_from(AIConversation)) or 0
-        relationship_count = db.scalar(select(func.count()).select_from(Relationship)) or 0
-        interaction_count = db.scalar(select(func.count()).select_from(RelationshipInteraction)) or 0
-        checkin_count = db.scalar(select(func.count()).select_from(DailyCheckIn)) or 0
-        profile = db.scalar(select(UserProfile).limit(1))
+    def get_payload(self, db: Session, mode: str | None = None) -> dict:
+        normalized_mode = normalize_data_mode(mode)
+        habit_model = dataset_model(normalized_mode, HabitLogReal, HabitLogDemo)
+        relationship_model = dataset_model(normalized_mode, RelationshipReal, RelationshipDemo)
+        interaction_model = dataset_model(normalized_mode, RelationshipInteractionReal, RelationshipInteractionDemo)
+        checkin_model = dataset_model(normalized_mode, DailyCheckInReal, DailyCheckInDemo)
+        profile_model = dataset_model(normalized_mode, UserProfileReal, UserProfileDemo)
+        conversation_model = dataset_model(normalized_mode, AIConversationReal, AIConversationDemo)
+        source_coverage = self._source_coverage(db, normalized_mode)
+        tracked_habits = (
+            db.scalar(select(func.count(func.distinct(habit_model.habit_id))).select_from(habit_model)) or 0
+        )
+        conversations = db.scalar(select(func.count()).select_from(conversation_model)) or 0
+        relationship_count = db.scalar(
+            select(func.count()).select_from(relationship_model).where(relationship_model.active.is_(True))
+        ) or 0
+        interaction_count = db.scalar(
+            select(func.count()).select_from(interaction_model)
+        ) or 0
+        checkin_count = db.scalar(select(func.count()).select_from(checkin_model)) or 0
+        profile = db.scalar(select(profile_model).limit(1))
 
         active_systems = sum(len(layer.get("detectors", [])) + len(layer.get("models", [])) for layer in DEFAULT_LAYERS)
-        candidate_signals = max(24, (connected_sources * 12) + (relationship_count * 2) + min(active_habits, 20) + min(checkin_count, 14))
-        surfaced_insights = 4 if connected_sources >= 3 else 3
+        candidate_signals = self._candidate_signals(
+            source_coverage=source_coverage,
+            tracked_habits=tracked_habits,
+            conversations=conversations,
+            relationship_count=relationship_count,
+            checkin_count=checkin_count,
+        )
+        surfaced_insights = self._surfaced_insights(
+            source_coverage=source_coverage,
+            conversations=conversations,
+            relationship_count=relationship_count,
+            checkin_count=checkin_count,
+        )
         total_layers = len(DEFAULT_LAYERS)
-        last_refresh = self._last_refresh_label(profile)
-        mac_status = "Mac available" if connected_sources >= 1 else "Waiting for sources"
+        has_meaningful_runtime = source_coverage > 0 or checkin_count > 0 or relationship_count > 0 or conversations > 0
+        last_refresh = self._last_refresh_label(profile if has_meaningful_runtime else None)
+        mac_status = "Mac available" if has_meaningful_runtime else "Waiting for real data"
+        status = "Connected blueprint" if has_meaningful_runtime else "Waiting for real data"
 
         return {
             "overview": {
                 "version": "Brain v3",
-                "status": "Connected blueprint",
+                "status": status,
                 "lastRefresh": last_refresh,
                 "macStatus": mac_status,
-                "privacyMode": "Private inference with Qwen3 30B on your Mac, with local Whisper and optional local TTS.",
+                "privacyMode": "Private inference with Qwen 3.5 35B on your Mac through Ollama, with local Whisper and optional local TTS.",
                 "candidateSignals": candidate_signals,
                 "surfacedInsights": surfaced_insights,
                 "totalLayers": total_layers,
                 "activeSystems": active_systems,
             },
             "layers": self._layers_with_live_contributions(
-                connected_sources=connected_sources,
-                active_habits=active_habits,
+                source_coverage=source_coverage,
+                tracked_habits=tracked_habits,
                 conversations=conversations,
                 relationship_count=relationship_count,
                 interaction_count=interaction_count,
@@ -234,6 +284,51 @@ class BrainService:
             ),
             "versions": DEFAULT_VERSIONS,
         }
+
+    @staticmethod
+    def _candidate_signals(
+        *,
+        source_coverage: int,
+        tracked_habits: int,
+        conversations: int,
+        relationship_count: int,
+        checkin_count: int,
+    ) -> int:
+        if source_coverage == 0 and tracked_habits == 0 and conversations == 0 and relationship_count == 0 and checkin_count == 0:
+            return 0
+        return (source_coverage * 10) + min(tracked_habits, 20) + min(conversations * 2, 12) + (relationship_count * 2) + min(checkin_count, 14)
+
+    @staticmethod
+    def _surfaced_insights(
+        *,
+        source_coverage: int,
+        conversations: int,
+        relationship_count: int,
+        checkin_count: int,
+    ) -> int:
+        if source_coverage == 0 and checkin_count < 3 and relationship_count == 0 and conversations == 0:
+            return 0
+        if source_coverage >= 3 or checkin_count >= 14:
+            return 4
+        if source_coverage >= 1 or checkin_count >= 3 or conversations >= 2 or relationship_count >= 2:
+            return 2
+        return 1
+
+    @staticmethod
+    def _source_coverage(db: Session, mode: str) -> int:
+        health_model = dataset_model(mode, HealthDataReal, HealthDataDemo)
+        finance_model = dataset_model(mode, FinanceDataReal, FinanceDataDemo)
+        music_model = dataset_model(mode, MusicDataReal, MusicDataDemo)
+        location_model = dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
+        weather_model = dataset_model(mode, WeatherDataReal, WeatherDataDemo)
+        counts = [
+            db.scalar(select(func.count()).select_from(health_model)) or 0,
+            db.scalar(select(func.count()).select_from(finance_model)) or 0,
+            db.scalar(select(func.count()).select_from(music_model)) or 0,
+            db.scalar(select(func.count()).select_from(location_model)) or 0,
+            db.scalar(select(func.count()).select_from(weather_model)) or 0,
+        ]
+        return sum(1 for count in counts if count > 0)
 
     @staticmethod
     def _last_refresh_label(profile: UserProfile | None) -> str:
@@ -251,8 +346,8 @@ class BrainService:
     def _layers_with_live_contributions(
         self,
         *,
-        connected_sources: int,
-        active_habits: int,
+        source_coverage: int,
+        tracked_habits: int,
         conversations: int,
         relationship_count: int,
         interaction_count: int,
@@ -260,15 +355,15 @@ class BrainService:
         profile_present: bool,
     ) -> list[dict]:
         contributions = {
-            "data-quality": f"Currently monitoring freshness across {connected_sources} connected source{'s' if connected_sources != 1 else ''}.",
-            "pattern-engine": f"Ready to compare {active_habits} active habit signals and {checkin_count} check-in records against baseline.",
+            "data-quality": f"Currently monitoring freshness across {source_coverage} data domain{'s' if source_coverage != 1 else ''}.",
+            "pattern-engine": f"Ready to compare {tracked_habits} tracked habit signal{'s' if tracked_habits != 1 else ''} and {checkin_count} check-in record{'s' if checkin_count != 1 else ''} against baseline.",
             "timeline-engine": f"Tracking sequences across {checkin_count} check-ins and recent activity windows.",
             "unsupervised-engine": "Prepared for clustering once more multiday history accumulates across the synced domains.",
             "prediction-engine": "Waiting for enough labeled history before next-day forecasting becomes reliable.",
             "text-intelligence": f"Can currently ground themes in {conversations} therapist conversation{'s' if conversations != 1 else ''}.",
             "knowledge-layer": "Blueprint is in place for curated research retrieval and framework matching.",
             "causal-layer": "Preparing before/after comparisons so the app can recommend small experiments, not just observations.",
-            "insight-composer": f"Composing from current app state: {connected_sources} connected source{'s' if connected_sources != 1 else ''}, {relationship_count} people, and {interaction_count} logged interaction{'s' if interaction_count != 1 else ''}.",
+            "insight-composer": f"Composing from current app state: {source_coverage} data domain{'s' if source_coverage != 1 else ''}, {relationship_count} people, and {interaction_count} logged interaction{'s' if interaction_count != 1 else ''}.",
             "feedback-layer": "Prepared to learn from refreshes, dismissals, and future usefulness signals.",
         }
         layers: list[dict] = []

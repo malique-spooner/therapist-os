@@ -7,19 +7,47 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ...config import settings
-from ...models import AIConversation, FinanceData, HealthData, Habit, HabitLog, UserProfile, WeatherData
+from ...models import Habit
+from ...models.life_data import (
+    AIConversationDemo,
+    AIConversationReal,
+    FinanceDataDemo,
+    FinanceDataReal,
+    HabitLogDemo,
+    HabitLogReal,
+    HealthDataDemo,
+    HealthDataReal,
+    UserProfileDemo,
+    UserProfileReal,
+    WeatherDataDemo,
+    WeatherDataReal,
+)
+from ..data_mode import dataset_model, normalize_data_mode
 
 
 class ContextBuilder:
-    async def build_context_document(self, db: Session) -> str:
+    async def build_context_document(self, db: Session, mode: str | None = None) -> str:
+        normalized_mode = normalize_data_mode(mode)
+        health_model = dataset_model(normalized_mode, HealthDataReal, HealthDataDemo)
+        finance_model = dataset_model(normalized_mode, FinanceDataReal, FinanceDataDemo)
+        habit_log_model = dataset_model(normalized_mode, HabitLogReal, HabitLogDemo)
+        profile_model = dataset_model(normalized_mode, UserProfileReal, UserProfileDemo)
+        weather_model = dataset_model(normalized_mode, WeatherDataReal, WeatherDataDemo)
+        conversation_model = dataset_model(normalized_mode, AIConversationReal, AIConversationDemo)
         today = date.today()
-        health = db.scalars(select(HealthData).where(HealthData.date >= today - timedelta(days=6)).order_by(HealthData.date)).all()
-        finance = db.scalars(select(FinanceData).where(FinanceData.date >= today - timedelta(days=6))).all()
+        health = db.scalars(
+            select(health_model).where(health_model.date >= today - timedelta(days=6)).order_by(health_model.date)
+        ).all()
+        finance = db.scalars(select(finance_model).where(finance_model.date >= today - timedelta(days=6))).all()
         habits = db.scalars(select(Habit)).all()
-        habit_logs = db.scalars(select(HabitLog).where(HabitLog.date >= today - timedelta(days=6))).all()
-        profile = db.scalar(select(UserProfile).limit(1))
-        recent_sessions = db.scalars(select(AIConversation).order_by(AIConversation.started_at.desc()).limit(3)).all()
-        weather = db.scalars(select(WeatherData).where(WeatherData.date >= today - timedelta(days=2)).order_by(WeatherData.date)).all()
+        habit_logs = db.scalars(select(habit_log_model).where(habit_log_model.date >= today - timedelta(days=6))).all()
+        profile = db.scalar(select(profile_model).limit(1))
+        recent_sessions = db.scalars(
+            select(conversation_model).order_by(conversation_model.started_at.desc()).limit(3)
+        ).all()
+        weather = db.scalars(
+            select(weather_model).where(weather_model.date >= today - timedelta(days=2)).order_by(weather_model.date)
+        ).all()
 
         sections: list[str] = []
         if profile:
@@ -56,29 +84,42 @@ class ContextBuilder:
 
         return "\n\n".join(sections)
 
-    async def build_system_prompt(self, db: Session) -> str:
-        context = await self.build_context_document(db)
+    async def build_system_prompt(self, db: Session, mode: str | None = None) -> str:
+        context = await self.build_context_document(db, mode)
         now = datetime.now()
         return (
             "You are a personal AI therapist with access to real data from this person's life. "
-            "You are warm, direct, and honest. You ask one question at a time. "
-            "Use CBT, Self-Determination Theory, and Behaviourism in accessible language.\n\n"
+            "You are warm, calm, direct, and honest. You ask one question at a time. "
+            "Reply once, not twice. Do not restate the same idea in two different phrasings. "
+            "Use 1 to 3 short sentences, and ask at most one question. "
+            "Write for spoken delivery: natural, grounded, low-hype, and easy to hear out loud. "
+            "Prefer simple language over formal therapy language. "
+            "The user's latest message always takes priority over any background context. "
+            "If they correct a fact, accept the correction and continue from that corrected fact. "
+            "Do not act as if they said something else. "
+            "Treat the life-data context as optional background, not as something you must mention. "
+            "Only bring in background metrics when they are directly relevant to the user's latest message. "
+            "If the user corrects a detail, briefly acknowledge the correction and continue without repeating yourself. "
+            "Use CBT, Self-Determination Theory, and Behaviourism in accessible language only when helpful.\n\n"
             f"{context}\n\n"
             f"Today's date: {date.today().isoformat()}\n"
             f"Time zone: {settings.USER_TIMEZONE}\n"
             f"Time of day: {now.strftime('%H:%M')}"
         )
 
-    async def generate_opening_message(self, db: Session) -> str:
+    async def generate_opening_message(self, db: Session, mode: str | None = None) -> str:
+        normalized_mode = normalize_data_mode(mode)
+        health_model = dataset_model(normalized_mode, HealthDataReal, HealthDataDemo)
+        profile_model = dataset_model(normalized_mode, UserProfileReal, UserProfileDemo)
         today = date.today()
-        health = db.scalar(select(HealthData).where(HealthData.date == today))
+        health = db.scalar(select(health_model).where(health_model.date == today))
         if health:
             if (health.sleep_duration_hours or 0) < 6:
                 return f"You slept {health.sleep_duration_hours:.1f} hours last night, which is below your recent baseline. What feels most important to notice about your energy today?"
             if (health.steps or 0) > 10000:
                 return f"You've been moving more than usual, and your recovery markers look steadier today. What's been helping lately?"
 
-        profile = db.scalar(select(UserProfile).limit(1))
+        profile = db.scalar(select(profile_model).limit(1))
         if profile and profile.notable_patterns:
             return f"I’m holding the patterns you’ve been working on, especially {profile.notable_patterns[0].lower()}. Where does that feel most active today?"
 

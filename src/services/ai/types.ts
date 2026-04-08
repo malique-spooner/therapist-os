@@ -40,7 +40,7 @@ export const AI_PROVIDERS: AIProvider[] = [
   {
     id: 'local-qwen',
     name: 'Local Mind',
-    model: 'qwen3:30b',
+    model: 'qwen3.5:35b',
     costPerSession: 'Private on Mac',
     costRaw: 0,
     tier: 'free',

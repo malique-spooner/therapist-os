@@ -1,2 +1,5 @@
 -r requirements.txt
 whisper-cpp-python==0.2.0
+piper-tts==1.4.2
+kokoro-onnx==0.4.9
+soundfile==0.13.1

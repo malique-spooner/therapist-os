@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...core.logging import get_logger
-from ...models import HealthData
+from ...models.life_data import HealthDataReal
 
 logger = get_logger(__name__)
 
@@ -35,9 +35,21 @@ class GarminIngestionService:
         if not self.is_configured:
             raise RuntimeError("Garmin credentials are not configured")
         if self._client is None:
-            client = Garmin(self._email, self._password)
-            client.login()
-            self._client = client
+            try:
+                client = Garmin(self._email, self._password)
+                client.login()
+                self._client = client
+            except AssertionError as exc:
+                raise RuntimeError(
+                    "Garmin login succeeded partway but no profile was returned. This usually means Garmin changed the login flow, the credentials are wrong, or the account needs extra verification in Garmin Connect."
+                ) from exc
+            except Exception as exc:
+                message = str(exc)
+                if "429" in message or "Too Many Requests" in message:
+                    raise RuntimeError(
+                        "Garmin is rate-limiting login attempts right now (429 Too Many Requests). Wait a bit, sign into Garmin Connect in the browser if needed, then try syncing again."
+                    ) from exc
+                raise RuntimeError(f"Garmin sync failed during login: {message}") from exc
         return self._client
 
     @staticmethod
@@ -101,13 +113,13 @@ class GarminIngestionService:
         workout_type = primary.get("activityType", {}).get("typeKey") or primary.get("activityName")
         return True, workout_type, duration_minutes
 
-    async def sync_last_7_days(self, db: Session) -> list[HealthData]:
-        records: list[HealthData] = []
+    async def sync_last_7_days(self, db: Session) -> list[HealthDataReal]:
+        records: list[HealthDataReal] = []
         for offset in range(6, -1, -1):
             records.append(await self.sync_date(date.today() - timedelta(days=offset), db))
         return records
 
-    async def sync_date(self, target_date: date, db: Session) -> HealthData:
+    async def sync_date(self, target_date: date, db: Session) -> HealthDataReal:
         stats = self._fetch_stats(target_date)
         sleep = self._fetch_sleep(target_date)
         hrv = self._fetch_hrv(target_date)
@@ -116,9 +128,9 @@ class GarminIngestionService:
 
         had_workout, workout_type, workout_duration = self._extract_activity_summary(activities)
 
-        record = db.scalar(select(HealthData).where(HealthData.date == target_date))
+        record = db.scalar(select(HealthDataReal).where(HealthDataReal.date == target_date))
         if not record:
-            record = HealthData(date=target_date)
+            record = HealthDataReal(date=target_date)
             db.add(record)
 
         record.steps = self._extract_steps(stats) or record.steps or 0
@@ -130,8 +142,6 @@ class GarminIngestionService:
         record.workout_logged = had_workout
         record.workout_type = workout_type
         record.workout_duration_minutes = workout_duration or 0
-        record.is_demo = False
-
         db.commit()
         db.refresh(record)
 

@@ -28,7 +28,7 @@ describe('api client', () => {
     await api.getBrain();
 
     const [url] = vi.mocked(global.fetch).mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8000/api/brain');
+    expect(String(url)).toBe('http://localhost:8000/api/brain?mode=demo-only');
   });
 
   it('calls the data source endpoints with the expected paths', async () => {
@@ -63,7 +63,7 @@ describe('api client', () => {
     await api.createLiveSession();
 
     const [url, init] = vi.mocked(global.fetch).mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8000/api/ai/live/session');
+    expect(String(url)).toBe('http://localhost:8000/api/ai/live/session?mode=demo-only');
     expect(init?.method).toBe('POST');
   });
 
@@ -93,7 +93,7 @@ describe('api client', () => {
     });
 
     const [url, init] = vi.mocked(global.fetch).mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8000/api/relationships/imports/snapchat');
+    expect(String(url)).toBe('http://localhost:8000/api/relationships/imports/snapchat?mode=demo-only');
     expect(init?.method).toBe('POST');
     expect(init?.body).toBeInstanceOf(FormData);
   });

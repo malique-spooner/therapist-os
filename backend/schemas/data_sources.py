@@ -14,6 +14,21 @@ class DataSourceSchema(BaseModel):
     folderPath: str | None = None
     connectionHint: str | None = None
     lastError: str | None = None
+    syncBlocked: bool = False
+    syncGuardMessage: str | None = None
+    intendedSync: str | None = None
+    manualSyncAllowed: bool = True
+
+
+class DataSourceSyncAttemptSchema(BaseModel):
+    id: int
+    status: str
+    trigger: str
+    dataMode: str | None = None
+    rowsSynced: int | None = None
+    detail: str | None = None
+    attemptedAt: str
+    cooldownUntil: str | None = None
 
 
 class DataSourceActionSchema(BaseModel):
@@ -48,6 +63,22 @@ class DataSourceSetupSchema(BaseModel):
     folderPath: str | None = None
     canAuthorize: bool = False
     authActionLabel: str | None = None
+    recentAttempts: list[DataSourceSyncAttemptSchema] = []
+    intendedSync: str | None = None
+    manualSyncAllowed: bool = True
+
+
+class DataSourceActivityItemSchema(DataSourceSchema):
+    recordsAvailable: int
+    lastCollectedAt: str | None = None
+    latestDataDate: str | None = None
+    recentAttempts: list[DataSourceSyncAttemptSchema] = []
+
+
+class DataSourceActivityResponseSchema(BaseModel):
+    mode: str
+    generatedAt: str
+    items: list[DataSourceActivityItemSchema]
 
 
 class DataSourceAuthorizeSchema(BaseModel):

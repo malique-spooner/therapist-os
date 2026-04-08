@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { TopBar } from '@/components/navigation/TopBar';
 import { HealthSummary } from './HealthSummary';
 import { HealthCharts } from './HealthCharts';
-import { WellbeingRings } from '@/components/dashboard/WellbeingRings';
 import { InsightCard } from '@/components/dashboard/InsightCard';
 import type { Period } from '@/lib/mockDataUtils';
 import { api } from '@/lib/api';
@@ -12,6 +11,7 @@ import { useApiQuery } from '@/hooks/useApiQuery';
 import { RetryNotice } from '@/components/ui/retry-notice';
 import { DateRangeControl, type DateRangeValue } from '@/components/ui/date-range-control';
 import { APP_TODAY, addDays, clampIsoDate, differenceInDays } from '@/lib/date';
+import { useSettingsStore } from '@/store/settings';
 
 const insights = [
   {
@@ -53,13 +53,14 @@ interface HealthPageProps {
 }
 
 export function HealthPage({ onBack, onSettings, onTalkAboutThis }: HealthPageProps) {
-  const { data, isLoading, error, refetch } = useApiQuery(() => api.getHealth('3-months'), []);
+  const dataMode = useSettingsStore((state) => state.dataMode);
+  const { data, isLoading, error, refetch } = useApiQuery(() => api.getHealth('3-months'), [dataMode]);
   const allDays = useMemo(() => data ?? [], [data]);
   const availableDates = useMemo(() => allDays.map((day) => day.date), [allDays]);
   const latestDate = availableDates[availableDates.length - 1] ?? APP_TODAY;
   const earliestDate = availableDates[0] ?? addDays(latestDate, -89);
   const [range, setRange] = useState<DateRangeValue>(() => ({
-    startDate: addDays(latestDate, -6),
+    startDate: latestDate,
     endDate: latestDate,
   }));
 
@@ -75,7 +76,9 @@ export function HealthPage({ onBack, onSettings, onTalkAboutThis }: HealthPagePr
     () => allDays.filter((day) => day.date >= range.startDate && day.date <= range.endDate),
     [allDays, range.endDate, range.startDate],
   );
-  const derivedPeriod: Period = differenceInDays(range.startDate, range.endDate) + 1 <= 7 ? 'this-week' : differenceInDays(range.startDate, range.endDate) + 1 <= 31 ? 'this-month' : '3-months';
+  const spanDays = differenceInDays(range.startDate, range.endDate) + 1;
+  const derivedPeriod: Period = spanDays <= 1 ? 'today' : spanDays <= 7 ? 'this-week' : spanDays <= 31 ? 'this-month' : '3-months';
+  const showEmptyRealState = dataMode === 'real-only' && !isLoading && !days.length;
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
@@ -91,22 +94,32 @@ export function HealthPage({ onBack, onSettings, onTalkAboutThis }: HealthPagePr
           minDate={earliestDate}
           maxDate={latestDate}
         />
-        <HealthSummary days={days} />
-        <WellbeingRings period={derivedPeriod} />
-        {isLoading && !days.length ? (
-          <div className="px-4 space-y-3 pb-4">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div key={index} className="h-64 rounded-[28px] animate-pulse" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }} />
-            ))}
-          </div>
-        ) : (
-          <HealthCharts period={derivedPeriod} days={days} />
+        {showEmptyRealState && (
+          <RetryNotice
+            message="Not enough real health data yet. Sync Garmin or switch to Demo mode."
+            onRetry={refetch}
+            className="mx-4 mb-4 w-[calc(100%-2rem)]"
+          />
         )}
-        <div className="px-4 space-y-3">
-          {insights.map((insight, index) => (
-            <InsightCard key={insight.id} insight={insight} index={index} onTalkAboutThis={onTalkAboutThis} />
-          ))}
-        </div>
+        {!showEmptyRealState && (
+          <>
+            <HealthSummary days={days} />
+            {isLoading && !days.length ? (
+              <div className="px-4 space-y-3 pb-4">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="h-64 rounded-[28px] animate-pulse" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }} />
+                ))}
+              </div>
+            ) : (
+              <HealthCharts period={derivedPeriod} days={days} />
+            )}
+            <div className="px-4 space-y-3">
+              {(dataMode === 'demo-only' ? insights : []).map((insight, index) => (
+                <InsightCard key={insight.id} insight={insight} index={index} onTalkAboutThis={onTalkAboutThis} />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

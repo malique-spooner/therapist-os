@@ -1,11 +1,14 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { Volume2 } from 'lucide-react';
 import { Message } from '@/store/session';
 import { formatCost } from '@/lib/costCalculator';
 
 interface MessageBubbleProps {
   message: Message;
+  onSpeak?: (message: Message) => void;
+  isSpeaking?: boolean;
 }
 
 const lensColors: Record<string, string> = {
@@ -14,7 +17,7 @@ const lensColors: Record<string, string> = {
   Behaviourism: '#F59E0B',
 };
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, onSpeak, isSpeaking = false }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const time = new Date(message.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
@@ -45,6 +48,22 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
         <div className={`flex items-center gap-2 mt-1 ${isUser ? 'justify-end' : 'justify-start'}`}>
           <span className="text-xs" style={{ color: 'var(--color-text-muted)', fontSize: 10 }}>{time}</span>
+          {!isUser && onSpeak && (
+            <button
+              type="button"
+              onClick={() => onSpeak(message)}
+              className="flex items-center gap-1 rounded-full px-2 py-1 text-xs"
+              style={{
+                color: isSpeaking ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                backgroundColor: isSpeaking ? 'rgba(82,183,136,0.12)' : 'transparent',
+                border: `1px solid ${isSpeaking ? 'rgba(82,183,136,0.2)' : 'var(--color-border)'}`,
+                fontSize: 10,
+              }}
+            >
+              <Volume2 size={12} />
+              {isSpeaking ? 'Speaking' : 'Speak'}
+            </button>
+          )}
           {!isUser && typeof message.costPence === 'number' && message.costPence > 0 && (
             <span className="text-xs" style={{ color: 'var(--color-text-muted)', fontSize: 10 }}>
               This response: {formatCost(message.costPence)}

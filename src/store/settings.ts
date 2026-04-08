@@ -3,12 +3,16 @@ import { persist } from 'zustand/middleware';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type AIProviderId = 'local-qwen';
-export type DataMode = 'mixed' | 'real-only' | 'demo-only';
+export type TherapistTTSProvider = 'kokoro' | 'piper';
+export type DataMode = 'real-only' | 'demo-only';
 
 interface SettingsState {
   theme: Theme;
   textSize: 'small' | 'medium' | 'large';
   activeProvider: AIProviderId;
+  localModel: string;
+  ttsProvider: TherapistTTSProvider;
+  ttsVoice: string;
   dataMode: DataMode;
   budgetEnabled: boolean;
   budgetLimit: number; // in pence
@@ -23,6 +27,9 @@ interface SettingsState {
   setTheme: (theme: Theme) => void;
   setTextSize: (size: 'small' | 'medium' | 'large') => void;
   setActiveProvider: (id: AIProviderId) => void;
+  setLocalModel: (model: string) => void;
+  setTtsProvider: (provider: TherapistTTSProvider) => void;
+  setTtsVoice: (voice: string) => void;
   setDataMode: (mode: DataMode) => void;
   setBudgetEnabled: (v: boolean) => void;
   setBudgetLimit: (pence: number) => void;
@@ -41,7 +48,10 @@ export const useSettingsStore = create<SettingsState>()(
       theme: 'system',
       textSize: 'medium',
       activeProvider: 'local-qwen',
-      dataMode: 'mixed',
+      localModel: 'qwen2.5:3b',
+      ttsProvider: 'kokoro',
+      ttsVoice: 'af_heart',
+      dataMode: 'demo-only',
       budgetEnabled: true,
       budgetLimit: 1000, // £10.00 in pence
       budgetSpent: 240,  // £2.40 pre-populated for demo
@@ -52,7 +62,13 @@ export const useSettingsStore = create<SettingsState>()(
       setTheme: (theme) => set({ theme }),
       setTextSize: (textSize) => set({ textSize }),
       setActiveProvider: (activeProvider) => set({ activeProvider }),
-      setDataMode: (dataMode) => set({ dataMode }),
+      setLocalModel: (localModel) => set({ localModel }),
+      setTtsProvider: (ttsProvider) => set({
+        ttsProvider,
+        ttsVoice: ttsProvider === 'kokoro' ? 'af_heart' : 'en_US-lessac-medium',
+      }),
+      setTtsVoice: (ttsVoice) => set({ ttsVoice }),
+      setDataMode: (dataMode) => set({ dataMode: dataMode === 'real-only' ? 'real-only' : 'demo-only' }),
       setBudgetEnabled: (budgetEnabled) => set({ budgetEnabled }),
       setBudgetLimit: (budgetLimit) => set({ budgetLimit }),
       setBudgetSpent: (budgetSpent) => set({ budgetSpent }),
@@ -70,6 +86,18 @@ export const useSettingsStore = create<SettingsState>()(
       toggleFramework: (fw) =>
         set((s) => ({ frameworks: { ...s.frameworks, [fw]: !s.frameworks[fw] } })),
     }),
-    { name: 'therapist-os-settings' }
+    {
+      name: 'therapist-os-settings',
+      merge: (persisted, current) => {
+        const next = { ...current, ...(persisted as Partial<SettingsState>) };
+        return {
+          ...next,
+          dataMode: next.dataMode === 'real-only' ? 'real-only' : 'demo-only',
+          localModel: next.localModel || 'qwen2.5:3b',
+          ttsProvider: next.ttsProvider === 'piper' ? 'piper' : 'kokoro',
+          ttsVoice: next.ttsVoice || 'af_heart',
+        };
+      },
+    }
   )
 );

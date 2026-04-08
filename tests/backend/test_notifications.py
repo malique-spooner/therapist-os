@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 from sqlalchemy import select
 
-from backend.models import HabitLog, MonthlyBudget
+from backend.models.life_data import HabitLogDemo as HabitLog, MonthlyBudgetDemo as MonthlyBudget
 from backend.services.notifications import NotificationService
 
 

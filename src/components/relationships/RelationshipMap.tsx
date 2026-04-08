@@ -12,6 +12,14 @@ export function RelationshipMap({ onAdd }: RelationshipMapProps) {
   return (
     <div className="px-4 pb-4">
       <p className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Your people</p>
+      {!people.length && (
+        <div className="rounded-[24px] p-4 mb-3" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>No people added yet</p>
+          <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+            Real mode now starts empty here on purpose. Add someone once and the relationships side of the app can start learning from actual contact, not placeholders.
+          </p>
+        </div>
+      )}
       <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-1" style={{ WebkitOverflowScrolling: 'touch' }}>
         {people.map((person) => (
           <div key={person.id} className="snap-center flex-shrink-0 text-center w-20">

@@ -12,13 +12,14 @@ import { type Period } from '@/lib/mockDataUtils';
 import { api } from '@/lib/api';
 import { useApiQuery } from '@/hooks/useApiQuery';
 import { RetryNotice } from '@/components/ui/retry-notice';
+import { useSettingsStore } from '@/store/settings';
 
 
 const PERIODS: { label: string; value: Period }[] = [
-  { label: 'This week', value: 'this-week' },
-  { label: 'Last week', value: 'last-week' },
-  { label: 'This month', value: 'this-month' },
-  { label: '3 months', value: '3-months' },
+  { label: 'Today', value: 'today' },
+  { label: '7 days', value: 'this-week' },
+  { label: '30 days', value: 'this-month' },
+  { label: '90 days', value: '3-months' },
 ];
 
 const ringColors = ['var(--color-primary)', 'var(--color-accent)', '#F59E0B'];
@@ -31,11 +32,13 @@ interface DashboardPageProps {
 }
 
 export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist, onOpenDomain }: DashboardPageProps) {
-  const [period, setPeriod] = useState<Period>('this-week');
-  const { data, isLoading, error, refetch } = useApiQuery(() => api.getDashboard(period), [period]);
+  const [period, setPeriod] = useState<Period>('today');
+  const dataMode = useSettingsStore((state) => state.dataMode);
+  const { data, isLoading, error, refetch } = useApiQuery(() => api.getDashboard(period), [period, dataMode]);
   const rings = data?.rings ?? [];
   const heroInsight = data?.heroInsight;
   const allCards = data?.insights ?? [];
+  const canRenderDashboard = dataMode === 'demo-only' || data?.status === 'ready';
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
@@ -63,7 +66,7 @@ export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist, 
           <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{data?.dateLabel ?? new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
         </div>
 
-        {onOpenDomain && <TodaySnapshot onSelect={onOpenDomain} />}
+        {onOpenDomain && dataMode === 'demo-only' && <TodaySnapshot onSelect={onOpenDomain} />}
 
         {/* Period filter */}
         <div className="px-4 pb-4">
@@ -91,61 +94,69 @@ export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist, 
           {!isLoading && error && (
             <RetryNotice onRetry={refetch} className="mx-4 w-[calc(100%-2rem)] p-5" />
           )}
-          {!isLoading && !error && heroInsight && <HeroCard insight={heroInsight} onTalkAboutThis={onNavigateToTherapist} />}
+          {!isLoading && !error && heroInsight && canRenderDashboard && <HeroCard insight={heroInsight} onTalkAboutThis={onNavigateToTherapist} />}
+          {!isLoading && !error && dataMode === 'real-only' && !canRenderDashboard && (
+            <RetryNotice message="Not enough real data yet to generate dashboard insights. Keep syncing sources or switch to Demo mode." onRetry={refetch} className="mx-4 w-[calc(100%-2rem)] p-5" />
+          )}
         </div>
 
-        {/* Data rings */}
-        <div className="px-4 pb-4">
-          <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-            <h2 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--color-text-muted)' }}>
-              {PERIODS.find(p => p.value === period)?.label} overview
-            </h2>
-            <div className="flex items-start justify-around">
-              {(isLoading ? [{ label: '', value: '', unit: '', percentage: 0, trend: '', trendPositive: true }, { label: '', value: '', unit: '', percentage: 0, trend: '', trendPositive: true }, { label: '', value: '', unit: '', percentage: 0, trend: '', trendPositive: true }] : rings).map((ring, i) => (
-                <DataRing
-                  key={`${ring.label}-${i}`}
-                  {...ring}
-                  color={ringColors[i]}
-                  delay={i * 0.1}
+        {(canRenderDashboard || isLoading) && (
+          <div className="px-4 pb-4">
+            <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+              <h2 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--color-text-muted)' }}>
+                {data?.windowLabel ?? PERIODS.find(p => p.value === period)?.label} overview
+              </h2>
+              <div className="flex items-start justify-around">
+                {(isLoading ? [{ label: '', value: '', unit: '', percentage: 0, trend: '', trendPositive: true }, { label: '', value: '', unit: '', percentage: 0, trend: '', trendPositive: true }, { label: '', value: '', unit: '', percentage: 0, trend: '', trendPositive: true }] : rings).map((ring, i) => (
+                  <DataRing
+                    key={`${ring.label}-${i}`}
+                    {...ring}
+                    color={ringColors[i]}
+                    delay={i * 0.1}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mini charts row */}
+        {canRenderDashboard && (
+          <div className="px-4 pb-4">
+            <div className="flex gap-3 overflow-x-auto no-select pb-1">
+              {(data?.miniTrends ?? []).map((trend) => (
+                <MiniTrend
+                  key={trend.label}
+                  label={trend.label}
+                  data={trend.data}
+                  color={trend.label === 'Sleep' ? 'var(--color-primary)' : trend.label === 'Steps' ? 'var(--color-accent)' : '#F59E0B'}
+                  unit={trend.unit}
+                  latest={trend.latest}
+                  invertTrend={trend.invertTrend}
                 />
               ))}
             </div>
           </div>
-        </div>
-
-        {/* Mini charts row */}
-        <div className="px-4 pb-4">
-          <div className="flex gap-3 overflow-x-auto no-select pb-1">
-            {(data?.miniTrends ?? []).map((trend) => (
-              <MiniTrend
-                key={trend.label}
-                label={trend.label}
-                data={trend.data}
-                color={trend.label === 'Sleep' ? 'var(--color-primary)' : trend.label === 'Steps' ? 'var(--color-accent)' : '#F59E0B'}
-                unit={trend.unit}
-                latest={trend.latest}
-                invertTrend={trend.invertTrend}
-              />
-            ))}
-          </div>
-        </div>
+        )}
 
         {/* Insight cards feed */}
-        <div className="px-4 pb-6">
-          <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--color-text-muted)' }}>
-            Insights
-          </h2>
-          <div className="space-y-3">
-            {allCards.map((card, i) => (
-              <InsightCard
-                key={card.id}
-                insight={card}
-                index={i}
-                onTalkAboutThis={onNavigateToTherapist}
-              />
-            ))}
+        {canRenderDashboard && (
+          <div className="px-4 pb-6">
+            <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--color-text-muted)' }}>
+              Insights
+            </h2>
+            <div className="space-y-3">
+              {allCards.map((card, i) => (
+                <InsightCard
+                  key={card.id}
+                  insight={card}
+                  index={i}
+                  onTalkAboutThis={onNavigateToTherapist}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

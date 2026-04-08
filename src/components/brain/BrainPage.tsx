@@ -26,9 +26,9 @@ function SectionTitle({ eyebrow, title, subtitle }: { eyebrow: string; title: st
 }
 
 export function BrainPage({ onBack }: BrainPageProps) {
-  const { data, isLoading, error, refetch } = useApiQuery(() => api.getBrain(), []);
   const dataMode = useSettingsStore((state) => state.dataMode);
-  const useFallback = dataMode !== 'real-only' && (!data || dataMode === 'demo-only');
+  const { data, isLoading, error, refetch } = useApiQuery(() => api.getBrain(), [dataMode]);
+  const useFallback = dataMode === 'demo-only';
   const brainOverview = useFallback ? fallbackOverview : data?.overview;
   const brainLayers = useMemo(() => useFallback ? fallbackLayers : (data?.layers ?? []), [data?.layers, useFallback]);
   const brainVersions = useMemo(() => useFallback ? fallbackVersions : (data?.versions ?? []), [data?.versions, useFallback]);
@@ -70,7 +70,7 @@ export function BrainPage({ onBack }: BrainPageProps) {
                 <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'rgba(27,67,50,0.75)' }}>Current brain</p>
                 <h1 className="text-2xl font-semibold mt-2" style={{ color: 'var(--color-dark)' }}>{brainOverview?.version ?? 'No live brain data yet'}</h1>
                 <p className="text-sm mt-2 max-w-[34ch] leading-relaxed" style={{ color: 'rgba(27,67,50,0.82)' }}>
-                  {isLoading ? 'Refreshing the current brain state...' : useFallback ? 'Fresh interpretation, private local inference with Qwen3 30B, and transparent layer-by-layer thinking.' : 'Real-only mode is showing backend brain state only.'}
+                  {isLoading ? 'Refreshing the current brain state...' : useFallback ? 'Fresh interpretation, private local inference with Qwen 3.5 35B through Ollama, and transparent layer-by-layer thinking.' : 'Real-only mode is showing backend brain state only.'}
                 </p>
               </div>
               <div className="w-14 h-14 rounded-[20px] flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(255,255,255,0.72)' }}>

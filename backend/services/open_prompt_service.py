@@ -8,15 +8,17 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     AppOpenPromptState,
-    DailyCheckIn,
-    FinanceData,
-    HealthData,
-    LocationCompanionLog,
-    LocationDailySummary,
-    MusicData,
-    NutritionLog,
-    Relationship,
-    RelationshipInteraction,
+)
+from ..models.life_data import (
+    DailyCheckInDemo as DailyCheckIn,
+    FinanceDataDemo as FinanceData,
+    HealthDataDemo as HealthData,
+    LocationCompanionLogDemo as LocationCompanionLog,
+    LocationDailySummaryDemo as LocationDailySummary,
+    MusicDataDemo as MusicData,
+    NutritionLogDemo as NutritionLog,
+    RelationshipDemo as Relationship,
+    RelationshipInteractionDemo as RelationshipInteraction,
 )
 
 

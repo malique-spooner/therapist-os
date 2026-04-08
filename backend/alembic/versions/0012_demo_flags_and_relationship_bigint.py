@@ -1,7 +1,7 @@
 """add demo flags and widen relationship interaction timestamp
 
-Revision ID: 0012_demo_flags_and_relationship_bigint
-Revises: 0011_checkin_timestamp_bigint
+Revision ID: 0012_demo_flags
+Revises: 0011_checkin_ts_big
 Create Date: 2026-04-03 06:30:00
 """
 
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0012_demo_flags_and_relationship_bigint"
-down_revision = "0011_checkin_timestamp_bigint"
+revision = "0012_demo_flags"
+down_revision = "0011_checkin_ts_big"
 branch_labels = None
 depends_on = None
 

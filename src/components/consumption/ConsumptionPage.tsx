@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { TopBar } from '@/components/navigation/TopBar';
-import { ValenceMeter } from './ValenceMeter';
 import { ValenceChart } from './ValenceChart';
+import { SpotifyInsightsBoard } from './SpotifyInsightsBoard';
 import { YouTubeSection } from './YouTubeSection';
 import { InsightCard } from '@/components/dashboard/InsightCard';
 import type { Period } from '@/lib/mockDataUtils';
@@ -12,6 +12,7 @@ import { useApiQuery } from '@/hooks/useApiQuery';
 import { RetryNotice } from '@/components/ui/retry-notice';
 import { DateRangeControl, type DateRangeValue } from '@/components/ui/date-range-control';
 import { APP_TODAY, addDays, clampIsoDate, differenceInDays } from '@/lib/date';
+import { useSettingsStore } from '@/store/settings';
 
 const insights = [
   {
@@ -53,15 +54,17 @@ interface ConsumptionPageProps {
 }
 
 export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: ConsumptionPageProps) {
-  const { data, isLoading, error, refetch } = useApiQuery(() => api.getConsumption('3-months'), []);
+  const dataMode = useSettingsStore((state) => state.dataMode);
+  const { data, isLoading, error, refetch } = useApiQuery(() => api.getConsumption('3-months'), [dataMode]);
   const allDays = useMemo(() => data ?? [], [data]);
   const availableDates = useMemo(() => allDays.map((day) => day.date), [allDays]);
   const latestDate = availableDates[availableDates.length - 1] ?? APP_TODAY;
   const earliestDate = availableDates[0] ?? addDays(latestDate, -89);
   const [range, setRange] = useState<DateRangeValue>(() => ({
-    startDate: addDays(latestDate, -6),
+    startDate: latestDate,
     endDate: latestDate,
   }));
+  const [selectedProvider, setSelectedProvider] = useState<'all' | 'spotify' | 'youtube'>('all');
 
   useEffect(() => {
     setRange((current) => {
@@ -71,11 +74,47 @@ export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: Consump
     });
   }, [earliestDate, latestDate]);
 
-  const days = useMemo(
+  const rangedDays = useMemo(
     () => allDays.filter((day) => day.date >= range.startDate && day.date <= range.endDate),
     [allDays, range.endDate, range.startDate],
   );
-  const derivedPeriod: Period = differenceInDays(range.startDate, range.endDate) + 1 <= 7 ? 'this-week' : differenceInDays(range.startDate, range.endDate) + 1 <= 31 ? 'this-month' : '3-months';
+  const spotifyDays = useMemo(
+    () =>
+      rangedDays
+        .map((day) => {
+          const spotify = day.providerBreakdown?.spotify;
+          if (!spotify) return null;
+          return {
+            ...day,
+            listeningHours: spotify.listeningHours,
+            averageValence: spotify.averageValence,
+            averageEnergy: spotify.averageEnergy,
+            averageDanceability: spotify.averageDanceability,
+            newDiscoveries: spotify.newDiscoveries,
+            topGenres: spotify.topGenres,
+            topTracks: spotify.topTracks,
+          };
+        })
+        .filter((day): day is NonNullable<typeof day> => Boolean(day)),
+    [rangedDays],
+  );
+  const youtubeDays = useMemo(
+    () =>
+      rangedDays.filter((day) => Boolean(day.providerBreakdown?.youtube)),
+    [rangedDays],
+  );
+  const availableProviders = useMemo(() => {
+    const providers = new Set<'spotify' | 'youtube'>();
+    rangedDays.forEach((day) => {
+      if (day.providerBreakdown?.spotify) providers.add('spotify');
+      if (day.providerBreakdown?.youtube) providers.add('youtube');
+    });
+    return Array.from(providers);
+  }, [rangedDays]);
+  const mediaDays = selectedProvider === 'youtube' ? youtubeDays : selectedProvider === 'spotify' ? spotifyDays : rangedDays;
+  const spanDays = differenceInDays(range.startDate, range.endDate) + 1;
+  const derivedPeriod: Period = spanDays <= 1 ? 'today' : spanDays <= 7 ? 'this-week' : spanDays <= 31 ? 'this-month' : '3-months';
+  const showEmptyRealState = dataMode === 'real-only' && !isLoading && !mediaDays.length;
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
@@ -91,23 +130,67 @@ export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: Consump
           minDate={earliestDate}
           maxDate={latestDate}
         />
-        <ValenceMeter days={days} />
-        {isLoading && !days.length ? (
+        {availableProviders.length > 0 && (
+          <div className="px-4 pb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-text-muted)' }}>
+              Media provider
+            </p>
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {(['all', ...availableProviders] as Array<'all' | 'spotify' | 'youtube'>).map((provider) => {
+                const active = selectedProvider === provider;
+                return (
+                  <button
+                    key={provider}
+                    type="button"
+                    onClick={() => setSelectedProvider(provider)}
+                    className="shrink-0 rounded-full px-3 py-2 text-sm font-medium transition-colors"
+                    style={{
+                      backgroundColor: active ? 'var(--color-primary)' : 'var(--color-surface-2)',
+                      color: active ? 'white' : 'var(--color-text)',
+                      border: active ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                    }}
+                  >
+                    {provider === 'all' ? 'All media' : provider === 'spotify' ? 'Spotify' : 'YouTube'}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {showEmptyRealState && (
+          <RetryNotice
+            message={
+              selectedProvider === 'youtube'
+                ? 'YouTube data is not connected yet for this range. Switch providers or Demo mode for now.'
+                : selectedProvider === 'spotify'
+                  ? 'Spotify data is not connected yet for this range. Switch providers or Demo mode for now.'
+                  : 'Not enough real media data yet for this range. Connect Spotify or YouTube, or switch to Demo mode.'
+            }
+            onRetry={refetch}
+            className="mx-4 mb-4 w-[calc(100%-2rem)]"
+          />
+        )}
+        {!showEmptyRealState && (
           <>
-            <div className="mx-4 h-72 rounded-[28px] animate-pulse mb-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }} />
-            <div className="mx-4 h-64 rounded-[28px] animate-pulse mb-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }} />
-          </>
-        ) : (
-          <>
-            <ValenceChart period={derivedPeriod} days={days} />
-            <YouTubeSection days={days} />
+            {(selectedProvider === 'all' || selectedProvider === 'spotify') && <SpotifyInsightsBoard days={spotifyDays} />}
+            {isLoading && !mediaDays.length ? (
+              <>
+                <div className="mx-4 h-72 rounded-[28px] animate-pulse mb-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }} />
+                <div className="mx-4 h-64 rounded-[28px] animate-pulse mb-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }} />
+              </>
+            ) : (
+              <>
+                {(selectedProvider === 'all' || selectedProvider === 'spotify') && <ValenceChart period={derivedPeriod} days={spotifyDays} />}
+                {(selectedProvider === 'all' || selectedProvider === 'youtube') && <YouTubeSection days={youtubeDays} />}
+              </>
+            )}
+            <div className="px-4 space-y-3">
+              {(dataMode === 'demo-only' ? insights : []).map((insight, index) => (
+                <InsightCard key={insight.id} insight={insight} index={index} onTalkAboutThis={onTalkAboutThis} />
+              ))}
+            </div>
           </>
         )}
-        <div className="px-4 space-y-3">
-          {insights.map((insight, index) => (
-            <InsightCard key={insight.id} insight={insight} index={index} onTalkAboutThis={onTalkAboutThis} />
-          ))}
-        </div>
       </div>
     </div>
   );

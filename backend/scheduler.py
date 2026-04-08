@@ -2,9 +2,11 @@ import asyncio
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from .config import settings
 from .database import SessionLocal
 from .services.data_sources import DataSourceService
 from .services.ingestion.weather import WeatherIngestionService
+from .services.ingestion.spotify import SpotifyIngestionService
 from .services.profile_service import ProfileService
 from .services.notifications import NotificationService
 
@@ -19,6 +21,39 @@ async def _sync_weather_job() -> None:
 
 def sync_weather_job() -> None:
     asyncio.run(_sync_weather_job())
+
+
+async def _sync_spotify_job() -> None:
+    with SessionLocal() as db:
+        source_service = DataSourceService()
+        service = SpotifyIngestionService(source_service.get_runtime_config("spotify", db))
+        if not service.is_configured:
+            return
+        try:
+            result = await service.sync_recent_listening(db)
+        except RuntimeError as exc:
+            source_service.mark_sync_result("spotify", success=False, db=db, error=str(exc))
+            return
+        source_service.mark_sync_result(
+            "spotify",
+            success=True,
+            db=db,
+            runtime_updates={"spotify_recent_after_ms": str(result.get("cursor_ms")) if result.get("cursor_ms") else None},
+            rows_synced=result.get("rows_synced"),
+        )
+
+
+def sync_spotify_job() -> None:
+    asyncio.run(_sync_spotify_job())
+
+
+async def _sync_garmin_job() -> None:
+    with SessionLocal() as db:
+        await DataSourceService().sync("garmin", db, trigger="background")
+
+
+def sync_garmin_job() -> None:
+    asyncio.run(_sync_garmin_job())
 
 
 async def _daily_checkin_reminder_job() -> None:
@@ -63,6 +98,8 @@ def profile_refresh_job() -> None:
 
 def main() -> None:
     scheduler = BlockingScheduler(timezone="Europe/London")
+    scheduler.add_job(sync_spotify_job, "interval", minutes=settings.SPOTIFY_SYNC_INTERVAL_MINUTES)
+    scheduler.add_job(sync_garmin_job, "cron", hour=settings.GARMIN_SYNC_HOUR, minute=settings.GARMIN_SYNC_MINUTE)
     scheduler.add_job(sync_weather_job, "cron", hour=6, minute=0)
     scheduler.add_job(sync_weather_job, "cron", hour=20, minute=0)
     scheduler.add_job(daily_checkin_reminder_job, "cron", hour=8, minute=0)

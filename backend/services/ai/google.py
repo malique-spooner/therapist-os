@@ -22,15 +22,17 @@ class GoogleProvider(AIProvider):
     def is_available(self) -> bool:
         return bool(settings.GOOGLE_AI_API_KEY)
 
-    async def send_message(self, message: str, conversation_history: list[dict[str, str]], system_prompt: str) -> AIResponse:
-        chat = self._model.start_chat(history=[{"role": "user" if item["role"] != "assistant" else "model", "parts": [item["content"]]} for item in conversation_history])
+    async def send_message(self, message: str, conversation_history: list[dict[str, str]], system_prompt: str, model_override: str | None = None) -> AIResponse:
+        model_name = model_override or self.model
+        model = self._model if model_name == self.model else genai.GenerativeModel(model_name)
+        chat = model.start_chat(history=[{"role": "user" if item["role"] != "assistant" else "model", "parts": [item["content"]]} for item in conversation_history])
         response = await chat.send_message_async(f"{system_prompt}\n\nUser message:\n{message}")
         usage = getattr(response, "usage_metadata", None)
         tokens_used = int((getattr(usage, "prompt_token_count", 0) or 0) + (getattr(usage, "candidates_token_count", 0) or 0))
         return AIResponse(
             content=(response.text or "").strip(),
             provider=self.id,
-            model=self.model,
+            model=model_name,
             tokens_used=tokens_used,
             cost_pence=self.cost_raw,
             frameworks_referenced=[],

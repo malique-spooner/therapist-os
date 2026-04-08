@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from base64 import urlsafe_b64encode
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import secrets
 from typing import Callable
@@ -9,14 +9,40 @@ from urllib.parse import urlencode, urlparse
 
 import httpx
 
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..core.secrets import secret_box
-from ..models import DataSourceConnection
+from ..models import DataSourceConnection, DataSourceSyncAttempt
+from ..models.life_data import (
+    FinanceDataDemo,
+    FinanceDataReal,
+    HealthDataDemo,
+    HealthDataReal,
+    LocationCompanionLogDemo,
+    LocationCompanionLogReal,
+    LocationDailySummaryDemo,
+    LocationDailySummaryReal,
+    LocationDataDemo,
+    LocationDataReal,
+    MusicDataDemo,
+    MusicDataReal,
+    SpotifyPlayEventDemo,
+    SpotifyPlayEventReal,
+    NutritionLogDemo,
+    NutritionLogReal,
+    RelationshipDemo,
+    RelationshipInteractionDemo,
+    RelationshipInteractionReal,
+    RelationshipReal,
+    WeatherDataDemo,
+    WeatherDataReal,
+)
 from .ingestion.garmin import GarminIngestionService
 from .ingestion.spotify import SpotifyIngestionService
 from .ingestion.truelayer import TrueLayerIngestionService
+from .data_mode import dataset_model, normalize_data_mode
 from .whisper_service import WhisperService
 
 
@@ -29,11 +55,12 @@ DEFAULT_SOURCES = {
         "setup": {
             "mode": "credentials",
             "title": "Connect Garmin Connect",
-            "description": "Save your Garmin Connect login so Therapist OS can sync steps, sleep, HRV, and workouts.",
+            "description": "Save your Garmin Connect login so Therapist OS can run a daily automatic health sync for steps, sleep, HRV, and workouts.",
             "actionLabel": "Save Garmin login",
             "instructions": [
                 "Use the same email and password you use to sign in to Garmin Connect.",
-                "These credentials are stored encrypted on the backend and only used for Garmin sync jobs.",
+                "These credentials are stored encrypted on the backend and only used for the background Garmin sync job.",
+                "Therapist OS syncs Garmin automatically once per day and keeps a backoff in place if Garmin rate-limits the login.",
                 "If you use multi-factor auth or Garmin changes the login flow, you may need to reconnect later.",
             ],
             "fields": [
@@ -194,6 +221,36 @@ class DataSourceService:
     def __init__(self) -> None:
         self._whisper = WhisperService()
 
+    def _intended_sync_label(self, source_id: str) -> str | None:
+        if source_id == "spotify":
+            return f"Every {settings.SPOTIFY_SYNC_INTERVAL_MINUTES} minutes in the background"
+        if source_id == "weather":
+            return "Twice daily in the background, plus manual sync"
+        if source_id == "garmin":
+            return (
+                f"Daily in the background at {settings.GARMIN_SYNC_HOUR:02d}:{settings.GARMIN_SYNC_MINUTE:02d}, "
+                f"with at least {settings.GARMIN_MIN_SYNC_INTERVAL_MINUTES // 60:g} hours between attempts"
+            )
+        if source_id == "truelayer":
+            return "Manual sync for now after bank connection"
+        if source_id == "owntracks":
+            return "Continuous live updates when your phone sends pings"
+        if source_id == "google_drive":
+            return "Manual refresh when you import new archives"
+        if source_id == "youtube":
+            return "Manual import only in Phase 2"
+        if source_id == "google_calendar":
+            return "Not scheduled yet"
+        if source_id == "google_photos":
+            return "Not scheduled yet"
+        if source_id == "voice_journal":
+            return "On demand when you record or transcribe"
+        return None
+
+    @staticmethod
+    def _manual_sync_allowed(source_id: str) -> bool:
+        return source_id != "garmin"
+
     def _config(self, record: DataSourceConnection | None) -> dict[str, str]:
         if not record:
             return {}
@@ -283,6 +340,256 @@ class DataSourceService:
             db.flush()
         return record
 
+    @staticmethod
+    def _serialize_attempt(attempt: DataSourceSyncAttempt) -> dict:
+        return {
+            "id": attempt.id,
+            "status": attempt.status,
+            "trigger": attempt.trigger,
+            "dataMode": attempt.data_mode,
+            "rowsSynced": attempt.rows_synced,
+            "detail": attempt.detail,
+            "attemptedAt": attempt.attempted_at.isoformat(),
+            "cooldownUntil": attempt.cooldown_until.isoformat() if attempt.cooldown_until else None,
+        }
+
+    def _append_sync_attempt(
+        self,
+        source_id: str,
+        status: str,
+        db: Session,
+        *,
+        detail: str | None = None,
+        trigger: str = "manual",
+        cooldown_until: datetime | None = None,
+        data_mode: str | None = None,
+        rows_synced: int | None = None,
+    ) -> None:
+        db.add(
+            DataSourceSyncAttempt(
+                source_id=source_id,
+                status=status,
+                trigger=trigger,
+                data_mode=data_mode,
+                rows_synced=rows_synced,
+                detail=detail,
+                cooldown_until=cooldown_until,
+            )
+        )
+
+    @staticmethod
+    def _result_count(result: object) -> int | None:
+        if result is None:
+            return 0
+        if isinstance(result, dict) and "rows_synced" in result:
+            try:
+                return int(result["rows_synced"])
+            except (TypeError, ValueError):
+                return None
+        if isinstance(result, list):
+            return len(result)
+        if isinstance(result, tuple):
+            return len(result)
+        return 1
+
+    @staticmethod
+    def _legacy_attempt(record: DataSourceConnection) -> list[dict]:
+        if not record.last_sync_status:
+            return []
+        attempted_at = record.last_sync_at or record.updated_at or record.created_at
+        return [
+            {
+                "id": 0,
+                "status": record.last_sync_status,
+                "trigger": "legacy",
+                "dataMode": "real-only",
+                "rowsSynced": None,
+                "detail": record.last_error,
+                "attemptedAt": attempted_at.isoformat(),
+                "cooldownUntil": None,
+            }
+        ]
+
+    @staticmethod
+    def _latest_attempts(source_id: str, db: Session, limit: int = 10, data_mode: str | None = None) -> list[dict]:
+        try:
+            query = db.query(DataSourceSyncAttempt).filter(DataSourceSyncAttempt.source_id == source_id)
+            if data_mode:
+                query = query.filter(DataSourceSyncAttempt.data_mode == data_mode)
+            attempts = query.order_by(DataSourceSyncAttempt.attempted_at.desc()).limit(limit).all()
+        except (ProgrammingError, OperationalError):
+            db.rollback()
+            return []
+        if attempts:
+            return [DataSourceService._serialize_attempt(attempt) for attempt in attempts]
+        record = db.query(DataSourceConnection).filter(DataSourceConnection.source_id == source_id).first()
+        if record is None:
+            return []
+        return DataSourceService._legacy_attempt(record)
+
+    @staticmethod
+    def _source_dataset_specs(source_id: str):
+        if source_id == "garmin":
+            return [(HealthDataReal, HealthDataDemo, "date", "updated_at")]
+        if source_id == "truelayer":
+            return [(FinanceDataReal, FinanceDataDemo, "date", "created_at")]
+        if source_id == "spotify":
+            return [(SpotifyPlayEventReal, SpotifyPlayEventDemo, "played_date", "played_at")]
+        if source_id == "youtube":
+            return [(MusicDataReal, MusicDataDemo, "date", "updated_at")]
+        if source_id == "weather":
+            return [(WeatherDataReal, WeatherDataDemo, "date", "created_at")]
+        if source_id == "owntracks":
+            return [
+                (LocationDataReal, LocationDataDemo, "timestamp", "timestamp"),
+                (LocationDailySummaryReal, LocationDailySummaryDemo, "date", "updated_at"),
+                (LocationCompanionLogReal, LocationCompanionLogDemo, "date", "updated_at"),
+            ]
+        if source_id == "voice_journal":
+            return []
+        if source_id == "google_calendar":
+            return []
+        if source_id == "google_photos":
+            return []
+        if source_id == "google_drive":
+            return []
+        return []
+
+    @staticmethod
+    def _row_matches_source(source_id: str, row: object) -> bool:
+        if source_id == "spotify":
+            provider_breakdown = getattr(row, "provider_breakdown", None) or {}
+            if provider_breakdown:
+                return bool(provider_breakdown.get("spotify"))
+            if getattr(row, "played_at", None) is not None:
+                return True
+            return bool(
+                getattr(row, "listening_hours", None)
+                or getattr(row, "top_tracks", None)
+                or getattr(row, "top_genres", None)
+            )
+        if source_id != "youtube":
+            return True
+        provider_breakdown = getattr(row, "provider_breakdown", None) or {}
+        return bool(provider_breakdown.get("youtube"))
+
+    def _dataset_activity(self, source_id: str, mode: str | None, db: Session) -> tuple[int, datetime | None, str | None]:
+        specs = self._source_dataset_specs(source_id)
+        total_records = 0
+        last_collected_at: datetime | None = None
+        latest_data_date: str | None = None
+
+        for real_model, demo_model, date_attr_name, updated_attr_name in specs:
+            model = dataset_model(mode, real_model, demo_model)
+            rows = db.query(model).all()
+            for row in rows:
+                if not self._row_matches_source(source_id, row):
+                    continue
+                total_records += 1
+                updated_value = getattr(row, updated_attr_name, None)
+                if updated_value and (last_collected_at is None or updated_value > last_collected_at):
+                    last_collected_at = updated_value
+                date_value = getattr(row, date_attr_name, None)
+                if date_value is not None:
+                    iso_value = date_value.date().isoformat() if hasattr(date_value, "date") else date_value.isoformat()
+                    if latest_data_date is None or iso_value > latest_data_date:
+                        latest_data_date = iso_value
+
+        return total_records, last_collected_at, latest_data_date
+
+    def _backfill_sync_attempts(self, db: Session) -> None:
+        changed = False
+        for source_id in DEFAULT_SOURCES:
+            record = self._record(source_id, db)
+
+            has_real_attempt = db.query(DataSourceSyncAttempt).filter(
+                DataSourceSyncAttempt.source_id == source_id,
+                DataSourceSyncAttempt.data_mode == "real-only",
+            ).first()
+            if not has_real_attempt and record.last_sync_status:
+                db.add(
+                    DataSourceSyncAttempt(
+                        source_id=source_id,
+                        status=record.last_sync_status,
+                        trigger="legacy-backfill",
+                        data_mode="real-only",
+                        rows_synced=None,
+                        detail=record.last_error,
+                        attempted_at=record.last_sync_at or record.updated_at or record.created_at,
+                    )
+                )
+                changed = True
+
+            has_demo_attempt = db.query(DataSourceSyncAttempt).filter(
+                DataSourceSyncAttempt.source_id == source_id,
+                DataSourceSyncAttempt.data_mode == "demo-only",
+            ).first()
+            if not has_demo_attempt:
+                count, last_collected_at, latest_data_date = self._dataset_activity(source_id, "demo-only", db)
+                if count > 0 and last_collected_at:
+                    db.add(
+                        DataSourceSyncAttempt(
+                            source_id=source_id,
+                            status="demo-refresh",
+                            trigger="seed",
+                            data_mode="demo-only",
+                            rows_synced=count,
+                            detail=f"Backfilled from demo dataset through {latest_data_date}.",
+                            attempted_at=last_collected_at,
+                        )
+                    )
+                    changed = True
+
+        if changed:
+            db.flush()
+
+    def sync_guard_message(self, source_id: str, db: Session) -> str | None:
+        if source_id != "garmin":
+            return None
+
+        record = self._record(source_id, db)
+        return self._sync_guard_message_for_record(record)
+
+    def _sync_guard_message_for_record(self, record: DataSourceConnection) -> str | None:
+        if record.source_id != "garmin":
+            return None
+        now = datetime.utcnow()
+
+        retry_after_raw = (record.config_json or {}).get("garmin_retry_after")
+        if retry_after_raw:
+            try:
+                retry_after_dt = datetime.fromisoformat(str(retry_after_raw))
+            except ValueError:
+                retry_after_dt = None
+            if retry_after_dt:
+                remaining_minutes = max(0, int(((retry_after_dt - now).total_seconds() + 59) // 60))
+                if remaining_minutes > 0:
+                    return (
+                        f"Garmin sync is in cooldown after a rate-limit response. "
+                        f"Wait about {remaining_minutes} more minute{'s' if remaining_minutes != 1 else ''} before trying again."
+                    )
+
+        if record.last_sync_at:
+            retry_after = record.last_sync_at.timestamp() + (settings.GARMIN_MIN_SYNC_INTERVAL_MINUTES * 60)
+            remaining_minutes = max(0, int((retry_after - now.timestamp() + 59) // 60))
+            if remaining_minutes > 0:
+                return (
+                    f"Garmin sync is limited to once every {settings.GARMIN_MIN_SYNC_INTERVAL_MINUTES} minutes. "
+                    f"Wait about {remaining_minutes} more minute{'s' if remaining_minutes != 1 else ''} before syncing again."
+                )
+
+        return None
+
+    @staticmethod
+    def _with_runtime_state(record: DataSourceConnection, **updates: str | None) -> None:
+        config = dict(record.config_json or {})
+        for key, value in updates.items():
+            if value in (None, ""):
+                config.pop(key, None)
+            else:
+                config[key] = value
+        record.config_json = config or None
+
     def list_sources(self, db: Session) -> list[dict]:
         availability = self._availability(db)
         payload: list[dict] = []
@@ -334,37 +641,111 @@ class DataSourceService:
         db.refresh(record)
         return self.serialize(record, DEFAULT_SOURCES[source_id]["icon"])
 
-    async def sync(self, source_id: str, db: Session) -> dict:
+    async def sync(self, source_id: str, db: Session, *, trigger: str = "manual") -> dict:
         if source_id not in DEFAULT_SOURCES:
             raise KeyError(source_id)
         record = self._record(source_id, db)
+        guard_message = self.sync_guard_message(source_id, db)
+        if guard_message:
+            record.last_sync_status = "throttled"
+            record.last_error = guard_message
+            cooldown_until = None
+            retry_after_raw = (record.config_json or {}).get("garmin_retry_after")
+            if retry_after_raw:
+                try:
+                    cooldown_until = datetime.fromisoformat(str(retry_after_raw))
+                except ValueError:
+                    cooldown_until = None
+            self._append_sync_attempt(
+                source_id,
+                "throttled",
+                db,
+                detail=guard_message,
+                trigger=trigger,
+                cooldown_until=cooldown_until,
+                data_mode="real-only",
+                rows_synced=0,
+            )
+            db.commit()
+            db.refresh(record)
+            return self.serialize(record, DEFAULT_SOURCES[source_id]["icon"])
+        if trigger == "manual" and not self._manual_sync_allowed(source_id):
+            record.last_sync_status = "automatic-only"
+            record.last_error = "Garmin sync is automatic only. Therapist OS runs it once per day in the background."
+            self._append_sync_attempt(
+                source_id,
+                "automatic-only",
+                db,
+                detail=record.last_error,
+                trigger=trigger,
+                data_mode="real-only",
+                rows_synced=0,
+            )
+            db.commit()
+            db.refresh(record)
+            return self.serialize(record, DEFAULT_SOURCES[source_id]["icon"])
         action = self._sync_action(source_id, record)
         if action is None:
             record.connected = False
             record.last_sync_status = "unsupported"
             record.last_error = DEFAULT_SOURCES[source_id]["hint"]
+            self._append_sync_attempt(source_id, "unsupported", db, detail=record.last_error, trigger=trigger)
             db.commit()
             db.refresh(record)
             return self.serialize(record, DEFAULT_SOURCES[source_id]["icon"])
 
         try:
-            await action(db)
+            result = await action(db)
             record.connected = True
             record.available = True
             record.last_sync_at = datetime.utcnow()
             record.last_sync_status = "success"
             record.last_error = None
             record.connection_hint = None
-        except RuntimeError as exc:
+            self._with_runtime_state(record, garmin_retry_after=None)
+            if source_id == "spotify" and isinstance(result, dict):
+                cursor_ms = result.get("cursor_ms")
+                self._with_runtime_state(record, spotify_recent_after_ms=str(cursor_ms) if cursor_ms else None)
+            self._append_sync_attempt(
+                source_id,
+                "success",
+                db,
+                trigger=trigger,
+                data_mode="real-only",
+                rows_synced=self._result_count(result),
+            )
+        except Exception as exc:
             record.connected = False
             record.last_sync_status = "failed"
             record.last_error = str(exc)
             record.connection_hint = DEFAULT_SOURCES[source_id]["hint"]
+            cooldown_until = None
+            if source_id == "garmin" and ("429" in record.last_error or "Too Many Requests" in record.last_error):
+                cooldown_until = datetime.utcnow() + timedelta(minutes=settings.GARMIN_RATE_LIMIT_BACKOFF_MINUTES)
+                self._with_runtime_state(record, garmin_retry_after=cooldown_until.isoformat())
+            self._append_sync_attempt(
+                source_id,
+                "failed",
+                db,
+                detail=record.last_error,
+                trigger=trigger,
+                cooldown_until=cooldown_until,
+                data_mode="real-only",
+                rows_synced=0,
+            )
         db.commit()
         db.refresh(record)
         return self.serialize(record, DEFAULT_SOURCES[source_id]["icon"])
 
-    def mark_sync_result(self, source_id: str, success: bool, db: Session, error: str | None = None) -> None:
+    def mark_sync_result(
+        self,
+        source_id: str,
+        success: bool,
+        db: Session,
+        error: str | None = None,
+        runtime_updates: dict[str, str | None] | None = None,
+        rows_synced: int | None = None,
+    ) -> None:
         if source_id not in DEFAULT_SOURCES:
             return
         record = self._record(source_id, db)
@@ -374,6 +755,17 @@ class DataSourceService:
         record.last_sync_at = datetime.utcnow() if success else record.last_sync_at
         record.last_error = None if success else error
         record.connection_hint = None if success else DEFAULT_SOURCES[source_id]["hint"]
+        if runtime_updates:
+            self._with_runtime_state(record, **runtime_updates)
+        if success:
+            self._with_runtime_state(record, garmin_retry_after=None)
+            self._append_sync_attempt(source_id, "success", db, detail=None, data_mode="real-only", rows_synced=rows_synced)
+        elif source_id == "garmin" and error and ("429" in error or "Too Many Requests" in error):
+            retry_after = datetime.utcnow() + timedelta(minutes=settings.GARMIN_RATE_LIMIT_BACKOFF_MINUTES)
+            self._with_runtime_state(record, garmin_retry_after=retry_after.isoformat())
+            self._append_sync_attempt(source_id, "failed", db, detail=error, cooldown_until=retry_after, data_mode="real-only", rows_synced=0)
+        elif not success:
+            self._append_sync_attempt(source_id, "failed", db, detail=error, data_mode="real-only", rows_synced=0)
         db.commit()
 
     def _sync_action(self, source_id: str, record: DataSourceConnection) -> Callable[[Session], object] | None:
@@ -394,6 +786,7 @@ class DataSourceService:
         if source_id not in DEFAULT_SOURCES:
             raise KeyError(source_id)
         record = self._record(source_id, db)
+        self._backfill_sync_attempts(db)
         default = DEFAULT_SOURCES[source_id]
         setup = default.get("setup")
         if not setup:
@@ -411,6 +804,8 @@ class DataSourceService:
                 "webhookUrl": None,
                 "callbackUrl": None,
                 "folderPath": default.get("folder_path"),
+                "recentAttempts": [],
+                "manualSyncAllowed": self._manual_sync_allowed(source_id),
             }
 
         config = self._config(record)
@@ -447,6 +842,9 @@ class DataSourceService:
             "folderPath": config.get("folder_path") or default.get("folder_path"),
             "canAuthorize": self._can_authorize(source_id, config),
             "authActionLabel": setup.get("authActionLabel"),
+            "recentAttempts": self._latest_attempts(source_id, db),
+            "intendedSync": self._intended_sync_label(source_id),
+            "manualSyncAllowed": self._manual_sync_allowed(source_id),
         }
 
     def save_setup(self, source_id: str, values: dict[str, str], db: Session) -> dict:
@@ -471,6 +869,8 @@ class DataSourceService:
         record.connected = self._is_connected(source_id, next_config, record.available)
         record.last_error = None
         record.connection_hint = self._connection_hint(source_id, next_config, record.available, record.connected)
+        if source_id == "garmin":
+            self._with_runtime_state(record, garmin_retry_after=None)
         db.commit()
         db.refresh(record)
         return self.serialize(record, DEFAULT_SOURCES[source_id]["icon"])
@@ -713,6 +1113,7 @@ class DataSourceService:
 
     def serialize(self, record: DataSourceConnection, icon: str) -> dict:
         config = self._config(record)
+        sync_guard_message = self._sync_guard_message_for_record(record)
         return {
             "id": record.source_id,
             "name": record.display_name,
@@ -726,4 +1127,35 @@ class DataSourceService:
             "folderPath": config.get("folder_path") or DEFAULT_SOURCES[record.source_id].get("folder_path"),
             "connectionHint": record.connection_hint,
             "lastError": record.last_error,
+            "syncBlocked": bool(sync_guard_message),
+            "syncGuardMessage": sync_guard_message,
+            "intendedSync": self._intended_sync_label(record.source_id),
+            "manualSyncAllowed": self._manual_sync_allowed(record.source_id),
+        }
+
+    def get_activity(self, mode: str | None, db: Session) -> dict:
+        normalized_mode = normalize_data_mode(mode)
+        self._backfill_sync_attempts(db)
+        items: list[dict] = []
+        availability = self._availability(db)
+        for source_id, default in DEFAULT_SOURCES.items():
+            record = self._record(source_id, db)
+            record.display_name = default["name"]
+            record.category = default["category"]
+            config = self._config(record)
+            record.available = availability.get(source_id, False)
+            record.connected = self._is_connected(source_id, config, record.available)
+            record.connection_hint = self._connection_hint(source_id, config, record.available, record.connected)
+            serialized = self.serialize(record, default["icon"])
+            count, last_collected_at, latest_data_date = self._dataset_activity(source_id, normalized_mode, db)
+            serialized["recordsAvailable"] = count
+            serialized["lastCollectedAt"] = last_collected_at.isoformat() if last_collected_at else None
+            serialized["latestDataDate"] = latest_data_date
+            serialized["recentAttempts"] = self._latest_attempts(source_id, db, data_mode=normalized_mode)
+            items.append(serialized)
+        db.commit()
+        return {
+            "mode": normalized_mode,
+            "generatedAt": datetime.utcnow().isoformat(),
+            "items": items,
         }

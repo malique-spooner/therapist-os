@@ -7,7 +7,21 @@ from statistics import mean
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import FinanceData, HabitLog, HealthData, WeatherData
+from ..models.life_data import (
+    FinanceDataDemo,
+    FinanceDataReal,
+    HabitLogDemo,
+    HabitLogReal,
+    HealthDataDemo,
+    HealthDataReal,
+    LocationDailySummaryDemo,
+    LocationDailySummaryReal,
+    MusicDataDemo,
+    MusicDataReal,
+    WeatherDataDemo,
+    WeatherDataReal,
+)
+from .data_mode import dataset_model, normalize_data_mode
 from .insights_service import InsightsService
 from .periods import date_window
 
@@ -16,35 +30,54 @@ class DashboardService:
     def __init__(self) -> None:
         self.insights_service = InsightsService()
 
-    def _load_health(self, db: Session, period: str) -> list[HealthData]:
+    def _load_health(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        return db.scalars(select(HealthData).where(HealthData.date.between(start, end)).order_by(HealthData.date)).all()
+        model = dataset_model(mode, HealthDataReal, HealthDataDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
 
-    def _load_finance(self, db: Session, period: str) -> list[FinanceData]:
+    def _load_finance(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        return db.scalars(select(FinanceData).where(FinanceData.date.between(start, end)).order_by(FinanceData.date)).all()
+        model = dataset_model(mode, FinanceDataReal, FinanceDataDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
 
-    def _load_habits(self, db: Session, period: str) -> list[HabitLog]:
+    def _load_habits(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        return db.scalars(select(HabitLog).where(HabitLog.date.between(start, end)).order_by(HabitLog.date)).all()
+        model = dataset_model(mode, HabitLogReal, HabitLogDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
 
-    def _load_weather(self, db: Session, period: str) -> list[WeatherData]:
+    def _load_weather(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        return db.scalars(select(WeatherData).where(WeatherData.date.between(start, end)).order_by(WeatherData.date)).all()
+        model = dataset_model(mode, WeatherDataReal, WeatherDataDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
 
-    def build_dashboard(self, db: Session, period: str) -> dict:
-        health = self._load_health(db, period)
-        finance = self._load_finance(db, period)
-        habits = self._load_habits(db, period)
-        weather = self._load_weather(db, period)
+    def _load_music(self, db: Session, period: str, mode: str | None) -> list:
+        start, end = date_window(period)
+        model = dataset_model(mode, MusicDataReal, MusicDataDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
+
+    def _load_location(self, db: Session, period: str, mode: str | None) -> list:
+        start, end = date_window(period)
+        model = dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
+
+    def build_dashboard(self, db: Session, period: str, mode: str | None = None) -> dict:
+        normalized_mode = normalize_data_mode(mode)
+        health = self._load_health(db, period, normalized_mode)
+        finance = self._load_finance(db, period, normalized_mode)
+        habits = self._load_habits(db, period, normalized_mode)
+        weather = self._load_weather(db, period, normalized_mode)
+        music = self._load_music(db, period, normalized_mode)
+        location = self._load_location(db, period, normalized_mode)
 
         avg_steps = round(mean(item.steps or 0 for item in health)) if health else 0
         avg_sleep = round(mean(item.sleep_quality or 0 for item in health), 1) if health else 0
         spend_total = round(sum(item.amount_pence for item in finance) / 100)
 
-        prev_health = self._load_health(db, "last-week")
+        prev_health = self._load_health(db, "last-week", normalized_mode)
         prev_steps = round(mean(item.steps or 0 for item in prev_health)) if prev_health else 0
         step_trend = round(((avg_steps - prev_steps) / prev_steps) * 100) if prev_steps else 0
+        window_label = "today" if period == "today" else "selected window"
+        spend_label = "Today Spend" if period == "today" else "Window Spend"
 
         spend_by_date: dict[str, int] = defaultdict(int)
         spend_by_category: dict[str, int] = defaultdict(int)
@@ -52,8 +85,9 @@ class DashboardService:
             spend_by_date[item.date.isoformat()] += round(item.amount_pence / 100)
             spend_by_category[item.category] += round(item.amount_pence / 100)
 
-        hero_headline = self.insights_service.generate_hero_headline(period, db)
-        cards = self.insights_service.generate_dashboard_insights(period, db)
+        enough_data = bool(health or finance or habits or weather or music or location)
+        hero_headline = self.insights_service.generate_hero_headline(period, db, normalized_mode) if enough_data else "Not enough data yet to generate a reliable daily read."
+        cards = self.insights_service.generate_dashboard_insights(period, db, normalized_mode) if enough_data else []
 
         health_tail = health[-14:] if len(health) >= 14 else health
         dates = [item.date.isoformat() for item in health_tail]
@@ -65,16 +99,16 @@ class DashboardService:
             "heroInsight": {
                 "weekOf": (date.today() - timedelta(days=date.today().weekday())).isoformat(),
                 "heroHeadline": hero_headline,
-                "heroFramework": "CBT",
-                "cards": cards,
-            },
+            "heroFramework": "CBT",
+            "cards": cards,
+        },
             "rings": [
                 {
                     "label": "Movement",
                     "value": f"{avg_steps:,}",
-                    "unit": "steps/day",
+                    "unit": "daily movement",
                     "percentage": min(100, round((avg_steps / 12000) * 100)) if avg_steps else 0,
-                    "trend": f"{step_trend:+d}% vs last week",
+                    "trend": "today focus" if period == "today" else f"{step_trend:+d}% vs recent baseline",
                     "trendPositive": step_trend >= 0,
                 },
                 {
@@ -82,15 +116,15 @@ class DashboardService:
                     "value": str(avg_sleep),
                     "unit": "out of 10",
                     "percentage": min(100, round((avg_sleep / 10) * 100)) if avg_sleep else 0,
-                    "trend": "Pattern held steady",
+                    "trend": "last sleep block" if period == "today" else "recent daily pattern",
                     "trendPositive": True,
                 },
                 {
-                    "label": "Weekly Spend",
+                    "label": spend_label,
                     "value": f"£{spend_total}",
                     "unit": "current window",
                     "percentage": min(100, round((spend_total / max(1, 350 * max(len(health), 7) / 7)) * 100)),
-                    "trend": "Lower is better here",
+                    "trend": "daily spend signal" if period == "today" else "lower is better here",
                     "trendPositive": spend_total <= 350,
                 },
             ],
@@ -118,4 +152,6 @@ class DashboardService:
                 },
             ],
             "insights": cards,
+            "windowLabel": window_label,
+            "status": "ready" if enough_data else ("demo" if normalized_mode == "demo-only" else "waiting-for-data"),
         }

@@ -148,10 +148,8 @@ export function DateRangeControl({
           whileHover={{ y: -1 }}
           transition={{ type: 'spring', stiffness: 320, damping: 24 }}
           style={{
-            background:
-              'linear-gradient(180deg, color-mix(in srgb, var(--color-surface-2) 86%, white 14%) 0%, var(--color-surface-2) 100%)',
+            backgroundColor: 'var(--color-surface-2)',
             border: '1px solid var(--color-border)',
-            boxShadow: '0 10px 24px rgba(15, 23, 42, 0.05)',
           }}
         >
           <motion.button
@@ -167,8 +165,7 @@ export function DateRangeControl({
             className="flex-1 rounded-[18px] px-4 py-3 text-left min-h-10"
             whileTap={{ scale: 0.985 }}
             style={{
-              background:
-                'linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 90%, white 10%) 0%, var(--color-surface) 100%)',
+              backgroundColor: 'var(--color-surface)',
               border: '1px solid var(--color-border)',
             }}
           >
@@ -221,8 +218,7 @@ export function DateRangeControl({
             <motion.div
               className="fixed inset-x-0 bottom-0 z-50 rounded-t-[32px] p-5"
               style={{
-                background:
-                  'linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 90%, white 10%) 0%, var(--color-surface) 100%)',
+                backgroundColor: 'var(--color-surface)',
                 boxShadow: '0 -18px 48px rgba(15, 23, 42, 0.18)',
               }}
               initial={{ opacity: 0, y: 48 }}
@@ -247,7 +243,7 @@ export function DateRangeControl({
                   }}
                   whileTap={{ scale: 0.96 }}
                   className="rounded-full px-4 py-2 text-sm font-semibold"
-                  style={{ backgroundColor: 'var(--color-primary)', color: '#fff', boxShadow: '0 12px 24px rgba(44, 122, 123, 0.22)' }}
+                  style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}
                 >
                   Apply
                 </motion.button>
@@ -289,8 +285,7 @@ export function DateRangeControl({
               <div
                 className="mt-4 rounded-[28px] p-4 overflow-hidden"
                 style={{
-                  background:
-                    'linear-gradient(180deg, color-mix(in srgb, var(--color-surface-2) 86%, white 14%) 0%, var(--color-surface-2) 100%)',
+                  backgroundColor: 'var(--color-surface-2)',
                   border: '1px solid var(--color-border)',
                 }}
               >
@@ -371,7 +366,6 @@ export function DateRangeControl({
                             color: isBoundary ? '#fff' : !inMonth ? 'rgba(107, 114, 128, 0.55)' : hasData ? 'var(--color-text)' : 'rgba(107, 114, 128, 0.65)',
                             border: `1px solid ${isBoundary ? 'transparent' : hasData ? 'var(--color-border)' : 'rgba(148, 163, 184, 0.18)'}`,
                             opacity: isDisabled ? 0.35 : hasData ? 1 : 0.62,
-                            boxShadow: isBoundary ? '0 12px 20px rgba(44, 122, 123, 0.22)' : 'none',
                           }}
                         >
                           {Number(day.slice(-2))}

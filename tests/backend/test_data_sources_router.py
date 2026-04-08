@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from backend.routers import data_sources as data_sources_router
-from backend.models import DataSourceConnection
+from backend.models import DataSourceConnection, DataSourceSyncAttempt
 
 
 def test_data_sources_list_returns_known_sources(client):
@@ -13,6 +13,31 @@ def test_data_sources_list_returns_known_sources(client):
     assert {"garmin", "truelayer", "spotify", "google_drive", "voice_journal"} <= ids
     google_drive = next(item for item in payload if item["id"] == "google_drive")
     assert google_drive["folderPath"] == "Therapist OS / Google Takeout"
+
+
+def test_data_source_activity_returns_dataset_stats_and_attempts(client, db_session):
+    db_session.add(
+        DataSourceSyncAttempt(
+            source_id="garmin",
+            status="failed",
+            trigger="manual",
+            data_mode="real-only",
+            rows_synced=0,
+            detail="Garmin is rate-limiting login attempts right now.",
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/api/data-sources/activity?mode=demo-only", headers={"X-API-Key": "dev-secret-key"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "demo-only"
+    garmin = next(item for item in payload["items"] if item["id"] == "garmin")
+    assert garmin["recordsAvailable"] >= 90
+    assert garmin["recentAttempts"]
+    assert garmin["recentAttempts"][0]["status"] == "demo-refresh"
+    assert garmin["recentAttempts"][0]["dataMode"] == "demo-only"
 
 
 def test_data_source_connect_returns_hint_when_not_configured(client):
@@ -101,6 +126,25 @@ def test_data_source_setup_masks_saved_password_fields(client):
     assert password_field["value"] is None
 
 
+def test_data_source_setup_returns_recent_sync_attempts(client, db_session):
+    db_session.add(
+        DataSourceSyncAttempt(
+            source_id="garmin",
+            status="failed",
+            trigger="manual",
+            detail="Garmin is rate-limiting login attempts right now.",
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/api/data-sources/garmin/setup", headers={"X-API-Key": "dev-secret-key"})
+
+    assert response.status_code == 200
+    attempts = response.json()["recentAttempts"]
+    assert attempts
+    assert attempts[0]["status"] == "failed"
+
+
 def test_data_source_authorize_returns_url(client, monkeypatch):
     monkeypatch.setattr(data_sources_router.service, "begin_authorization", lambda source_id, db: "https://accounts.spotify.com/authorize?state=test")
 
@@ -139,7 +183,7 @@ def test_data_source_oauth_callback_returns_connected_source(client, monkeypatch
 
 
 def test_data_source_sync_uses_service_result(client, monkeypatch):
-    async def fake_sync(source_id, db):
+    async def fake_sync(source_id, db, trigger="manual"):
         return {
             "id": source_id,
             "name": "Garmin Connect",
@@ -151,6 +195,7 @@ def test_data_source_sync_uses_service_result(client, monkeypatch):
             "lastSyncStatus": "success",
             "connectionHint": None,
             "lastError": None,
+            "manualSyncAllowed": False,
         }
 
     monkeypatch.setattr(data_sources_router.service, "sync", fake_sync)
@@ -159,6 +204,33 @@ def test_data_source_sync_uses_service_result(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["detail"] == "Data source synced"
+
+
+def test_data_source_sync_returns_automatic_only_for_garmin_manual_sync(client):
+    response = client.post("/api/data-sources/garmin/sync", headers={"X-API-Key": "dev-secret-key"})
+
+    assert response.status_code == 200
+    payload = response.json()["source"]
+    assert payload["lastSyncStatus"] == "automatic-only"
+    assert "automatic only" in payload["lastError"]
+
+
+def test_data_source_sync_returns_throttled_source_when_garmin_is_in_cooldown(client, db_session):
+    service = data_sources_router.service
+    record = service._record("garmin", db_session)
+    record.available = True
+    record.connected = False
+    record.last_sync_status = "failed"
+    record.last_error = "Garmin is rate-limiting login attempts right now (429 Too Many Requests)."
+    record.config_json = {"garmin_retry_after": (datetime.utcnow() + timedelta(minutes=30)).isoformat()}
+    db_session.commit()
+
+    response = client.post("/api/data-sources/garmin/sync", headers={"X-API-Key": "dev-secret-key"})
+
+    assert response.status_code == 200
+    payload = response.json()["source"]
+    assert payload["lastSyncStatus"] == "throttled"
+    assert "cooldown" in payload["lastError"]
 
 
 def test_data_source_serializes_relative_sync_time(db_session):

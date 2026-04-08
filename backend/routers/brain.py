@@ -11,5 +11,5 @@ service = BrainService()
 
 
 @router.get("", response_model=BrainPayloadSchema)
-def get_brain_payload(db: Session = Depends(get_db)) -> dict:
-    return service.get_payload(db)
+def get_brain_payload(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
+    return service.get_payload(db, mode)

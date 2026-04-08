@@ -11,7 +11,9 @@ from .core.logging import configure_logging, get_logger
 from .database import SessionLocal, engine
 from .middleware.request_context import RequestContextMiddleware
 from .routers import ai, brain, checkins, consumption, dashboard, data_sources, finance, habits, health, location, nutrition, open_prompts, profile, relationships, weather
+from .services.life_data_bootstrap import bootstrap_life_data
 from .services.seed import seed_demo_data
+from .services.ai.providers import REAL_PROVIDERS
 from .validate_env import validate_settings
 
 configure_logging(settings.LOG_LEVEL)
@@ -23,9 +25,18 @@ async def lifespan(app: FastAPI):
     validation = validate_settings()
     for warning in validation.warnings:
         logger.warning("environment_warning", extra={"event": "environment_warning", "extra_data": {"warning": warning}})
-    if settings.SEED_DEMO_DATA and inspect(engine).has_table("health_data"):
-        with SessionLocal() as db:
+    with SessionLocal() as db:
+        bootstrap_life_data(db)
+        if settings.SEED_DEMO_DATA and inspect(engine).has_table("health_data"):
             seed_demo_data(db)
+    if settings.OLLAMA_PREWARM_ON_STARTUP:
+        provider = REAL_PROVIDERS.get("local-qwen")
+        if provider and getattr(provider, "is_available", False) and hasattr(provider, "prewarm"):
+            try:
+                await provider.prewarm()
+                logger.info("ollama_prewarm_complete", extra={"event": "ollama_prewarm_complete"})
+            except Exception:
+                logger.warning("ollama_prewarm_failed", extra={"event": "ollama_prewarm_failed"})
     yield
 
 

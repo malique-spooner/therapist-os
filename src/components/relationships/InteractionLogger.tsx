@@ -44,6 +44,7 @@ export function InteractionLogger({ preselectedPersonId, selectedDate }: Interac
   }
 
   const recent = [...interactions].filter((interaction) => interaction.date === selectedDate).slice(-5).reverse();
+  const hasPeople = people.length > 0;
 
   return (
     <div className="px-4 pb-4 space-y-3">
@@ -55,6 +56,11 @@ export function InteractionLogger({ preselectedPersonId, selectedDate }: Interac
 
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-muted)' }}>Who did you connect with?</p>
+          {!hasPeople && (
+            <p className="text-sm mb-2" style={{ color: 'var(--color-text-muted)' }}>
+              Add at least one real person first, then you can log interactions for the selected day.
+            </p>
+          )}
           <div className="flex gap-2 overflow-x-auto pb-1">
             {people.map((person) => {
               const active = selectedPeople.includes(person.id);
@@ -121,8 +127,9 @@ export function InteractionLogger({ preselectedPersonId, selectedDate }: Interac
 
         <button
           onClick={submit}
+          disabled={!selectedPeople.length || !hasPeople}
           className="w-full rounded-2xl h-12 font-semibold"
-          style={{ backgroundColor: selectedPeople.length ? 'var(--color-primary)' : 'var(--color-border)', color: selectedPeople.length ? '#fff' : 'var(--color-text-muted)' }}
+          style={{ backgroundColor: selectedPeople.length && hasPeople ? 'var(--color-primary)' : 'var(--color-border)', color: selectedPeople.length && hasPeople ? '#fff' : 'var(--color-text-muted)' }}
         >
           Log interaction
         </button>

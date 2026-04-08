@@ -7,6 +7,7 @@ from sqlalchemy import inspect
 
 from .config import settings
 from .database import SessionLocal, engine
+from .services.life_data_bootstrap import bootstrap_life_data
 from .services.seed import seed_demo_data
 
 
@@ -23,6 +24,7 @@ def seed_if_enabled() -> None:
     if not inspect(engine).has_table("health_data"):
         raise RuntimeError("Database schema is missing. Run migrations before seeding.")
     with SessionLocal() as db:
+        bootstrap_life_data(db)
         seed_demo_data(db)
 
 

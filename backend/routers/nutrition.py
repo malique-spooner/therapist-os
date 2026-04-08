@@ -6,14 +6,15 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models import NutritionLog
+from ..models.life_data import NutritionLogDemo, NutritionLogReal
 from ..schemas.nutrition import NutritionCreateSchema
+from ..services.data_mode import dataset_model
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/nutrition", tags=["nutrition"], dependencies=[Depends(verify_api_key)])
 
 
-def _serialize(row: NutritionLog) -> dict:
+def _serialize(row) -> dict:
     return {
         "date": row.date.isoformat(),
         "meals": {
@@ -31,10 +32,11 @@ def _serialize(row: NutritionLog) -> dict:
     }
 
 
-def _upsert(target_date: date_type, payload: NutritionCreateSchema, db: Session) -> NutritionLog:
-    row = db.scalar(select(NutritionLog).where(NutritionLog.date == target_date))
+def _upsert(target_date: date_type, payload: NutritionCreateSchema, db: Session, mode: str | None) -> NutritionLogReal | NutritionLogDemo:
+    model = dataset_model(mode or "real-only", NutritionLogReal, NutritionLogDemo)
+    row = db.scalar(select(model).where(model.date == target_date))
     if not row:
-        row = NutritionLog(date=target_date)
+        row = model(date=target_date)
         db.add(row)
 
     row.breakfast = bool(payload.meals.get("breakfast"))
@@ -45,22 +47,27 @@ def _upsert(target_date: date_type, payload: NutritionCreateSchema, db: Session)
     row.caffeine_count = int(payload.caffeine.get("count", 0))
     row.caffeine_last_before_noon = bool(payload.caffeine.get("lastBeforeNoon", True))
     row.alcohol_units = int(payload.alcohol.get("units", 0))
-    row.is_demo = False
     db.commit()
     db.refresh(row)
     return row
 
 
 @router.get("")
-def get_nutrition(period: str = "this-week", db: Session = Depends(get_db)) -> list[dict]:
+def get_nutrition(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
-    rows = db.scalars(select(NutritionLog).where(NutritionLog.date.between(start, end)).order_by(NutritionLog.date)).all()
+    model = dataset_model(mode, NutritionLogReal, NutritionLogDemo)
+    rows = db.scalars(
+        select(model)
+        .where(model.date.between(start, end))
+        .order_by(model.date)
+    ).all()
     return [_serialize(row) for row in rows]
 
 
 @router.get("/today")
-def get_nutrition_today(db: Session = Depends(get_db)) -> dict:
-    row = db.scalar(select(NutritionLog).order_by(NutritionLog.date.desc()))
+def get_nutrition_today(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
+    model = dataset_model(mode, NutritionLogReal, NutritionLogDemo)
+    row = db.scalar(select(model).order_by(model.date.desc()))
     if row:
         return _serialize(row)
     return {
@@ -73,9 +80,10 @@ def get_nutrition_today(db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/day")
-def get_nutrition_for_date(date: str, db: Session = Depends(get_db)) -> dict:
+def get_nutrition_for_date(date: str, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
     target_date = date_type.fromisoformat(date)
-    row = db.scalar(select(NutritionLog).where(NutritionLog.date == target_date))
+    model = dataset_model(mode, NutritionLogReal, NutritionLogDemo)
+    row = db.scalar(select(model).where(model.date == target_date))
     if row:
         return _serialize(row)
     return {
@@ -88,16 +96,16 @@ def get_nutrition_for_date(date: str, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/today")
-def save_nutrition_today(payload: NutritionCreateSchema, db: Session = Depends(get_db)) -> dict:
-    return _serialize(_upsert(date_type.today(), payload, db))
+def save_nutrition_today(payload: NutritionCreateSchema, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
+    return _serialize(_upsert(date_type.today(), payload, db, mode))
 
 
 @router.put("/today")
-def update_nutrition_today(payload: NutritionCreateSchema, db: Session = Depends(get_db)) -> dict:
-    return _serialize(_upsert(date_type.today(), payload, db))
+def update_nutrition_today(payload: NutritionCreateSchema, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
+    return _serialize(_upsert(date_type.today(), payload, db, mode))
 
 
 @router.put("/day")
-def update_nutrition_for_date(date: str, payload: NutritionCreateSchema, db: Session = Depends(get_db)) -> dict:
+def update_nutrition_for_date(date: str, payload: NutritionCreateSchema, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
     target_date = date_type.fromisoformat(date)
-    return _serialize(_upsert(target_date, payload, db))
+    return _serialize(_upsert(target_date, payload, db, mode))

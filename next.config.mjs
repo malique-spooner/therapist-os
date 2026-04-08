@@ -5,9 +5,11 @@ const nextConfig = {
   reactStrictMode: true,
 };
 
+const pwaEnabled = process.env.ENABLE_PWA === 'true';
+
 export default withPWA({
   dest: 'public',
-  register: true,
+  register: pwaEnabled,
   skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development',
+  disable: !pwaEnabled,
 })(nextConfig);

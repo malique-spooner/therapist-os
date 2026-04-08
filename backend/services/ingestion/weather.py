@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...core.logging import get_logger
-from ...models import WeatherData
+from ...models.life_data import WeatherDataReal
 
 logger = get_logger(__name__)
 
@@ -27,10 +27,10 @@ class WeatherIngestionService:
     def is_configured(self) -> bool:
         return bool(self._api_key)
 
-    async def sync_today(self, db: Session) -> WeatherData:
+    async def sync_today(self, db: Session) -> WeatherDataReal:
         return await self.sync_date(date.today(), db)
 
-    async def sync_date(self, target_date: date, db: Session) -> WeatherData:
+    async def sync_date(self, target_date: date, db: Session) -> WeatherDataReal:
         if not self.is_configured:
             raise RuntimeError("OPENWEATHER_API_KEY is not configured")
 
@@ -67,9 +67,9 @@ class WeatherIngestionService:
         sunrise = datetime.fromtimestamp(day_payload["sunrise"])
         sunset = datetime.fromtimestamp(day_payload["sunset"])
         condition = (day_payload.get("weather") or [{}])[0].get("main", "").lower() or None
-        record = db.scalar(select(WeatherData).where(WeatherData.date == target_date))
+        record = db.scalar(select(WeatherDataReal).where(WeatherDataReal.date == target_date))
         if not record:
-            record = WeatherData(date=target_date, sunrise_time=sunrise.time(), sunset_time=sunset.time(), daylight_hours=0)
+            record = WeatherDataReal(date=target_date, sunrise_time=sunrise.time(), sunset_time=sunset.time(), daylight_hours=0)
             db.add(record)
 
         record.sunrise_time = sunrise.time()
@@ -79,7 +79,6 @@ class WeatherIngestionService:
         record.temperature_low_c = day_payload.get("temp", {}).get("min")
         record.condition = condition
         record.uv_index = day_payload.get("uvi")
-        record.is_demo = False
         db.commit()
         db.refresh(record)
         logger.info(
@@ -94,8 +93,8 @@ class WeatherIngestionService:
         )
         return record
 
-    async def sync_recent_days(self, db: Session, days: int = 5) -> list[WeatherData]:
-        records: list[WeatherData] = []
+    async def sync_recent_days(self, db: Session, days: int = 5) -> list[WeatherDataReal]:
+        records: list[WeatherDataReal] = []
         start = date.today() - timedelta(days=days - 1)
         for offset in range(days):
             target = start + timedelta(days=offset)

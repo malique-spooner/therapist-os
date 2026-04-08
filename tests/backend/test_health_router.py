@@ -1,7 +1,6 @@
-from datetime import date
-from types import SimpleNamespace
+from datetime import datetime, timedelta
 
-from backend.routers import health as health_router
+from backend.models import DataSourceConnection
 
 
 def test_health_today_returns_latest_record(client):
@@ -23,29 +22,26 @@ def test_health_period_accepts_week_alias(client):
     assert len(payload) <= 7
 
 
-def test_health_sync_uses_service_result(client, monkeypatch):
-    async def fake_sync(_db):
-        return [SimpleNamespace(date=date(2026, 4, 1))]
+def test_health_sync_is_automatic_only(client):
+    response = client.post("/api/health/sync", headers={"X-API-Key": "dev-secret-key"})
 
-    monkeypatch.setattr(health_router.service, "sync_last_7_days", fake_sync)
+    assert response.status_code == 405
+    assert "automatic only" in response.json()["detail"]
+
+
+def test_health_sync_throttles_after_rate_limit(client, db_session):
+    record = db_session.get(DataSourceConnection, "garmin")
+    if not record:
+        record = DataSourceConnection(source_id="garmin", display_name="Garmin Connect", category="Body")
+        db_session.add(record)
+    record.available = True
+    record.connected = False
+    record.last_sync_status = "failed"
+    record.last_error = "Garmin is rate-limiting login attempts right now (429 Too Many Requests)."
+    record.config_json = {"garmin_retry_after": (datetime.utcnow() + timedelta(minutes=30)).isoformat()}
+    db_session.commit()
 
     response = client.post("/api/health/sync", headers={"X-API-Key": "dev-secret-key"})
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "detail": "Health synced",
-        "daysSynced": 1,
-        "latestDate": "2026-04-01",
-    }
-
-
-def test_health_sync_surfaces_configuration_errors(client, monkeypatch):
-    async def fake_sync(_db):
-        raise RuntimeError("Garmin credentials are not configured")
-
-    monkeypatch.setattr(health_router.service, "sync_last_7_days", fake_sync)
-
-    response = client.post("/api/health/sync", headers={"X-API-Key": "dev-secret-key"})
-
-    assert response.status_code == 400
-    assert "Garmin credentials" in response.json()["detail"]
+    assert response.status_code == 405
+    assert "automatic only" in response.json()["detail"]

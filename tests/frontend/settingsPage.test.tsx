@@ -7,62 +7,102 @@ describe('SettingsPage data sources', () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({
+    global.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes('/api/ai/runtime-options')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            localModels: ['qwen2.5:3b', 'qwen3.5:35b'],
+            defaultModel: 'qwen2.5:3b',
+            ttsProviders: ['kokoro', 'piper'],
+            defaultTtsProvider: 'kokoro',
+            defaultTtsVoice: 'af_heart',
+            ttsVoices: {
+              kokoro: ['af_heart', 'af_bella'],
+              piper: ['en_US-lessac-medium'],
+            },
+          }),
+        } as Response);
+      }
+
+      if (url.endsWith('/api/data-sources')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: false, available: false, connectionState: 'setup-required', lastSync: null, lastSyncStatus: null, connectionHint: 'Add GARMIN_EMAIL and GARMIN_PASSWORD on the backend to enable sync.', lastError: null },
+          ]),
+        } as Response);
+      }
+
+      if (url.includes('/api/data-sources/garmin/setup') && !init?.method) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'garmin',
+            name: 'Garmin Connect',
+            mode: 'credentials',
+            title: 'Connect Garmin Connect',
+            description: 'Save your Garmin login so Therapist OS can sync steps, sleep, HRV, and workouts.',
+            instructions: [],
+            actionLabel: 'Save Garmin login',
+            connected: false,
+            available: false,
+            fields: [
+              { key: 'email', label: 'Garmin email', type: 'email', required: true, placeholder: 'you@example.com', hasValue: false, value: null },
+              { key: 'password', label: 'Garmin password', type: 'password', required: true, placeholder: 'Password', hasValue: false, value: null },
+            ],
+            webhookUrl: null,
+            callbackUrl: null,
+            folderPath: null,
+          }),
+        } as Response);
+      }
+
+      if (url.includes('/api/data-sources/garmin/setup') && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            detail: 'Data source connected',
+            source: { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: true, available: true, connectionState: 'connected', lastSync: 'just now', lastSyncStatus: 'success', connectionHint: null, lastError: null },
+          }),
+        } as Response);
+      }
+
+      if (url.includes('/api/data-sources/garmin/setup') && !url.endsWith('/api/data-sources/garmin/setup')) {
+        return Promise.resolve({ ok: false } as Response);
+      }
+
+      if (url.includes('/api/data-sources/garmin/setup')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'garmin',
+            name: 'Garmin Connect',
+            mode: 'credentials',
+            title: 'Connect Garmin Connect',
+            description: 'Save your Garmin login so Therapist OS can sync steps, sleep, HRV, and workouts.',
+            instructions: [],
+            actionLabel: 'Save Garmin login',
+            connected: true,
+            available: true,
+            fields: [
+              { key: 'email', label: 'Garmin email', type: 'email', required: true, placeholder: 'you@example.com', hasValue: true, value: 'athlete@example.com' },
+              { key: 'password', label: 'Garmin password', type: 'password', required: true, placeholder: 'Password', hasValue: true, value: null },
+            ],
+            webhookUrl: null,
+            callbackUrl: null,
+            folderPath: null,
+          }),
+        } as Response);
+      }
+
+      return Promise.resolve({
         ok: true,
-        json: async () => ([
-          { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: false, available: false, connectionState: 'setup-required', lastSync: null, lastSyncStatus: null, connectionHint: 'Add GARMIN_EMAIL and GARMIN_PASSWORD on the backend to enable sync.', lastError: null },
-        ]),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 'garmin',
-          name: 'Garmin Connect',
-          mode: 'credentials',
-          title: 'Connect Garmin Connect',
-          description: 'Save your Garmin login so Therapist OS can sync steps, sleep, HRV, and workouts.',
-          instructions: [],
-          actionLabel: 'Save Garmin login',
-          connected: false,
-          available: false,
-          fields: [
-            { key: 'email', label: 'Garmin email', type: 'email', required: true, placeholder: 'you@example.com', hasValue: false, value: null },
-            { key: 'password', label: 'Garmin password', type: 'password', required: true, placeholder: 'Password', hasValue: false, value: null },
-          ],
-          webhookUrl: null,
-          callbackUrl: null,
-          folderPath: null,
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          detail: 'Data source connected',
-          source: { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: true, available: true, connectionState: 'connected', lastSync: 'just now', lastSyncStatus: 'success', connectionHint: null, lastError: null },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 'garmin',
-          name: 'Garmin Connect',
-          mode: 'credentials',
-          title: 'Connect Garmin Connect',
-          description: 'Save your Garmin login so Therapist OS can sync steps, sleep, HRV, and workouts.',
-          instructions: [],
-          actionLabel: 'Save Garmin login',
-          connected: true,
-          available: true,
-          fields: [
-            { key: 'email', label: 'Garmin email', type: 'email', required: true, placeholder: 'you@example.com', hasValue: true, value: 'athlete@example.com' },
-            { key: 'password', label: 'Garmin password', type: 'password', required: true, placeholder: 'Password', hasValue: true, value: null },
-          ],
-          webhookUrl: null,
-          callbackUrl: null,
-          folderPath: null,
-        }),
-      }) as unknown as typeof fetch;
+        json: async () => ({}),
+      } as Response);
+    }) as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -79,7 +119,8 @@ describe('SettingsPage data sources', () => {
     expect(screen.getByText('Google Drive')).toBeInTheDocument();
     expect(screen.getByText(/Folder: Therapist OS \/ Google Takeout/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Brain' })).toBeInTheDocument();
-    expect(screen.getByText('Local LLM on Mac')).toBeInTheDocument();
+    expect(screen.getByText('Therapist LLM')).toBeInTheDocument();
+    expect(screen.getByText('Therapist Voice')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Garmin Connect' }));
     expect(await screen.findByText('Connect Garmin Connect')).toBeInTheDocument();
