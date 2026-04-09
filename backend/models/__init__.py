@@ -1,3 +1,4 @@
+from .auth import AdminUser, AuthSession
 from .checkins import DailyCheckIn
 from .conversations import AIConversation, AIMessage
 from .assistant_features import AppOpenPromptState, LocationCompanionLog
@@ -50,6 +51,8 @@ from .relationships import Relationship, RelationshipInteraction
 from .weather import WeatherData
 
 __all__ = [
+    "AdminUser",
+    "AuthSession",
     "DailyCheckIn",
     "DailyCheckInDemo",
     "DailyCheckInReal",

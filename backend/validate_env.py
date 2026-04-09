@@ -22,7 +22,8 @@ def validate_settings() -> ValidationResult:
         warnings.append("DATABASE_URL is using SQLite; production should use PostgreSQL.")
     if not settings.FRONTEND_URL:
         errors.append("FRONTEND_URL must be set.")
-    warnings.append("Public API keys should match the backend key only for single-user local deployments.")
+    if settings.ENVIRONMENT == "production" and (not settings.ADMIN_EMAIL or not settings.ADMIN_PASSWORD):
+        warnings.append("ADMIN_EMAIL and ADMIN_PASSWORD should be set in production so login can be enabled.")
     return ValidationResult(ok=not errors, errors=errors, warnings=warnings)
 
 

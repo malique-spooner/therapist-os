@@ -39,6 +39,7 @@ That gives you the normal safe workflow:
 ## Pre-deploy Checklist
 
 - `.env` present with strong `API_SECRET_KEY`
+- `ADMIN_EMAIL` and `ADMIN_PASSWORD` set for the single-user login
 - PostgreSQL credentials set
 - `FRONTEND_URL` set to the live app URL
 - `TRUSTED_HOSTS` includes the live domain
@@ -53,6 +54,10 @@ Recommended live values:
 ENVIRONMENT=production
 FRONTEND_URL=https://app.example.com
 NEXT_PUBLIC_API_URL=
+NEXT_PUBLIC_API_KEY=
+ADMIN_EMAIL=you@example.com
+ADMIN_PASSWORD=replace-with-a-strong-password
+ADMIN_NAME=Malique
 TRUSTED_HOSTS=app.example.com,www.app.example.com,localhost,127.0.0.1
 SEED_DEMO_DATA=false
 ```
@@ -60,7 +65,8 @@ SEED_DEMO_DATA=false
 Notes:
 
 - Leave `NEXT_PUBLIC_API_URL` empty if nginx will serve both the app and API on the same domain.
-- Keep `NEXT_PUBLIC_API_KEY` aligned with the backend only if this remains a single-user private deployment.
+- Leave `NEXT_PUBLIC_API_KEY` empty in production so the browser uses the secure auth cookie instead of a public API key.
+- The API boot path will create or update the single admin account from `ADMIN_EMAIL` and `ADMIN_PASSWORD`.
 - For VPS deployment, `OLLAMA_BASE_URL` should point at the Mac inference bridge once that exists rather than `host.docker.internal`.
 
 ## DNS And Domain

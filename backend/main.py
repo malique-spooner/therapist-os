@@ -10,7 +10,8 @@ from .config import settings
 from .core.logging import configure_logging, get_logger
 from .database import SessionLocal, engine
 from .middleware.request_context import RequestContextMiddleware
-from .routers import ai, brain, checkins, consumption, dashboard, data_sources, finance, habits, health, location, nutrition, open_prompts, profile, relationships, weather
+from .routers import ai, auth, brain, checkins, consumption, dashboard, data_sources, finance, habits, health, location, nutrition, open_prompts, profile, relationships, weather
+from .services.auth import ensure_admin_user
 from .services.life_data_bootstrap import bootstrap_life_data
 from .services.seed import seed_demo_data
 from .services.ai.providers import REAL_PROVIDERS
@@ -27,6 +28,7 @@ async def lifespan(app: FastAPI):
         logger.warning("environment_warning", extra={"event": "environment_warning", "extra_data": {"warning": warning}})
     with SessionLocal() as db:
         bootstrap_life_data(db)
+        ensure_admin_user(db)
         if settings.SEED_DEMO_DATA and inspect(engine).has_table("health_data"):
             seed_demo_data(db)
     if settings.OLLAMA_PREWARM_ON_STARTUP:
@@ -94,6 +96,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)
+app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(health.router, prefix=settings.API_V1_PREFIX)
 app.include_router(finance.router, prefix=settings.API_V1_PREFIX)
 app.include_router(consumption.router, prefix=settings.API_V1_PREFIX)

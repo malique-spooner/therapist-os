@@ -15,6 +15,7 @@ interface SettingsPageProps {
   onOpenBrain?: () => void;
   requestedSourceId?: string | null;
   onSourceRequestHandled?: () => void;
+  onLogout?: () => void | Promise<void>;
 }
 
 const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
@@ -216,7 +217,7 @@ function getSourceStatusLabel(source: DataSourcePayload) {
 }
 
 
-export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceRequestHandled }: SettingsPageProps) {
+export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceRequestHandled, onLogout }: SettingsPageProps) {
   const {
     theme,
     setTheme,
@@ -675,6 +676,22 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
             </button>
           ))}
         </div>
+
+        {onLogout && (
+          <>
+            <SectionHeader title="Session" />
+            <div className="px-4">
+              <button
+                type="button"
+                onClick={() => { void onLogout(); }}
+                className="h-12 w-full rounded-2xl text-sm font-semibold"
+                style={{ backgroundColor: 'var(--color-dark)', color: '#fff' }}
+              >
+                Sign out
+              </button>
+            </div>
+          </>
+        )}
 
         {/* App Info */}
         <div className="px-4 py-6 text-center">

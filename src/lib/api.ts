@@ -261,6 +261,18 @@ export interface LiveSessionPayload {
   warning: string;
 }
 
+export interface AuthUserPayload {
+  id: number;
+  email: string;
+  displayName: string;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+  remember: boolean;
+}
+
 export interface AIRuntimeOptionsPayload {
   localModels: string[];
   defaultModel: string;
@@ -324,7 +336,7 @@ export interface DateQuery {
 
 type DataMode = 'demo-only' | 'real-only';
 
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? 'dev-secret-key';
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? '';
 
 function getApiBase() {
   if (process.env.NEXT_PUBLIC_API_URL) {
@@ -360,7 +372,7 @@ function withDataMode(path: string) {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const apiBase = getApiBase();
   const headers = new Headers(init?.headers);
-  headers.set('X-API-Key', API_KEY);
+  if (API_KEY) headers.set('X-API-Key', API_KEY);
   if (!(init?.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
@@ -369,6 +381,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers,
     cache: 'no-store',
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -423,6 +436,14 @@ function handleStreamEvent(
 }
 
 export const api = {
+  getAuthStatus: () => request<{ configured: boolean }>('/api/auth/status'),
+  login: (payload: LoginPayload) =>
+    request<{ user: AuthUserPayload }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  logout: () => request<{ detail: string }>('/api/auth/logout', { method: 'POST' }),
+  getCurrentUser: () => request<AuthUserPayload>('/api/auth/me'),
   getDashboard: (period: string) => request<DashboardPayload>(withDataMode(`/api/dashboard?period=${period}`)),
   getBrain: () => request<BrainPayloadResponse>(withDataMode('/api/brain')),
   getHealth: (query: string | DateQuery) =>
@@ -484,13 +505,14 @@ export const api = {
     if (payload.note) formData.append('note', payload.note);
 
     const headers = new Headers();
-    headers.set('X-API-Key', API_KEY);
+    if (API_KEY) headers.set('X-API-Key', API_KEY);
 
     const response = await fetch(`${apiBase}${withDataMode('/api/relationships/imports/snapchat')}`, {
       method: 'POST',
       headers,
       body: formData,
       cache: 'no-store',
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -561,13 +583,14 @@ export const api = {
     formData.append('audio', audioBlob, 'recording.webm');
 
     const headers = new Headers();
-    headers.set('X-API-Key', API_KEY);
+    if (API_KEY) headers.set('X-API-Key', API_KEY);
 
     const response = await fetch(`${apiBase}/api/ai/transcribe`, {
       method: 'POST',
       headers,
       body: formData,
       cache: 'no-store',
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -581,12 +604,12 @@ export const api = {
     const apiBase = getApiBase();
     const response = await fetch(`${apiBase}/api/ai/tts`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': API_KEY,
-      },
+      headers: API_KEY
+        ? { 'Content-Type': 'application/json', 'X-API-Key': API_KEY }
+        : { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, provider: options?.provider, voice: options?.voice }),
       cache: 'no-store',
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -626,10 +649,9 @@ export const api = {
     const apiBase = getApiBase();
     const response = await fetch(`${apiBase}${withDataMode('/api/ai/message/stream')}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': API_KEY,
-      },
+      headers: API_KEY
+        ? { 'Content-Type': 'application/json', 'X-API-Key': API_KEY }
+        : { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message,
         provider,
@@ -637,6 +659,7 @@ export const api = {
         model: modelOverride || undefined,
       }),
       cache: 'no-store',
+      credentials: 'include',
     });
 
     if (!response.ok || !response.body) {

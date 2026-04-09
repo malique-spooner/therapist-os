@@ -22,6 +22,7 @@ import { NutritionPage } from './nutrition/NutritionPage';
 import { RelationshipsPage } from './relationships/RelationshipsPage';
 import { LocationPage } from './location/LocationPage';
 import { api, type AppOpenPromptPayload } from '@/lib/api';
+import { LoginGate } from './auth/LoginGate';
 
 type PageId =
   | 'dashboard'
@@ -58,6 +59,8 @@ export function AppShell() {
   const [openPrompt, setOpenPrompt] = useState<AppOpenPromptPayload | null>(null);
   const [openPromptVisible, setOpenPromptVisible] = useState(false);
   const [settingsSourceId, setSettingsSourceId] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const hasCheckedInToday = useCheckInStore((state) => state.hasCheckedInToday)();
   const checkInHydrated = useCheckInStore((state) => state.hydrated);
   const hydrateCheckIns = useCheckInStore((state) => state.hydrateFromApi);
@@ -70,6 +73,27 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    void api.getCurrentUser().then(() => {
+      if (!active) return;
+      setIsAuthenticated(true);
+      setAuthChecked(true);
+    }).catch(() => {
+      void api.getAuthStatus().then((status) => {
+        if (!active) return;
+        setIsAuthenticated(!status.configured);
+        setAuthChecked(true);
+      }).catch(() => {
+        if (!active) return;
+        setIsAuthenticated(false);
+        setAuthChecked(true);
+      });
+    });
+
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     const shouldOpenSettings = searchParams.get('settings') === '1';
     const sourceId = searchParams.get('source');
     if (shouldOpenSettings) {
@@ -79,18 +103,20 @@ export function AppShell() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     if (!checkInHydrated) {
       void hydrateCheckIns();
     }
-  }, [checkInHydrated, hydrateCheckIns]);
+  }, [checkInHydrated, hydrateCheckIns, isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     void applyCheckInDataMode(dataMode);
     void applyRelationshipsDataMode();
-  }, [applyCheckInDataMode, applyRelationshipsDataMode, dataMode]);
+  }, [applyCheckInDataMode, applyRelationshipsDataMode, dataMode, isAuthenticated]);
 
   useEffect(() => {
-    if (!mounted || !checkInHydrated || !hasCheckedInToday) return;
+    if (!isAuthenticated || !mounted || !checkInHydrated || !hasCheckedInToday) return;
 
     let active = true;
     void api.getOpenPrompt().then((prompt) => {
@@ -104,7 +130,7 @@ export function AppShell() {
     });
 
     return () => { active = false; };
-  }, [mounted, checkInHydrated, hasCheckedInToday]);
+  }, [isAuthenticated, mounted, checkInHydrated, hasCheckedInToday]);
 
   function navigateTo(page: PageId) {
     setDirection(pageDepth[page] >= pageDepth[currentPage] ? 1 : -1);
@@ -124,6 +150,17 @@ export function AppShell() {
   function navigateToBrain() {
     setShowSettings(false);
     navigateTo('brain');
+  }
+
+  async function handleLogout() {
+    try {
+      await api.logout();
+    } catch {
+      // best effort
+    } finally {
+      setShowSettings(false);
+      setIsAuthenticated(false);
+    }
   }
 
   async function dismissOpenPrompt() {
@@ -205,6 +242,18 @@ export function AppShell() {
 
   const showBottomNav = true;
 
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-surface)' }}>
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Checking session…</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginGate onAuthenticated={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <div className="flex flex-col w-full" style={{ height: '100dvh', backgroundColor: 'var(--color-surface)' }}>
       <div className="flex-1 overflow-hidden relative">
@@ -258,6 +307,7 @@ export function AppShell() {
                 }}
                 onOpenBrain={navigateToBrain}
                 requestedSourceId={settingsSourceId}
+                onLogout={handleLogout}
                 onSourceRequestHandled={() => setSettingsSourceId(null)}
               />
             </motion.div>

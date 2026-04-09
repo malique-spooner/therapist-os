@@ -84,6 +84,8 @@ Important local values:
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_API_KEY=dev-secret-key
+ADMIN_EMAIL=you@example.com
+ADMIN_PASSWORD=replace-with-a-strong-password
 DATA_SOURCE_ENCRYPTION_KEY=replace-this-with-a-long-random-secret
 OLLAMA_BASE_URL=http://host.docker.internal:11434
 LOCAL_QWEN_MODEL=qwen3.5:35b
@@ -143,6 +145,13 @@ Public traffic should hit nginx on your domain, with:
 - `/` -> frontend
 - `/api/*` -> backend API
 - `/healthz` and `/readyz` -> backend health checks
+
+For live private deployment:
+
+- set `NEXT_PUBLIC_API_KEY=` blank on the VPS
+- set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in the VPS `.env`
+- the backend will create or refresh that single admin login on startup
+- the frontend will then use a secure cookie session with a remember-device flow
 
 ## Testing
 
