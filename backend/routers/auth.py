@@ -23,6 +23,7 @@ def _cookie_max_age(expires_at: datetime) -> int:
 
 
 def _set_auth_cookie(response: Response, token: str, expires_at: datetime) -> None:
+    expires_utc = expires_at.replace(tzinfo=timezone.utc)
     response.set_cookie(
         key=settings.AUTH_COOKIE_NAME,
         value=token,
@@ -30,7 +31,7 @@ def _set_auth_cookie(response: Response, token: str, expires_at: datetime) -> No
         secure=_cookie_secure(),
         samesite="lax",
         max_age=_cookie_max_age(expires_at),
-        expires=expires_at,
+        expires=expires_utc,
         path="/",
     )
 
