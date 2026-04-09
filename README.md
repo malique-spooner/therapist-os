@@ -6,6 +6,7 @@ The project now has:
 - a Next.js 14 frontend PWA
 - a FastAPI backend with PostgreSQL and Alembic
 - Docker-based local and deployment workflows
+- a Dockerized production frontend path for VPS deployment
 - backend ingestion and sync paths for multiple life domains
 - a Brain system UI that maps how insights are meant to be generated over time
 
@@ -126,6 +127,22 @@ Frontend:
 - [http://localhost:3000](http://localhost:3000)
 
 If port `3000` is already in use, Next may move to another port such as `3001`.
+
+### VPS / live deployment shape
+
+The production compose stack now expects:
+
+- `frontend` for the Next.js app
+- `api` for FastAPI
+- `scheduler` for background jobs
+- `postgres` for storage
+- `nginx` as the public entry point
+
+Public traffic should hit nginx on your domain, with:
+
+- `/` -> frontend
+- `/api/*` -> backend API
+- `/healthz` and `/readyz` -> backend health checks
 
 ## Testing
 
