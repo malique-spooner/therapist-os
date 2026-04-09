@@ -38,9 +38,7 @@ export const useCheckInStore = create<CheckInState>()((set, get) => ({
     }
   },
   completeCheckIn: (checkIn) => {
-    const mode = useSettingsStore.getState().dataMode;
     void api.saveCheckin(checkIn).catch(() => {});
-    if (mode !== 'real-only') return;
 
     set((state) => {
       const nextEntry: DailyCheckIn = {
