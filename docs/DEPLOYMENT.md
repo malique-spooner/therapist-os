@@ -124,12 +124,53 @@ The nginx config now routes:
 
 This repo now has the live app routing in place, but certificate issuance is still an operational step you need to complete on the VPS.
 
-You have two good options:
+The included nginx config is now set up for a Let's Encrypt webroot flow:
 
-1. Terminate TLS in front of this stack using your provider or an external proxy.
-2. Extend the nginx setup with Certbot once DNS is pointed correctly.
+1. ensure DNS for `maliquespooner.com` and `app.maliquespooner.com` points at the VPS
+2. pull the latest repo on the VPS
+3. create the certbot directories if needed:
 
-For the immediate goal of validating the live topology, get the domain resolving and the stack reachable first, then add HTTPS once the app is serving correctly end to end.
+```bash
+mkdir -p infra/certbot/www infra/certbot/conf
+```
+
+4. stop nginx if it is already running without TLS:
+
+```bash
+docker compose stop nginx
+```
+
+5. issue the certificate from the VPS host:
+
+```bash
+apt install -y certbot
+certbot certonly --standalone -d maliquespooner.com -d app.maliquespooner.com
+```
+
+6. copy the generated certificates into the mounted compose path:
+
+```bash
+mkdir -p /root/therapist-os/infra/certbot/conf
+cp -R /etc/letsencrypt/* /root/therapist-os/infra/certbot/conf/
+```
+
+7. start the stack again:
+
+```bash
+docker compose up -d nginx
+```
+
+8. verify:
+
+```bash
+curl -I https://app.maliquespooner.com
+curl -I https://maliquespooner.com
+```
+
+Notes:
+
+- The nginx config expects certificate files under `infra/certbot/conf/live/maliquespooner.com/`.
+- If you reissue or renew certificates on the host, copy the updated `/etc/letsencrypt` contents back into `infra/certbot/conf/` before restarting nginx.
 
 ## Future Privacy-First Deployment Model
 
