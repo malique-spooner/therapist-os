@@ -15,10 +15,45 @@ interface GoogleMapCanvasProps {
   className?: string;
 }
 
+interface GoogleMapsNamespace {
+  Map: new (element: HTMLElement, options: Record<string, unknown>) => GoogleMapInstance;
+  Polyline: new (options: Record<string, unknown>) => GoogleMapOverlay;
+  Circle: new (options: Record<string, unknown>) => GoogleMapOverlay;
+  LatLngBounds: new () => GoogleLatLngBounds;
+}
+
+interface GoogleMapOverlay {
+  setMap(map: GoogleMapInstance | null): void;
+}
+
+interface GoogleLatLng {
+  lat(): number;
+  lng(): number;
+}
+
+interface GoogleLatLngBounds {
+  extend(point: { lat: number; lng: number }): void;
+  isEmpty(): boolean;
+}
+
+interface GoogleMapInstance {
+  setMapTypeId(type: string): void;
+  panTo(center: { lat: number; lng: number }): void;
+  setZoom(zoom: number): void;
+  getZoom?(): number;
+  getHeading?(): number;
+  setHeading?(heading: number): void;
+  getTilt?(): number;
+  setTilt?(tilt: number): void;
+  fitBounds(bounds: GoogleLatLngBounds, padding?: number): void;
+  getCenter?(): GoogleLatLng | null;
+  moveCamera?(options: { center: { lat: number; lng: number }; zoom: number; heading: number; tilt: number }): void;
+}
+
 declare global {
   interface Window {
-    __therapistGoogleMapsPromise?: Promise<any>;
-    google?: any;
+    __therapistGoogleMapsPromise?: Promise<GoogleMapsNamespace | null>;
+    google?: { maps?: GoogleMapsNamespace };
   }
 }
 
@@ -145,8 +180,8 @@ export function GoogleMapCanvas({
   className,
 }: GoogleMapCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<any>(null);
-  const overlaysRef = useRef<any[]>([]);
+  const mapRef = useRef<GoogleMapInstance | null>(null);
+  const overlaysRef = useRef<GoogleMapOverlay[]>([]);
   const animationFrameRef = useRef<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
