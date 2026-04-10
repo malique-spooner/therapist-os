@@ -61,6 +61,8 @@ function SourceActivityCard({ item }: { item: DataSourceActivityItemPayload }) {
         ? 'Auto only'
         : item.connected
           ? 'Connected'
+          : item.id === 'owntracks' && item.available
+            ? 'Waiting for ping'
           : item.available
             ? 'Ready'
             : 'Setup';
@@ -88,7 +90,9 @@ function SourceActivityCard({ item }: { item: DataSourceActivityItemPayload }) {
       </div>
 
       <p className="mt-3 text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-        {hasRows
+        {item.id === 'owntracks' && item.available && !hasRows
+          ? 'OwnTracks credentials are saved, but no successful phone publish has written real location data yet. Send a manual publish from the phone to confirm the pipeline.'
+          : hasRows
           ? `Latest saved data reaches ${item.latestDataDate ?? 'the current range'} and this source currently has ${item.recordsAvailable} stored row${item.recordsAvailable === 1 ? '' : 's'}.`
           : 'No stored rows yet in this dataset. The connection may still be set up correctly, but nothing has been written here yet.'}
       </p>

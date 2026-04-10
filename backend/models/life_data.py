@@ -309,6 +309,73 @@ class LocationCompanionLogDemo(_LocationCompanionLogMixin, Base):
     __tablename__ = "location_companion_logs_demo"
 
 
+class _LocationPlaceMemoryMixin:
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    place_key: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    label: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    tone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    merged_into_key: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    split_from_key: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    visit_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LocationPlaceMemoryReal(_LocationPlaceMemoryMixin, Base):
+    __tablename__ = "location_place_memory_real"
+
+
+class LocationPlaceMemoryDemo(_LocationPlaceMemoryMixin, Base):
+    __tablename__ = "location_place_memory_demo"
+
+
+class _LocationPlaceHistoryMixin:
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    place_key: Mapped[str] = mapped_column(String(120), index=True)
+    action: Mapped[str] = mapped_column(String(30), index=True)
+    detail_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class LocationPlaceHistoryReal(_LocationPlaceHistoryMixin, Base):
+    __tablename__ = "location_place_history_real"
+
+
+class LocationPlaceHistoryDemo(_LocationPlaceHistoryMixin, Base):
+    __tablename__ = "location_place_history_demo"
+
+
+class _LocationEventMixin:
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
+    event_type: Mapped[str] = mapped_column(String(40), index=True)
+    trigger: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    waypoint_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    waypoint_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    radius: Mapped[float | None] = mapped_column(Float, nullable=True)
+    raw_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class LocationEventReal(_LocationEventMixin, Base):
+    __tablename__ = "location_events_real"
+
+
+class LocationEventDemo(_LocationEventMixin, Base):
+    __tablename__ = "location_events_demo"
+
+
 class _UserProfileMixin:
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

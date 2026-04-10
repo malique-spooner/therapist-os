@@ -25,6 +25,7 @@ from ..config import settings
 from ..services.ai.context_builder import ContextBuilder
 from ..services.data_mode import dataset_model, demo_filter, normalize_data_mode
 from ..services.ai.providers import REAL_PROVIDERS, has_real_provider, provider_payloads, select_provider
+from ..services.data_sources import DataSourceService
 from ..services.whisper_service import WhisperService
 from ..services.tts_service import KOKORO_VOICES, TherapistTTSService
 
@@ -32,6 +33,7 @@ router = APIRouter(prefix="/ai", tags=["ai"], dependencies=[Depends(verify_api_k
 context_builder = ContextBuilder()
 whisper_service = WhisperService()
 tts_service = TherapistTTSService()
+data_source_service = DataSourceService()
 logger = get_logger(__name__)
 
 
@@ -150,7 +152,7 @@ def get_providers() -> list[dict]:
 
 
 @router.get("/runtime-options", response_model=AIRuntimeOptionsSchema)
-async def get_runtime_options() -> dict:
+async def get_runtime_options(db: Session = Depends(get_db)) -> dict:
     provider = REAL_PROVIDERS["local-qwen"]
     local_models = [settings.THERAPIST_DEFAULT_MODEL]
     if hasattr(provider, "list_models"):
@@ -172,6 +174,7 @@ async def get_runtime_options() -> dict:
             "kokoro": KOKORO_VOICES,
             "piper": ["en_US-lessac-medium"],
         },
+        "googleMapsApiKey": data_source_service.get_runtime_config("google_maps", db).get("api_key"),
     }
 
 

@@ -10,7 +10,7 @@ def test_data_sources_list_returns_known_sources(client):
     assert response.status_code == 200
     payload = response.json()
     ids = {item["id"] for item in payload}
-    assert {"garmin", "truelayer", "spotify", "google_drive", "voice_journal"} <= ids
+    assert {"garmin", "truelayer", "spotify", "google_drive", "google_maps", "voice_journal"} <= ids
     google_drive = next(item for item in payload if item["id"] == "google_drive")
     assert google_drive["folderPath"] == "Therapist OS / Google Takeout"
 
@@ -67,6 +67,27 @@ def test_google_drive_setup_requires_oauth_fields_and_instructions(client):
     payload = response.json()
     assert {field["key"] for field in payload["fields"]} == {"folder_path", "client_id", "client_secret", "refresh_token"}
     assert any("callback URL" in instruction for instruction in payload["instructions"])
+
+
+def test_owntracks_setup_returns_public_webhook_url(client):
+    response = client.get("/api/data-sources/owntracks/setup", headers={"X-API-Key": "dev-secret-key"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["webhookUrl"] == "http://localhost:3000/api/location/owntracks"
+    assert ":8000" not in payload["webhookUrl"]
+    assert any("Basic authentication" in instruction for instruction in payload["instructions"])
+
+
+def test_google_maps_setup_requires_browser_api_key(client):
+    response = client.get("/api/data-sources/google_maps/setup", headers={"X-API-Key": "dev-secret-key"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == "google_maps"
+    assert payload["actionLabel"] == "Save Maps API key"
+    assert {field["key"] for field in payload["fields"]} == {"api_key"}
+    assert any("browser API key" in instruction for instruction in payload["instructions"])
 
 
 def test_data_source_setup_save_marks_source_connected(client):

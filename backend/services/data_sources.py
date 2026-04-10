@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import hashlib
 import secrets
 from typing import Callable
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 
 import httpx
 
@@ -26,6 +26,10 @@ from ..models.life_data import (
     LocationDailySummaryReal,
     LocationDataDemo,
     LocationDataReal,
+    LocationEventDemo,
+    LocationEventReal,
+    LocationPlaceMemoryDemo,
+    LocationPlaceMemoryReal,
     MusicDataDemo,
     MusicDataReal,
     SpotifyPlayEventDemo,
@@ -141,6 +145,26 @@ DEFAULT_SOURCES = {
             ],
         },
     },
+    "google_maps": {
+        "name": "Google Maps",
+        "category": "Maps - Interactive map canvas and cinematic 3D recaps",
+        "icon": "🗺️",
+        "hint": "Save a Google Maps browser API key so Therapist OS can render map views and later power 3D recap scenes.",
+        "setup": {
+            "mode": "api-key",
+            "title": "Connect Google Maps",
+            "description": "Save a Google Maps browser API key for the map canvas, place visuals, and future cinematic 3D recap work.",
+            "actionLabel": "Save Maps API key",
+            "instructions": [
+                "Create a Google Maps Platform browser API key in the Google Cloud console.",
+                "Restrict the key to the Maps JavaScript API and the domains you control before using it in production.",
+                "This key is for frontend map rendering, so it is expected to be a browser-safe key rather than a secret server key.",
+            ],
+            "fields": [
+                {"key": "api_key", "label": "Google Maps browser API key", "type": "password", "placeholder": "AIza...", "required": True},
+            ],
+        },
+    },
     "youtube": {
         "name": "YouTube",
         "category": "Consumption - Watch History",
@@ -151,7 +175,7 @@ DEFAULT_SOURCES = {
         "name": "OwnTracks",
         "category": "Location - Continuous GPS Logging",
         "icon": "📍",
-        "hint": "Save a webhook username and password, then paste the URL into OwnTracks on your phone.",
+        "hint": "Save a webhook username and password, then set OwnTracks to HTTP mode with Basic auth using the public webhook URL.",
         "setup": {
             "mode": "webhook",
             "title": "Connect OwnTracks",
@@ -159,8 +183,9 @@ DEFAULT_SOURCES = {
             "actionLabel": "Save webhook login",
             "instructions": [
                 "Save a private webhook username and password here.",
-                "Open OwnTracks on your phone, choose HTTP mode, and paste the webhook URL shown below.",
-                "Set the same username and password in OwnTracks so Therapist OS can verify incoming location pings.",
+                "Open OwnTracks on your phone, choose HTTP mode, and paste the public HTTPS webhook URL shown below.",
+                "Turn Basic authentication on in OwnTracks and enter the same username and password there.",
+                "Keep WebSockets off for this setup, then send a manual location publish to confirm the connection.",
             ],
             "fields": [
                 {"key": "username", "label": "OwnTracks username", "type": "text", "placeholder": "owntracks-user", "required": True},
@@ -212,6 +237,7 @@ SENSITIVE_FIELD_KEYS: dict[str, set[str]] = {
     "truelayer": {"client_secret", "refresh_token", "access_token", "pkce_verifier", "oauth_state"},
     "spotify": {"client_secret", "refresh_token", "access_token", "oauth_state"},
     "google_drive": {"client_secret", "refresh_token", "access_token", "oauth_state"},
+    "google_maps": {"api_key"},
     "owntracks": {"password"},
     "weather": {"api_key"},
 }
@@ -249,7 +275,7 @@ class DataSourceService:
 
     @staticmethod
     def _manual_sync_allowed(source_id: str) -> bool:
-        return source_id != "garmin"
+        return source_id not in {"garmin", "owntracks", "google_maps"}
 
     def _config(self, record: DataSourceConnection | None) -> dict[str, str]:
         if not record:
@@ -284,6 +310,7 @@ class DataSourceService:
         spotify = self._record("spotify", db)
         owntracks = self._record("owntracks", db)
         google_drive = self._record("google_drive", db)
+        google_maps = self._record("google_maps", db)
         weather = self._record("weather", db)
 
         return {
@@ -291,6 +318,7 @@ class DataSourceService:
             "truelayer": TrueLayerIngestionService(self._config(truelayer)).is_configured,
             "spotify": SpotifyIngestionService(self._config(spotify)).is_configured,
             "google_drive": bool(self._config(google_drive).get("folder_path") and self._config(google_drive).get("client_id") and self._config(google_drive).get("client_secret") and self._config(google_drive).get("refresh_token")),
+            "google_maps": bool(self._config(google_maps).get("api_key") or settings.GOOGLE_MAPS_API_KEY),
             "youtube": False,
             "owntracks": bool(self._config(owntracks).get("username") and self._config(owntracks).get("password")),
             "google_calendar": False,
@@ -299,9 +327,11 @@ class DataSourceService:
             "weather": bool(self._config(weather).get("api_key")),
         }
 
-    def _is_connected(self, source_id: str, config: dict[str, str], available: bool) -> bool:
+    def _is_connected(self, source_id: str, config: dict[str, str], available: bool, last_sync_status: str | None = None) -> bool:
         if not available:
             return False
+        if source_id == "owntracks":
+            return last_sync_status == "success"
         if source_id in {"spotify", "truelayer", "google_drive"}:
             return bool(config.get("refresh_token"))
         return True
@@ -318,6 +348,8 @@ class DataSourceService:
     def _connection_hint(self, source_id: str, config: dict[str, str], available: bool, connected: bool) -> str | None:
         if connected:
             return None
+        if source_id == "owntracks" and available:
+            return "Webhook login saved. Open OwnTracks on your phone, use HTTP mode with Basic auth, then send a manual location publish."
         if source_id == "spotify" and self._can_authorize(source_id, config):
             return "App credentials saved. Continue with Spotify sign-in to finish connecting your account."
         if source_id == "truelayer" and self._can_authorize(source_id, config):
@@ -444,6 +476,8 @@ class DataSourceService:
                 (LocationDataReal, LocationDataDemo, "timestamp", "timestamp"),
                 (LocationDailySummaryReal, LocationDailySummaryDemo, "date", "updated_at"),
                 (LocationCompanionLogReal, LocationCompanionLogDemo, "date", "updated_at"),
+                (LocationPlaceMemoryReal, LocationPlaceMemoryDemo, "updated_at", "updated_at"),
+                (LocationEventReal, LocationEventDemo, "timestamp", "created_at"),
             ]
         if source_id == "voice_journal":
             return []
@@ -599,7 +633,7 @@ class DataSourceService:
             record.category = default["category"]
             config = self._config(record)
             record.available = availability.get(source_id, False)
-            record.connected = self._is_connected(source_id, config, record.available)
+            record.connected = self._is_connected(source_id, config, record.available, record.last_sync_status)
             record.connection_hint = self._connection_hint(source_id, config, record.available, record.connected)
             payload.append(self.serialize(record, default["icon"]))
         db.commit()
@@ -612,7 +646,7 @@ class DataSourceService:
         available = self._availability(db).get(source_id, False)
         config = self._config(record)
         record.available = available
-        record.connected = self._is_connected(source_id, config, available)
+        record.connected = self._is_connected(source_id, config, available, record.last_sync_status)
         if not record.connected:
             record.connected = False
             record.connection_hint = self._connection_hint(source_id, config, available, False)
@@ -866,7 +900,7 @@ class DataSourceService:
 
         self._store_config(source_id, record, next_config)
         record.available = self._availability(db).get(source_id, False)
-        record.connected = self._is_connected(source_id, next_config, record.available)
+        record.connected = self._is_connected(source_id, next_config, record.available, record.last_sync_status)
         record.last_error = None
         record.connection_hint = self._connection_hint(source_id, next_config, record.available, record.connected)
         if source_id == "garmin":
@@ -961,7 +995,7 @@ class DataSourceService:
             next_config["access_token"] = str(token_payload["access_token"])
         self._store_config(source_id, record, next_config)
         record.available = self._availability(db).get(source_id, False)
-        record.connected = self._is_connected(source_id, next_config, record.available)
+        record.connected = self._is_connected(source_id, next_config, record.available, record.last_sync_status)
         record.last_error = None
         record.connection_hint = self._connection_hint(source_id, next_config, record.available, record.connected)
         db.commit()
@@ -1051,10 +1085,7 @@ class DataSourceService:
     def _webhook_url(self, source_id: str) -> str | None:
         if source_id != "owntracks":
             return None
-        parsed = urlparse(settings.FRONTEND_URL)
-        host = parsed.hostname or "localhost"
-        scheme = parsed.scheme or "http"
-        base = f"{scheme}://{host}:8000"
+        base = settings.FRONTEND_URL.rstrip("/")
         return f"{base}{settings.API_V1_PREFIX}/location/owntracks"
 
     def _callback_url(self, source_id: str) -> str | None:
@@ -1092,7 +1123,10 @@ class DataSourceService:
         if source_id not in DEFAULT_SOURCES:
             raise KeyError(source_id)
         record = self._record(source_id, db)
-        return self._config(record)
+        config = self._config(record)
+        if source_id == "google_maps" and not config.get("api_key") and settings.GOOGLE_MAPS_API_KEY:
+            config["api_key"] = settings.GOOGLE_MAPS_API_KEY
+        return config
 
     @staticmethod
     def _relative_time(timestamp: datetime | None) -> str | None:
@@ -1144,7 +1178,7 @@ class DataSourceService:
             record.category = default["category"]
             config = self._config(record)
             record.available = availability.get(source_id, False)
-            record.connected = self._is_connected(source_id, config, record.available)
+            record.connected = self._is_connected(source_id, config, record.available, record.last_sync_status)
             record.connection_hint = self._connection_hint(source_id, config, record.available, record.connected)
             serialized = self.serialize(record, default["icon"])
             count, last_collected_at, latest_data_date = self._dataset_activity(source_id, normalized_mode, db)

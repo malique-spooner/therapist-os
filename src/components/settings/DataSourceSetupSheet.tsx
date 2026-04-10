@@ -26,6 +26,17 @@ function relativeDateLabel(timestamp: string) {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
+function attemptStatusLabel(status: string) {
+  switch (status) {
+    case 'success':
+      return 'Ping received';
+    case 'failed':
+      return 'Ping failed';
+    default:
+      return status.replace(/-/g, ' ');
+  }
+}
+
 interface DataSourceSetupSheetProps {
   source: DataSourcePayload | null;
   setup: DataSourceSetupPayload | null;
@@ -84,6 +95,7 @@ export function DataSourceSetupSheet({
     if (currentSource.lastSyncStatus === 'automatic-only') return 'Automatic only';
     if (currentSource.connected) return 'Connected';
     if (currentSource.connectionState === 'authorization-required') return 'Finish sign-in';
+    if (currentSource.id === 'owntracks' && currentSource.available) return 'Waiting for ping';
     if (currentSource.available) return 'Ready to sync';
     return 'Setup required';
   }, [source]);
@@ -101,8 +113,9 @@ export function DataSourceSetupSheet({
       case 'owntracks':
         return [
           'Save a private username and password here first.',
-          'Copy the webhook URL into OwnTracks on your phone in HTTP mode.',
-          'Set the same username and password in OwnTracks, then send a location ping.',
+          'Open OwnTracks on your phone, switch the connection to HTTP mode, and paste the public webhook URL.',
+          'Turn Basic authentication on, enter the same username and password, keep WebSockets off, and send a manual location publish.',
+          'Come back here and check the recent attempts list to confirm the ping was accepted.',
         ];
       case 'garmin':
         return [
@@ -289,7 +302,8 @@ export function DataSourceSetupSheet({
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold capitalize" style={{ color: 'var(--color-text)' }}>
-                          {attempt.status}
+                          {attemptStatusLabel(attempt.status)}
+                          {typeof attempt.rowsSynced === 'number' ? ` · ${attempt.rowsSynced} row${attempt.rowsSynced === 1 ? '' : 's'}` : ''}
                         </p>
                         <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
                           {relativeDateLabel(attempt.attemptedAt)} · {attempt.trigger}

@@ -6,6 +6,20 @@ from backend.models.life_data import AIConversationReal, AIMessageReal, MonthlyB
 from backend.services.ai.providers import AIResponse
 
 
+def test_ai_runtime_options_include_google_maps_key_from_saved_settings(client):
+    save = client.post(
+        "/api/data-sources/google_maps/setup",
+        headers={"X-API-Key": "dev-secret-key"},
+        json={"values": {"api_key": "AIza-test-key"}},
+    )
+    assert save.status_code == 200
+
+    response = client.get("/api/ai/runtime-options", headers={"X-API-Key": "dev-secret-key"})
+
+    assert response.status_code == 200
+    assert response.json()["googleMapsApiKey"] == "AIza-test-key"
+
+
 def test_ai_message_creates_conversation_and_updates_budget(client, db_session, monkeypatch):
     start_budget_row = db_session.scalar(select(MonthlyBudgetReal).limit(1))
     start_budget = start_budget_row.spent_pence if start_budget_row else 0

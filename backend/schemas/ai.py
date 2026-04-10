@@ -42,6 +42,7 @@ class AIRuntimeOptionsSchema(BaseModel):
     defaultTtsProvider: str
     defaultTtsVoice: str
     ttsVoices: dict[str, list[str]]
+    googleMapsApiKey: str | None = None
 
 
 class MessageSchema(BaseModel):

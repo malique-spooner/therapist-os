@@ -81,6 +81,21 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     manualSyncAllowed: true,
   },
   {
+    id: 'google_maps',
+    name: 'Google Maps',
+    category: 'Maps - interactive map canvas and cinematic 3D recaps',
+    icon: '🗺️',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Save a Google Maps browser API key so Therapist OS can render map views and future 3D recap scenes.',
+    lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: false,
+  },
+  {
     id: 'owntracks',
     name: 'OwnTracks',
     category: 'Location - live phone pings and daily movement summaries',
@@ -89,7 +104,7 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     available: false,
     lastSync: null,
     lastSyncStatus: null,
-    connectionHint: 'Save a webhook username and password, then paste the generated webhook URL into OwnTracks on your phone.',
+    connectionHint: 'Save a webhook username and password, then set OwnTracks to HTTP mode with Basic auth using the public webhook URL.',
     lastError: null,
     syncBlocked: false,
     syncGuardMessage: null,
@@ -212,6 +227,7 @@ function getSourceStatusLabel(source: DataSourcePayload) {
   if (source.lastSyncStatus === 'automatic-only') return 'Auto only';
   if (source.connected) return 'Connected';
   if (source.connectionState === 'authorization-required') return 'Finish sign-in';
+  if (source.id === 'owntracks' && source.available) return 'Waiting for ping';
   if (source.available) return 'Ready';
   return 'Setup';
 }
@@ -266,6 +282,7 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
           defaultTtsProvider: 'kokoro',
           defaultTtsVoice: 'af_heart',
           ttsVoices: { kokoro: ['af_heart'], piper: ['en_US-lessac-medium'] },
+          googleMapsApiKey: null,
         });
       }
     });

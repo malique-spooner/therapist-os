@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     GOOGLE_AI_API_KEY: str = ""
+    GOOGLE_MAPS_API_KEY: str = ""
     GROQ_API_KEY: str = ""
     OPENWEATHER_API_KEY: str = ""
     GARMIN_EMAIL: str = ""

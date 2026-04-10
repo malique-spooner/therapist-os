@@ -23,6 +23,7 @@ describe('SettingsPage data sources', () => {
               kokoro: ['af_heart', 'af_bella'],
               piper: ['en_US-lessac-medium'],
             },
+            googleMapsApiKey: null,
           }),
         } as Response);
       }
@@ -117,6 +118,7 @@ describe('SettingsPage data sources', () => {
     expect(await screen.findByText('Garmin Connect')).toBeInTheDocument();
     expect(screen.getByText(/GARMIN_EMAIL/i)).toBeInTheDocument();
     expect(screen.getByText('Google Drive')).toBeInTheDocument();
+    expect(screen.getByText('Google Maps')).toBeInTheDocument();
     expect(screen.getByText(/Folder: Therapist OS \/ Google Takeout/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Brain' })).toBeInTheDocument();
     expect(screen.getByText('Therapist LLM')).toBeInTheDocument();
@@ -144,5 +146,60 @@ describe('SettingsPage data sources', () => {
     expect(screen.getByText('TrueLayer')).toBeInTheDocument();
     expect(screen.getByText('Google Drive')).toBeInTheDocument();
     expect(screen.getByText(/Live connection status unavailable/i)).toBeInTheDocument();
+  });
+
+  it('shows OwnTracks as waiting for ping after credentials are saved but before the first publish', async () => {
+    global.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/ai/runtime-options')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            localModels: ['qwen2.5:3b'],
+            defaultModel: 'qwen2.5:3b',
+            ttsProviders: ['kokoro'],
+            defaultTtsProvider: 'kokoro',
+            defaultTtsVoice: 'af_heart',
+            ttsVoices: { kokoro: ['af_heart'] },
+            googleMapsApiKey: null,
+          }),
+        } as Response);
+      }
+
+      if (url.endsWith('/api/data-sources')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              id: 'owntracks',
+              name: 'OwnTracks',
+              category: 'Location - live phone pings and daily movement summaries',
+              icon: '📍',
+              connected: false,
+              available: true,
+              connectionState: 'ready',
+              lastSync: null,
+              lastSyncStatus: null,
+              connectionHint: 'Webhook login saved. Open OwnTracks on your phone, use HTTP mode with Basic auth, then send a manual location publish.',
+              lastError: null,
+              syncBlocked: false,
+              syncGuardMessage: null,
+              manualSyncAllowed: false,
+            },
+          ]),
+        } as Response);
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({}),
+      } as Response);
+    }) as unknown as typeof fetch;
+
+    render(<SettingsPage onBack={() => {}} onOpenBrain={() => {}} />);
+
+    expect(await screen.findByText('OwnTracks')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for ping')).toBeInTheDocument();
   });
 });

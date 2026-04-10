@@ -137,6 +137,85 @@ export interface LocationCompanionPayload {
   note?: string | null;
 }
 
+export interface LocationPlaceMemoryPayload {
+  placeKey: string;
+  label?: string | null;
+  suggestedLabel?: string | null;
+  category?: string | null;
+  tone?: string | null;
+  note?: string | null;
+  confidenceScore?: number | null;
+  status?: string | null;
+  mergedIntoKey?: string | null;
+  splitFromKey?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  visitCount?: number | null;
+  totalMinutes?: number | null;
+  averageDwellMinutes?: number | null;
+  firstSeenAt?: string | null;
+  lastSeenAt?: string | null;
+  lastVisited?: string | null;
+  historyCount?: number | null;
+  insight?: string | null;
+}
+
+export interface LocationPlaceHistoryPayload {
+  id: number;
+  placeKey: string;
+  action: string;
+  detail?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface LocationVisitPayload {
+  id: string;
+  placeKey: string;
+  placeLabel: string;
+  category: string;
+  startTimestamp: string;
+  endTimestamp: string;
+  dwellMinutes: number;
+  latitude: number;
+  longitude: number;
+  highlight: string;
+  tone: 'positive' | 'neutral' | 'draining';
+}
+
+export interface LocationRecapScenePayload {
+  id: string;
+  title: string;
+  description: string;
+  latitude: number;
+  longitude: number;
+  zoom: number;
+  heading: number;
+  tilt: number;
+  accent: string;
+  durationMs?: number | null;
+}
+
+export interface LocationRangeStatPayload {
+  label: string;
+  value: string;
+  detail: string;
+}
+
+export interface LocationIntelligencePayload {
+  mode: DataMode;
+  hasRealMapData: boolean;
+  heroTitle: string;
+  heroBody: string;
+  summaries: LocationSummaryPayload[];
+  selectedDay?: LocationSummaryPayload | null;
+  points: LocationPointPayload[];
+  selectedDayPoints: LocationPointPayload[];
+  visits: LocationVisitPayload[];
+  places: LocationPlaceMemoryPayload[];
+  recapScenes: LocationRecapScenePayload[];
+  rangeStats: LocationRangeStatPayload[];
+}
+
 export interface AppOpenPromptPayload {
   promptKey: string;
   category: string;
@@ -280,6 +359,7 @@ export interface AIRuntimeOptionsPayload {
   defaultTtsProvider: 'kokoro' | 'piper';
   defaultTtsVoice: string;
   ttsVoices: Record<string, string[]>;
+  googleMapsApiKey?: string | null;
 }
 
 export interface ConversationMessagePayload {
@@ -466,6 +546,29 @@ export const api = {
   getLocationCompanions: (date: string) => request<LocationCompanionPayload>(withDataMode(`/api/location/companions?date=${date}`)),
   saveLocationCompanions: (date: string, payload: Omit<LocationCompanionPayload, 'date'>) =>
     request<LocationCompanionPayload>(`/api/location/companions?date=${date}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  getLocationIntelligence: (query: { period?: string; date?: string; startDate?: string; endDate?: string }) => {
+    const params = new URLSearchParams();
+    if (query.period) params.set('period', query.period);
+    if (query.date) params.set('date', query.date);
+    if (query.startDate) params.set('startDate', query.startDate);
+    if (query.endDate) params.set('endDate', query.endDate);
+    return request<LocationIntelligencePayload>(withDataMode(`/api/location/intelligence?${params.toString()}`));
+  },
+  getLocationPlaces: () => request<LocationPlaceMemoryPayload[]>(withDataMode('/api/location/places')),
+  saveLocationPlace: (placeKey: string, payload: Omit<LocationPlaceMemoryPayload, 'placeKey'>) =>
+    request<LocationPlaceMemoryPayload>(`/api/location/places/${encodeURIComponent(placeKey)}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  getLocationPlaceHistory: (placeKey: string) =>
+    request<LocationPlaceHistoryPayload[]>(withDataMode(`/api/location/places/${encodeURIComponent(placeKey)}/history`)),
+  mergeLocationPlace: (placeKey: string, targetPlaceKey: string) =>
+    request<LocationPlaceMemoryPayload>(`/api/location/places/${encodeURIComponent(placeKey)}/merge`, {
+      method: 'POST',
+      body: JSON.stringify({ targetPlaceKey }),
+    }),
+  splitLocationPlace: (placeKey: string, newPlaceKey: string, label?: string | null) =>
+    request<LocationPlaceMemoryPayload>(`/api/location/places/${encodeURIComponent(placeKey)}/split`, {
+      method: 'POST',
+      body: JSON.stringify({ newPlaceKey, label: label ?? null }),
+    }),
   getNutrition: (query: string | DateQuery) =>
     request<NutritionPayload[]>(withDataMode(withDateQuery('/api/nutrition', typeof query === 'string' ? { period: query } : query))),
   getNutritionForDate: (date: string) => request<NutritionPayload>(withDataMode(`/api/nutrition/day?date=${date}`)),

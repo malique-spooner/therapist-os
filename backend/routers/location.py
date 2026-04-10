@@ -15,16 +15,30 @@ from ..models.life_data import (
     LocationDailySummaryReal,
     LocationDataDemo,
     LocationDataReal,
+    LocationEventDemo,
+    LocationEventReal,
+    LocationPlaceMemoryDemo,
+    LocationPlaceMemoryReal,
 )
-from ..schemas.open_prompts import LocationCompanionUpdateSchema
+from ..schemas.location import (
+    LocationCompanionUpdateSchema,
+    LocationIntelligenceResponseSchema,
+    LocationPlaceHistorySchema,
+    LocationPlaceMemorySchema,
+    LocationPlaceMemoryUpdateSchema,
+    LocationPlaceMergeSchema,
+    LocationPlaceSplitSchema,
+)
 from ..services.data_mode import dataset_model
 from ..services.data_sources import DataSourceService
+from ..services.location_intelligence import LocationIntelligenceService
 from ..services.location_summary import LocationSummaryService
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/location", tags=["location"])
 summary_service = LocationSummaryService()
 data_source_service = DataSourceService()
+location_intelligence_service = LocationIntelligenceService()
 
 
 def _serialize_point(point) -> dict:
@@ -54,6 +68,16 @@ def _serialize_companion_log(row) -> dict:
         "date": row.date.isoformat(),
         "personIds": row.person_ids or [],
         "contextLabel": row.context_label,
+        "note": row.note,
+    }
+
+
+def _serialize_place_memory(row) -> dict:
+    return {
+        "placeKey": row.place_key,
+        "label": row.label,
+        "category": row.category,
+        "tone": row.tone,
         "note": row.note,
     }
 
@@ -125,6 +149,51 @@ def upsert_location_companions(date: str, payload: LocationCompanionUpdateSchema
     return _serialize_companion_log(row)
 
 
+@router.get("/places", dependencies=[Depends(verify_api_key)])
+def get_location_places(mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
+    place_model = dataset_model(mode, LocationPlaceMemoryReal, LocationPlaceMemoryDemo)
+    rows = db.scalars(select(place_model).order_by(place_model.updated_at.desc())).all()
+    return [_serialize_place_memory(row) for row in rows]
+
+
+@router.put("/places/{place_key}", dependencies=[Depends(verify_api_key)])
+def upsert_location_place(place_key: str, payload: LocationPlaceMemoryUpdateSchema, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
+    return location_intelligence_service.upsert_place(place_key, payload.model_dump(), mode, db)
+
+
+@router.get("/places/{place_key}/history", dependencies=[Depends(verify_api_key)], response_model=list[LocationPlaceHistorySchema])
+def get_location_place_history(place_key: str, mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
+    return location_intelligence_service.get_place_history(place_key, mode, db)
+
+
+@router.post("/places/{place_key}/merge", dependencies=[Depends(verify_api_key)], response_model=LocationPlaceMemorySchema)
+def merge_location_place(place_key: str, payload: LocationPlaceMergeSchema, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
+    try:
+        return location_intelligence_service.merge_place(place_key, payload.targetPlaceKey, mode, db)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/places/{place_key}/split", dependencies=[Depends(verify_api_key)], response_model=LocationPlaceMemorySchema)
+def split_location_place(place_key: str, payload: LocationPlaceSplitSchema, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
+    try:
+        return location_intelligence_service.split_place(place_key, payload.newPlaceKey, payload.label, mode, db)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/intelligence", dependencies=[Depends(verify_api_key)], response_model=LocationIntelligenceResponseSchema)
+def get_location_intelligence(
+    period: str | None = "this-week",
+    date: str | None = None,
+    startDate: str | None = None,
+    endDate: str | None = None,
+    mode: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
+    return location_intelligence_service.get_intelligence(period, date, startDate, endDate, mode, db)
+
+
 @router.post("/owntracks")
 async def owntracks_webhook(
     payload: dict,
@@ -136,9 +205,13 @@ async def owntracks_webhook(
     expected_username = config.get("username")
     expected_password = config.get("password")
 
+    def reject(status_code: int, detail: str) -> None:
+        data_source_service.mark_sync_result("owntracks", success=False, db=db, error=detail, rows_synced=0)
+        raise HTTPException(status_code=status_code, detail=detail)
+
     if expected_username and expected_password:
         if not authorization:
-            raise HTTPException(status_code=401, detail="Missing OwnTracks credentials")
+            reject(401, "Missing OwnTracks credentials")
         try:
             import base64
 
@@ -148,18 +221,39 @@ async def owntracks_webhook(
             decoded = base64.b64decode(encoded).decode("utf-8")
             username, password = decoded.split(":", 1)
         except Exception as exc:  # noqa: BLE001
-            raise HTTPException(status_code=401, detail="Invalid OwnTracks credentials") from exc
+            reject(401, "Invalid OwnTracks credentials")
         if not (secrets.compare_digest(username, expected_username) and secrets.compare_digest(password, expected_password)):
-            raise HTTPException(status_code=401, detail="Invalid OwnTracks credentials")
+            reject(401, "Invalid OwnTracks credentials")
     elif settings.OWNTRACKS_SECRET and x_owntracks_secret != settings.OWNTRACKS_SECRET:
-        raise HTTPException(status_code=401, detail="Invalid OwnTracks secret")
-
-    if payload.get("_type") != "location":
-        raise HTTPException(status_code=400, detail="Unsupported OwnTracks payload")
+        reject(401, "Invalid OwnTracks secret")
 
     tst = payload.get("tst")
     if tst is None:
-        raise HTTPException(status_code=400, detail="Missing timestamp")
+        reject(400, "Missing timestamp")
+
+    payload_type = payload.get("_type")
+    if payload_type in {"transition", "waypoint", "region"}:
+        event_model = dataset_model("real-only", LocationEventReal, LocationEventDemo)
+        waypoint_name = payload.get("wtst") or payload.get("name") or payload.get("desc") or payload.get("regions")
+        event = event_model(
+            timestamp=datetime.fromtimestamp(int(tst), tz=UTC).replace(tzinfo=None),
+            event_type=str(payload_type),
+            trigger=payload.get("event") or payload.get("trigger") or payload.get("desc"),
+            waypoint_name=waypoint_name,
+            waypoint_id=payload.get("tid") or payload.get("waypoint") or payload.get("id") or payload.get("region"),
+            latitude=float(payload["lat"]) if payload.get("lat") is not None else None,
+            longitude=float(payload["lon"]) if payload.get("lon") is not None else None,
+            radius=float(payload["rad"]) if payload.get("rad") is not None else None,
+            raw_payload=payload,
+        )
+        db.add(event)
+        db.commit()
+        db.refresh(event)
+        data_source_service.mark_sync_result("owntracks", success=True, db=db, rows_synced=1)
+        return {"detail": "Location event received"}
+
+    if payload_type != "location":
+        reject(400, "Unsupported OwnTracks payload")
 
     point = LocationDataReal(
         timestamp=datetime.fromtimestamp(int(tst), tz=UTC).replace(tzinfo=None),
@@ -173,6 +267,6 @@ async def owntracks_webhook(
     db.refresh(point)
 
     await summary_service.summarise_day(point.timestamp.date(), db)
-    data_source_service.mark_sync_result("owntracks", success=True, db=db)
+    data_source_service.mark_sync_result("owntracks", success=True, db=db, rows_synced=1)
 
     return {"detail": "Location received"}
