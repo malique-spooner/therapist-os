@@ -1,6 +1,6 @@
 """add location place memory and raw events
 
-Revision ID: 0021_location_place_memory_and_events
+Revision ID: 0021_location_places_events
 Revises: 0020_admin_auth
 Create Date: 2026-04-10 06:10:00.000000
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0021_location_place_memory_and_events"
+revision = "0021_location_places_events"
 down_revision = "0020_admin_auth"
 branch_labels = None
 depends_on = None
