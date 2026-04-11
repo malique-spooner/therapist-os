@@ -250,7 +250,8 @@ export function GoogleMapCanvas({
   }, []);
 
   useEffect(() => {
-    if (!mapRef.current || !window.google?.maps || !mapReady) {
+    const map = mapRef.current;
+    if (!map || !window.google?.maps || !mapReady) {
       return;
     }
 
@@ -268,7 +269,7 @@ export function GoogleMapCanvas({
         strokeOpacity: 0.9,
         strokeWeight: 4,
       });
-      polyline.setMap(mapRef.current);
+      polyline.setMap(map);
       overlaysRef.current.push(polyline);
     }
 
@@ -279,7 +280,7 @@ export function GoogleMapCanvas({
         strokeWeight: (place.key ?? place.placeKey) === highlightedPlaceKey ? 2 : 1,
         fillColor: place.tone === 'positive' ? '#f4a261' : place.tone === 'draining' ? '#ef4444' : '#f8fafc',
         fillOpacity: (place.key ?? place.placeKey) === highlightedPlaceKey ? 0.9 : 0.68,
-        map: mapRef.current,
+        map,
         center: { lat: place.latitude ?? 51.5074, lng: place.longitude ?? -0.1278 },
         radius: (place.key ?? place.placeKey) === 'home' ? 110 : Math.max(45, Math.min(160, (place.averageDwellMinutes ?? 60) * 1.7)),
       });
@@ -290,13 +291,13 @@ export function GoogleMapCanvas({
       if (animationFrameRef.current) {
         window.cancelAnimationFrame(animationFrameRef.current);
       }
-      mapRef.current.setMapTypeId('hybrid');
-      const center = mapRef.current.getCenter?.();
+      map.setMapTypeId('hybrid');
+      const center = map.getCenter?.();
       const startLat = center?.lat?.() ?? defaultCenter.lat;
       const startLng = center?.lng?.() ?? defaultCenter.lng;
-      const startZoom = mapRef.current.getZoom?.() ?? 13;
-      const startHeading = mapRef.current.getHeading?.() ?? 0;
-      const startTilt = mapRef.current.getTilt?.() ?? 0;
+      const startZoom = map.getZoom?.() ?? 13;
+      const startHeading = map.getHeading?.() ?? 0;
+      const startTilt = map.getTilt?.() ?? 0;
       const duration = activeScene.durationMs ?? 4800;
       const startTime = performance.now();
       const easeInOut = (value: number) => 0.5 - Math.cos(value * Math.PI) / 2;
@@ -312,18 +313,18 @@ export function GoogleMapCanvas({
         const nextHeading = startHeading + (activeScene.heading - startHeading) * eased;
         const nextTilt = startTilt + (activeScene.tilt - startTilt) * eased;
 
-        if (typeof mapRef.current.moveCamera === 'function') {
-          mapRef.current.moveCamera({
+        if (typeof map.moveCamera === 'function') {
+          map.moveCamera({
             center: nextCenter,
             zoom: nextZoom,
             heading: nextHeading,
             tilt: nextTilt,
           });
         } else {
-          mapRef.current.panTo(nextCenter);
-          mapRef.current.setZoom(nextZoom);
-          if (typeof mapRef.current.setHeading === 'function') mapRef.current.setHeading(nextHeading);
-          if (typeof mapRef.current.setTilt === 'function') mapRef.current.setTilt(nextTilt);
+          map.panTo(nextCenter);
+          map.setZoom(nextZoom);
+          if (typeof map.setHeading === 'function') map.setHeading(nextHeading);
+          if (typeof map.setTilt === 'function') map.setTilt(nextTilt);
         }
 
         if (progress < 1) {
@@ -339,18 +340,18 @@ export function GoogleMapCanvas({
       window.cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
-    mapRef.current.setMapTypeId('roadmap');
-    if (typeof mapRef.current.setHeading === 'function') mapRef.current.setHeading(0);
-    if (typeof mapRef.current.setTilt === 'function') mapRef.current.setTilt(0);
+    map.setMapTypeId('roadmap');
+    if (typeof map.setHeading === 'function') map.setHeading(0);
+    if (typeof map.setTilt === 'function') map.setTilt(0);
 
     const bounds = new maps.LatLngBounds();
     points.forEach((point) => bounds.extend({ lat: point.latitude, lng: point.longitude }));
-    places.forEach((place) => bounds.extend({ lat: place.latitude, lng: place.longitude }));
+    places.forEach((place) => bounds.extend({ lat: place.latitude ?? 51.5074, lng: place.longitude ?? -0.1278 }));
     if (!bounds.isEmpty()) {
-      mapRef.current.fitBounds(bounds, 64);
+      map.fitBounds(bounds, 64);
     } else {
-      mapRef.current.panTo(defaultCenter);
-      mapRef.current.setZoom(13);
+      map.panTo(defaultCenter);
+      map.setZoom(13);
     }
   }, [activeScene, defaultCenter, highlightedPlaceKey, mapReady, places, points]);
 
