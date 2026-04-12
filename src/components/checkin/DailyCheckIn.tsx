@@ -83,7 +83,7 @@ export function DailyCheckIn({ onComplete, isEvening = false }: DailyCheckInProp
 
         <AnimatePresence mode="wait">
           {showComplete ? (
-            <CheckInComplete onContinue={onComplete} />
+            <CheckInComplete onContinue={onComplete} isEvening={isEvening} />
           ) : (
             <motion.div key="questions" className="space-y-6">
               {isEvening ? (

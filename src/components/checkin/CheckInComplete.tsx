@@ -4,9 +4,10 @@ import { motion } from 'framer-motion';
 
 interface CheckInCompleteProps {
   onContinue: () => void;
+  isEvening?: boolean;
 }
 
-export function CheckInComplete({ onContinue }: CheckInCompleteProps) {
+export function CheckInComplete({ onContinue, isEvening = false }: CheckInCompleteProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
