@@ -39,18 +39,16 @@ export function DailyCheckIn({ onComplete }: DailyCheckInProps) {
   const completeCheckIn = useCheckInStore((state) => state.completeCheckIn);
   const [emotionalState, setEmotionalState] = useState<1 | 2 | 3 | 4 | 5 | undefined>();
   const [energyLevel, setEnergyLevel] = useState<1 | 2 | 3 | 4 | 5 | undefined>();
-  const [oneWord, setOneWord] = useState('');
+  const [eveningReflection, setEveningReflection] = useState<1 | 2 | 3 | 4 | 5 | undefined>();
   const [showComplete, setShowComplete] = useState(false);
 
-  const canStart = Boolean(emotionalState);
-  const q2Visible = Boolean(emotionalState);
-  const q3Visible = Boolean(energyLevel);
+  const canStart = isEvening 
+    ? Boolean(eveningReflection)
+    : Boolean(emotionalState && energyLevel);
 
-  const description = useMemo(() => {
-    if (!emotionalState) return 'A quick emotional baseline to start the session.';
-    if (!energyLevel) return 'You’ve named the feeling. Now let’s get a read on your energy.';
-    return 'Optional, but helpful when you want one extra bit of context for the day.';
-  }, [emotionalState, energyLevel]);
+  const description = isEvening
+    ? 'How was your day overall?'
+    : 'A quick emotional and energy check to start your day';
 
   function handleSubmit() {
     if (isEvening) {
@@ -88,44 +86,32 @@ export function DailyCheckIn({ onComplete }: DailyCheckInProps) {
             <CheckInComplete onContinue={onComplete} />
           ) : (
             <motion.div key="questions" className="space-y-6">
-              <CheckInQuestion
-                visible
-                title="How are you feeling right now?"
-                options={emotionOptions}
-                selected={emotionalState}
-                onSelect={setEmotionalState}
-              />
-
-              <CheckInQuestion
-                visible={q2Visible}
-                title="What’s your energy like?"
-                options={energyOptions}
-                selected={energyLevel}
-                onSelect={setEnergyLevel}
-              />
-
-              <CheckInQuestion
-                visible={q3Visible}
-                title="One word for today?"
-                subtitle="Optional"
-              >
-                <div className="space-y-3">
-                  <input
-                    value={oneWord}
-                    onChange={(event) => setOneWord(event.target.value)}
-                    placeholder="anxious, hopeful, distracted..."
-                    className="w-full rounded-2xl px-4 py-3 text-sm outline-none"
-                    style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+              {isEvening ? (
+                <CheckInQuestion
+                  visible
+                  title="How was your day overall?"
+                  options={eveningReflectionOptions}
+                  selected={eveningReflection}
+                  onSelect={setEveningReflection}
+                />
+              ) : (
+                <>
+                  <CheckInQuestion
+                    visible
+                    title="How are you feeling right now?"
+                    options={emotionOptions}
+                    selected={emotionalState}
+                    onSelect={setEmotionalState}
                   />
-                  <button
-                    onClick={() => setOneWord('')}
-                    className="text-sm underline-offset-4 underline"
-                    style={{ color: 'var(--color-text-muted)' }}
-                  >
-                    Skip
-                  </button>
-                </div>
-              </CheckInQuestion>
+                  <CheckInQuestion
+                    visible
+                    title="What's your energy level?"
+                    options={energyOptions}
+                    selected={energyLevel}
+                    onSelect={setEnergyLevel}
+                  />
+                </>
+              )}
 
               <button
                 onClick={handleSubmit}
