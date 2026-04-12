@@ -48,24 +48,29 @@ export function DailyCheckIn({ onComplete, isEvening = false }: DailyCheckInProp
     ? 'How was your day overall?'
     : 'A quick emotional and energy check to start your day';
 
-  function handleSubmit() {
-    if (isEvening) {
-      if (!eveningReflection) return;
-      completeCheckIn({
-        type: 'evening',
-        eveningReflection,
-        timestamp: Date.now(),
-      });
-    } else {
-      if (!emotionalState || !energyLevel) return;
-      completeCheckIn({
-        type: 'morning',
-        emotionalState,
-        energyLevel,
-        timestamp: Date.now(),
-      });
+  async function handleSubmit() {
+    try {
+      if (isEvening) {
+        if (!eveningReflection) return;
+        await completeCheckIn({
+          type: 'evening',
+          eveningReflection,
+          timestamp: Date.now(),
+        });
+      } else {
+        if (!emotionalState || !energyLevel) return;
+        await completeCheckIn({
+          type: 'morning',
+          emotionalState,
+          energyLevel,
+          timestamp: Date.now(),
+        });
+      }
+      onComplete();
+    } catch (error) {
+      console.error('Failed to complete check-in:', error);
+      // Optionally show an error message to the user
     }
-    onComplete();
   }
 
   return (
