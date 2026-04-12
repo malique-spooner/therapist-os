@@ -28,7 +28,8 @@ Phase 3 goal:
   - [ ] Places
 - [ ] Remove any remaining fake helper payloads from `real-only` paths
 - [ ] Confirm empty states are honest and useful when real data is sparse
-- [ ] Confirm the sync activity page reports demo and real datasets accurately
+- [x] Confirm the sync activity page reports demo and real datasets accurately
+- [x] Keep demo data on a rolling 90-day window with scheduled refresh attempts matching real source cadence
 
 ### 1.2 Data Source Truthfulness
 - [ ] Confirm source status text matches actual backend state for:

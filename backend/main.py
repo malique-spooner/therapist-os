@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 
 from .config import settings
 from .core.logging import configure_logging, get_logger
@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     with SessionLocal() as db:
         bootstrap_life_data(db)
         ensure_admin_user(db)
-        if settings.SEED_DEMO_DATA and inspect(engine).has_table("health_data"):
+        if settings.SEED_DEMO_DATA:
             seed_demo_data(db)
     if settings.OLLAMA_PREWARM_ON_STARTUP:
         provider = REAL_PROVIDERS.get("local-qwen")

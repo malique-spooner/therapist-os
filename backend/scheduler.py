@@ -9,6 +9,12 @@ from .services.ingestion.weather import WeatherIngestionService
 from .services.ingestion.spotify import SpotifyIngestionService
 from .services.profile_service import ProfileService
 from .services.notifications import NotificationService
+from .services.seed import seed_demo_data
+
+
+def refresh_demo_data_job(*source_ids: str) -> None:
+    with SessionLocal() as db:
+        seed_demo_data(db, attempt_source_ids=tuple(source_ids), attempt_trigger="background")
 
 
 async def _sync_weather_job() -> None:
@@ -99,9 +105,16 @@ def profile_refresh_job() -> None:
 def main() -> None:
     scheduler = BlockingScheduler(timezone="Europe/London")
     scheduler.add_job(sync_spotify_job, "interval", minutes=settings.SPOTIFY_SYNC_INTERVAL_MINUTES)
+    scheduler.add_job(lambda: refresh_demo_data_job("spotify", "youtube"), "interval", minutes=settings.SPOTIFY_SYNC_INTERVAL_MINUTES)
     scheduler.add_job(sync_garmin_job, "cron", hour=settings.GARMIN_SYNC_HOUR, minute=settings.GARMIN_SYNC_MINUTE)
+    scheduler.add_job(lambda: refresh_demo_data_job("garmin"), "cron", hour=settings.GARMIN_SYNC_HOUR, minute=settings.GARMIN_SYNC_MINUTE)
     scheduler.add_job(sync_weather_job, "cron", hour=6, minute=0)
     scheduler.add_job(sync_weather_job, "cron", hour=20, minute=0)
+    scheduler.add_job(lambda: refresh_demo_data_job("weather"), "cron", hour=6, minute=0)
+    scheduler.add_job(lambda: refresh_demo_data_job("weather"), "cron", hour=20, minute=0)
+    scheduler.add_job(lambda: refresh_demo_data_job("truelayer"), "cron", hour=7, minute=0)
+    scheduler.add_job(lambda: refresh_demo_data_job("truelayer"), "cron", hour=19, minute=0)
+    scheduler.add_job(lambda: refresh_demo_data_job("owntracks"), "interval", minutes=3)
     scheduler.add_job(daily_checkin_reminder_job, "cron", hour=8, minute=0)
     scheduler.add_job(weekly_summary_job, "cron", day_of_week="sun", hour=9, minute=0)
     scheduler.add_job(budget_warning_job, "cron", hour=18, minute=0)

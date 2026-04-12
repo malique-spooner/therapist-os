@@ -27,6 +27,7 @@ The active product surfaces are API-backed and mode-aware. Demo and Real are sep
 - Health, Finance, and Consumption static insight cards are gated to `demo-only`.
 - Location now uses backend intelligence for the active page; older location helper components remain in the tree but are not the active Location page path.
 - Nutrition has been removed from the active frontend, API client, navigation, dashboard entry points, visual checks, and open-prompt nudges. Historical backend tables and migrations remain archived until an explicit destructive database migration is requested.
+- Demo data is a living sandbox: startup seeding keeps a rolling 90-day window, and scheduler jobs refresh demo sync attempts on the same cadence as the corresponding real sources.
 
 ## Verified This Pass
 

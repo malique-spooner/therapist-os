@@ -26,6 +26,8 @@ from ..models.life_data import (
     WeatherDataDemo as WeatherData,
 )
 
+DEMO_SOURCE_IDS = ("garmin", "truelayer", "spotify", "youtube", "weather", "owntracks")
+
 DEFAULT_HABITS = [
     {"id": "racket-sport", "name": "I will play racket sports three times a week because I am an athlete.", "action_text": "play racket sports", "when_text": "three times a week", "why_text": "I am an athlete", "habit_mode": "good", "cadence_type": "weekly-count", "target_count": 3, "sub_label": None, "category": "Movement", "category_icon": "🎾", "habit_type": "boolean", "frequency": "3x per week"},
     {"id": "team-sport", "name": "I will play team sports once a week because I perform better when I compete with other people.", "action_text": "play team sports", "when_text": "once a week", "why_text": "I perform better when I compete with other people", "habit_mode": "good", "cadence_type": "weekly-count", "target_count": 1, "sub_label": None, "category": "Movement", "category_icon": "⚽", "habit_type": "boolean", "frequency": "1x per week"},
@@ -123,9 +125,24 @@ def _upsert_demo_sync_attempt(
     rows_synced: int,
     attempted_at: datetime | None,
     detail: str,
+    trigger: str,
 ) -> None:
     if rows_synced <= 0 or attempted_at is None:
         return
+    if trigger != "seed":
+        db.add(
+            DataSourceSyncAttempt(
+                source_id=source_id,
+                status="demo-refresh",
+                trigger=trigger,
+                data_mode="demo-only",
+                rows_synced=rows_synced,
+                attempted_at=attempted_at,
+                detail=detail,
+            )
+        )
+        return
+
     attempt = db.scalar(
         select(DataSourceSyncAttempt)
         .where(
@@ -150,9 +167,28 @@ def _upsert_demo_sync_attempt(
     attempt.cooldown_until = None
 
 
-def seed_demo_data(db: Session) -> None:
+def _cleanup_demo_sync_attempts(db: Session) -> None:
+    cutoff = datetime.utcnow() - timedelta(days=90)
+    db.execute(
+        delete(DataSourceSyncAttempt).where(
+            DataSourceSyncAttempt.data_mode == "demo-only",
+            DataSourceSyncAttempt.trigger != "seed",
+            DataSourceSyncAttempt.attempted_at < cutoff,
+        )
+    )
+
+
+def seed_demo_data(
+    db: Session,
+    *,
+    attempt_source_ids: tuple[str, ...] | None = None,
+    attempt_trigger: str = "seed",
+) -> None:
     start, end = _demo_window()
     _cleanup_demo_window(db, start, end)
+    _cleanup_demo_sync_attempts(db)
+    attempt_sources = set(attempt_source_ids or DEMO_SOURCE_IDS)
+    attempted_at = datetime.utcnow()
 
     daily_categories: dict[date, dict[str, int]] = {}
     daily_social_evenings: dict[date, bool] = {}
@@ -527,50 +563,51 @@ def seed_demo_data(db: Session) -> None:
         )
 
     garmin_rows = db.scalar(select(func.count()).select_from(HealthData)) or 0
-    garmin_attempted_at = db.scalar(select(func.max(HealthData.updated_at)))
     _upsert_demo_sync_attempt(
         db,
         source_id="garmin",
         rows_synced=garmin_rows,
-        attempted_at=garmin_attempted_at,
+        attempted_at=attempted_at if "garmin" in attempt_sources else None,
         detail=f"Demo health dataset refreshed through {end.isoformat()}.",
+        trigger=attempt_trigger,
     )
 
     truelayer_rows = db.scalar(select(func.count()).select_from(FinanceData)) or 0
-    truelayer_attempted_at = db.scalar(select(func.max(FinanceData.created_at)))
     _upsert_demo_sync_attempt(
         db,
         source_id="truelayer",
         rows_synced=truelayer_rows,
-        attempted_at=truelayer_attempted_at,
+        attempted_at=attempted_at if "truelayer" in attempt_sources else None,
         detail=f"Demo finance dataset refreshed through {end.isoformat()}.",
+        trigger=attempt_trigger,
     )
 
     spotify_rows = db.scalar(select(func.count()).select_from(MusicData)) or 0
-    spotify_attempted_at = db.scalar(select(func.max(MusicData.updated_at)))
     _upsert_demo_sync_attempt(
         db,
         source_id="spotify",
         rows_synced=spotify_rows,
-        attempted_at=spotify_attempted_at,
+        attempted_at=attempted_at if "spotify" in attempt_sources else None,
         detail=f"Demo Spotify dataset refreshed through {end.isoformat()}.",
+        trigger=attempt_trigger,
     )
     _upsert_demo_sync_attempt(
         db,
         source_id="youtube",
         rows_synced=spotify_rows,
-        attempted_at=spotify_attempted_at,
+        attempted_at=attempted_at if "youtube" in attempt_sources else None,
         detail=f"Demo YouTube dataset refreshed through {end.isoformat()}.",
+        trigger=attempt_trigger,
     )
 
     weather_rows = db.scalar(select(func.count()).select_from(WeatherData)) or 0
-    weather_attempted_at = db.scalar(select(func.max(WeatherData.created_at)))
     _upsert_demo_sync_attempt(
         db,
         source_id="weather",
         rows_synced=weather_rows,
-        attempted_at=weather_attempted_at,
+        attempted_at=attempted_at if "weather" in attempt_sources else None,
         detail=f"Demo weather dataset refreshed through {end.isoformat()}.",
+        trigger=attempt_trigger,
     )
 
     owntracks_rows = (
@@ -578,23 +615,13 @@ def seed_demo_data(db: Session) -> None:
         + (db.scalar(select(func.count()).select_from(LocationDailySummary)) or 0)
         + (db.scalar(select(func.count()).select_from(LocationCompanionLog)) or 0)
     )
-    owntracks_attempted_at = max(
-        filter(
-            None,
-            [
-                db.scalar(select(func.max(LocationData.timestamp))),
-                db.scalar(select(func.max(LocationDailySummary.updated_at))),
-                db.scalar(select(func.max(LocationCompanionLog.updated_at))),
-            ],
-        ),
-        default=None,
-    )
     _upsert_demo_sync_attempt(
         db,
         source_id="owntracks",
         rows_synced=owntracks_rows,
-        attempted_at=owntracks_attempted_at,
+        attempted_at=attempted_at if "owntracks" in attempt_sources else None,
         detail=f"Demo location dataset refreshed through {end.isoformat()}.",
+        trigger=attempt_trigger,
     )
 
     db.commit()
