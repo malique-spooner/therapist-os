@@ -159,6 +159,8 @@ def _upsert_location_point(db: Session, when: datetime, lat: float, lng: float, 
 
 
 def _seed_place_memory(db: Session, start: date, end: date) -> None:
+    demo_place_keys = {place[0] for place in DEMO_PLACES}
+    db.execute(delete(LocationPlaceMemory).where(LocationPlaceMemory.place_key.not_in(demo_place_keys)))
     for place_key, label, category, tone, lat, lng, note in DEMO_PLACES:
         row = db.scalar(select(LocationPlaceMemory).where(LocationPlaceMemory.place_key == place_key))
         if not row:

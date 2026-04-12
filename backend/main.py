@@ -29,8 +29,7 @@ async def lifespan(app: FastAPI):
     with SessionLocal() as db:
         bootstrap_life_data(db)
         ensure_admin_user(db)
-        if settings.SEED_DEMO_DATA:
-            seed_demo_data(db)
+        seed_demo_data(db)
     if settings.OLLAMA_PREWARM_ON_STARTUP:
         provider = REAL_PROVIDERS.get("local-qwen")
         if provider and getattr(provider, "is_available", False) and hasattr(provider, "prewarm"):
