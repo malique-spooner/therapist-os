@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CheckInComplete } from './CheckInComplete';
 import { CheckInQuestion } from './CheckInQuestion';
 import { useCheckInStore } from '@/store/checkin';
 
@@ -40,7 +39,6 @@ export function DailyCheckIn({ onComplete, isEvening = false }: DailyCheckInProp
   const [emotionalState, setEmotionalState] = useState<1 | 2 | 3 | 4 | 5 | undefined>();
   const [energyLevel, setEnergyLevel] = useState<1 | 2 | 3 | 4 | 5 | undefined>();
   const [eveningReflection, setEveningReflection] = useState<1 | 2 | 3 | 4 | 5 | undefined>();
-  const [showComplete, setShowComplete] = useState(false);
 
   const canStart = isEvening 
     ? Boolean(eveningReflection)
@@ -67,7 +65,7 @@ export function DailyCheckIn({ onComplete, isEvening = false }: DailyCheckInProp
         timestamp: Date.now(),
       });
     }
-    setShowComplete(true);
+    onComplete();
   }
 
   return (
@@ -81,49 +79,43 @@ export function DailyCheckIn({ onComplete, isEvening = false }: DailyCheckInProp
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>{description}</p>
         </div>
 
-        <AnimatePresence mode="wait">
-          {showComplete ? (
-            <CheckInComplete onContinue={onComplete} isEvening={isEvening} />
+        <div className="space-y-6">
+          {isEvening ? (
+            <CheckInQuestion
+              visible
+              title="How was your day overall?"
+              options={eveningReflectionOptions}
+              selected={eveningReflection}
+              onSelect={setEveningReflection}
+            />
           ) : (
-            <motion.div key="questions" className="space-y-6">
-              {isEvening ? (
-                <CheckInQuestion
-                  visible
-                  title="How was your day overall?"
-                  options={eveningReflectionOptions}
-                  selected={eveningReflection}
-                  onSelect={setEveningReflection}
-                />
-              ) : (
-                <>
-                  <CheckInQuestion
-                    visible
-                    title="How are you feeling right now?"
-                    options={emotionOptions}
-                    selected={emotionalState}
-                    onSelect={setEmotionalState}
-                  />
-                  <CheckInQuestion
-                    visible
-                    title="What's your energy level?"
-                    options={energyOptions}
-                    selected={energyLevel}
-                    onSelect={setEnergyLevel}
-                  />
-                </>
-              )}
-
-              <button
-                onClick={handleSubmit}
-                disabled={!canStart}
-                className="w-full h-[52px] rounded-xl font-semibold transition-opacity"
-                style={{ backgroundColor: canStart ? 'var(--color-primary)' : 'var(--color-border)', color: canStart ? '#fff' : 'var(--color-text-muted)' }}
-              >
-                {isEvening ? 'Complete reflection' : 'Start my day'}
-              </button>
-            </motion.div>
+            <>
+              <CheckInQuestion
+                visible
+                title="How are you feeling right now?"
+                options={emotionOptions}
+                selected={emotionalState}
+                onSelect={setEmotionalState}
+              />
+              <CheckInQuestion
+                visible
+                title="What's your energy level?"
+                options={energyOptions}
+                selected={energyLevel}
+                onSelect={setEnergyLevel}
+              />
+            </>
           )}
-        </AnimatePresence>
+
+          <button
+            onClick={handleSubmit}
+            disabled={!canStart}
+            className="w-full h-[52px] rounded-xl font-semibold transition-opacity"
+            style={{ backgroundColor: canStart ? 'var(--color-primary)' : 'var(--color-border)', color: canStart ? '#fff' : 'var(--color-text-muted)' }}
+          >
+            {isEvening ? 'Complete reflection' : 'Start my day'}
+          </button>
+        </div>
       </div>
     </div>
   );
