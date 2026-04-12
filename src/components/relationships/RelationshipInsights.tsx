@@ -1,8 +1,5 @@
 'use client';
 
-import { relationshipInteractions } from '@/data/relationships';
-import { checkInHistory } from '@/data/checkins';
-import { healthData } from '@/data/health';
 import { InsightCard } from '@/components/dashboard/InsightCard';
 
 const relationshipInsightCards = [
@@ -49,10 +46,6 @@ const relationshipInsightCards = [
 ];
 
 export function RelationshipInsights({ onTalkAboutThis }: { onTalkAboutThis: (context: string) => void }) {
-  void relationshipInteractions;
-  void checkInHistory;
-  void healthData;
-
   return (
       <div className="px-4 pb-4 space-y-3">
         {relationshipInsightCards.map((card, index) => (

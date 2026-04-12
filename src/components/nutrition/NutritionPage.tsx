@@ -139,6 +139,26 @@ export function NutritionPage({ onBack, onSettings, onTalkAboutThis }: Nutrition
         {error && (
           <RetryNotice onRetry={refetch} className="mx-4 mb-4 w-[calc(100%-2rem)]" />
         )}
+        <motion.div
+          className="mx-4 mt-4 rounded-[28px] p-4"
+          style={{
+            backgroundColor: 'var(--color-surface-2)',
+            border: '1px solid var(--color-border)',
+          }}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--color-text-muted)' }}>
+            Paused focus
+          </p>
+          <p className="mt-2 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
+            Keep simple food context, skip big conclusions
+          </p>
+          <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+            Nutrition is parked while the core app gets sharper. Logging still works, but this page is not treated as a polished insight surface yet.
+          </p>
+        </motion.div>
         <DateRangeControl
           mode="single"
           value={selectedRange}

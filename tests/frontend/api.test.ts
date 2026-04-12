@@ -15,20 +15,22 @@ describe('api client', () => {
     vi.restoreAllMocks();
   });
 
-  it('sends the API key header on requests', async () => {
+  it('uses same-origin cookie auth options on requests', async () => {
     await api.getDashboard('this-week');
 
     expect(global.fetch).toHaveBeenCalled();
     const [, init] = vi.mocked(global.fetch).mock.calls[0];
     const headers = init?.headers as Headers;
-    expect(headers.get('X-API-Key')).toBeTruthy();
+    expect(headers.get('X-API-Key')).toBeNull();
+    expect(init?.credentials).toBe('include');
+    expect(init?.cache).toBe('no-store');
   });
 
   it('calls the brain endpoint with the expected path', async () => {
     await api.getBrain();
 
     const [url] = vi.mocked(global.fetch).mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8000/api/brain?mode=demo-only');
+    expect(String(url)).toBe('http://localhost:3000/api/brain?mode=demo-only');
   });
 
   it('calls the data source endpoints with the expected paths', async () => {
@@ -41,12 +43,12 @@ describe('api client', () => {
     await api.syncDataSource('garmin');
 
     const calls = vi.mocked(global.fetch).mock.calls.map(([url]) => String(url));
-    expect(calls).toContain('http://localhost:8000/api/data-sources');
-    expect(calls).toContain('http://localhost:8000/api/data-sources/garmin/setup');
-    expect(calls).toContain('http://localhost:8000/api/data-sources/spotify/authorize');
-    expect(calls).toContain('http://localhost:8000/api/data-sources/spotify/oauth/callback');
-    expect(calls).toContain('http://localhost:8000/api/data-sources/garmin/connect');
-    expect(calls).toContain('http://localhost:8000/api/data-sources/garmin/sync');
+    expect(calls).toContain('http://localhost:3000/api/data-sources');
+    expect(calls).toContain('http://localhost:3000/api/data-sources/garmin/setup');
+    expect(calls).toContain('http://localhost:3000/api/data-sources/spotify/authorize');
+    expect(calls).toContain('http://localhost:3000/api/data-sources/spotify/oauth/callback');
+    expect(calls).toContain('http://localhost:3000/api/data-sources/garmin/connect');
+    expect(calls).toContain('http://localhost:3000/api/data-sources/garmin/sync');
   });
 
   it('sends transcription uploads as multipart form data', async () => {
@@ -56,14 +58,15 @@ describe('api client', () => {
     expect(init?.method).toBe('POST');
     expect(init?.body).toBeInstanceOf(FormData);
     const headers = init?.headers as Headers;
-    expect(headers.get('X-API-Key')).toBeTruthy();
+    expect(headers.get('X-API-Key')).toBeNull();
+    expect(init?.credentials).toBe('include');
   });
 
   it('calls the live session endpoint with POST', async () => {
     await api.createLiveSession();
 
     const [url, init] = vi.mocked(global.fetch).mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8000/api/ai/live/session?mode=demo-only');
+    expect(String(url)).toBe('http://localhost:3000/api/ai/live/session?mode=demo-only');
     expect(init?.method).toBe('POST');
   });
 
@@ -78,9 +81,9 @@ describe('api client', () => {
     });
 
     const calls = vi.mocked(global.fetch).mock.calls.map(([url]) => String(url));
-    expect(calls).toContain('http://localhost:8000/api/open-prompts/current');
-    expect(calls).toContain('http://localhost:8000/api/open-prompts/location_people_2026-03-31/dismiss');
-    expect(calls).toContain('http://localhost:8000/api/location/companions?date=2026-03-31');
+    expect(calls).toContain('http://localhost:3000/api/open-prompts/current');
+    expect(calls).toContain('http://localhost:3000/api/open-prompts/location_people_2026-03-31/dismiss');
+    expect(calls).toContain('http://localhost:3000/api/location/companions?date=2026-03-31&mode=demo-only');
   });
 
   it('uploads snapchat best-friends screenshot imports as multipart form data', async () => {
@@ -93,8 +96,9 @@ describe('api client', () => {
     });
 
     const [url, init] = vi.mocked(global.fetch).mock.calls[0];
-    expect(String(url)).toBe('http://localhost:8000/api/relationships/imports/snapchat?mode=demo-only');
+    expect(String(url)).toBe('http://localhost:3000/api/relationships/imports/snapchat?mode=demo-only');
     expect(init?.method).toBe('POST');
     expect(init?.body).toBeInstanceOf(FormData);
+    expect(init?.credentials).toBe('include');
   });
 });

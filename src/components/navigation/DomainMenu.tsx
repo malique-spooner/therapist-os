@@ -10,7 +10,7 @@ interface DomainMenuProps {
 }
 
 const items = [
-  { id: 'nutrition' as const, label: 'Nutrition', icon: '🥗', description: 'Food, rhythm, caffeine, alcohol' },
+  { id: 'nutrition' as const, label: 'Nutrition', icon: '🥗', description: 'Paused log for food, caffeine, and alcohol context' },
   { id: 'relationships' as const, label: 'Relationships', icon: '🤝', description: 'Your people, interactions, coaching' },
   { id: 'finance' as const, label: 'Finance', icon: '💷', description: 'Spending patterns and emotional triggers' },
   { id: 'consumption' as const, label: 'Consumption', icon: '🎵', description: 'Music, YouTube, mood mirror' },

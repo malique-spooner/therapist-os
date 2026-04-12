@@ -13,7 +13,7 @@ const items = [
   { id: 'health' as const, label: 'Health', icon: HeartPulse },
   { id: 'therapist' as const, label: 'Mind', icon: MessageCircleHeart },
   { id: 'habits' as const, label: 'Habits', icon: Repeat2 },
-  { id: 'nutrition' as const, label: 'Food', icon: Salad },
+  { id: 'nutrition' as const, label: 'Food log', icon: Salad },
   { id: 'relationships' as const, label: 'People', icon: Users2 },
   { id: 'finance' as const, label: 'Money', icon: Coins },
   { id: 'consumption' as const, label: 'Media', icon: Music4 },

@@ -9,6 +9,9 @@ import { relationshipInteractions, relationshipPeople } from '@/data/relationshi
 import { getWeeklyHabitCompletion, type Period } from '@/lib/mockDataUtils';
 import { APP_TODAY, differenceInDays, getDayLabel } from '@/lib/date';
 
+// Legacy demo helpers. Active real-mode product surfaces should use backend API
+// payloads and only call this file from demo-only UI paths.
+
 export interface DomainSnapshot {
   id: 'physical' | 'nutrition' | 'relationships' | 'finance' | 'consumption' | 'location';
   label: string;
@@ -95,7 +98,7 @@ export function getDashboardSnapshots(): DomainSnapshot[] {
 
   return [
     { id: 'physical', label: 'Physical', icon: '⌚', value: `${latestHealth.steps.toLocaleString()} steps`, helper: `${latestHealth.sleepQuality}/10 sleep` },
-    { id: 'nutrition', label: 'Nutrition', icon: '🥗', value: `${Number(latestNutrition.meals.breakfast) + Number(latestNutrition.meals.lunch) + Number(latestNutrition.meals.dinner)} of 3 meals`, helper: latestNutrition.foodQuality === 3 ? 'whole-food day' : latestNutrition.foodQuality === 2 ? 'mixed day' : 'processed-heavy' },
+    { id: 'nutrition', label: 'Nutrition', icon: '🥗', value: `${Number(latestNutrition.meals.breakfast) + Number(latestNutrition.meals.lunch) + Number(latestNutrition.meals.dinner)} of 3 meals`, helper: 'paused context log' },
     { id: 'relationships', label: 'Relationships', icon: '🤝', value: `${daysAgo} days ago`, helper: 'last meaningful contact' },
     { id: 'finance', label: 'Finance', icon: '💷', value: `£${latestFinance.totalSpend}`, helper: 'today vs daily average' },
     { id: 'consumption', label: 'Consumption', icon: '🎵', value: `${Math.round(latestMusic.valence * 100)} valence`, helper: `${latestMusic.topGenre} this week` },
