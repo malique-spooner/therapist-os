@@ -4,7 +4,6 @@ import { financeData } from '@/data/finance';
 import { healthData } from '@/data/health';
 import { locationData, savedPlaces, type LocationDay, type SavedPlace } from '@/data/location';
 import { musicData } from '@/data/music';
-import { nutritionData, scienceTips } from '@/data/nutrition';
 import { relationshipInteractions, relationshipPeople } from '@/data/relationships';
 import { getWeeklyHabitCompletion, type Period } from '@/lib/mockDataUtils';
 import { APP_TODAY, differenceInDays, getDayLabel } from '@/lib/date';
@@ -13,7 +12,7 @@ import { APP_TODAY, differenceInDays, getDayLabel } from '@/lib/date';
 // payloads and only call this file from demo-only UI paths.
 
 export interface DomainSnapshot {
-  id: 'physical' | 'nutrition' | 'relationships' | 'finance' | 'consumption' | 'location';
+  id: 'physical' | 'relationships' | 'finance' | 'consumption' | 'location';
   label: string;
   icon: string;
   value: string;
@@ -88,7 +87,6 @@ export function getCheckInPill(checkIns: DailyCheckIn[] = checkInHistory) {
 
 export function getDashboardSnapshots(): DomainSnapshot[] {
   const latestHealth = healthData[healthData.length - 1];
-  const latestNutrition = nutritionData[nutritionData.length - 1];
   const latestFinance = financeData[financeData.length - 1];
   const latestMusic = musicData[musicData.length - 1];
   const latestLocation = locationData[locationData.length - 1];
@@ -98,7 +96,6 @@ export function getDashboardSnapshots(): DomainSnapshot[] {
 
   return [
     { id: 'physical', label: 'Physical', icon: '⌚', value: `${latestHealth.steps.toLocaleString()} steps`, helper: `${latestHealth.sleepQuality}/10 sleep` },
-    { id: 'nutrition', label: 'Nutrition', icon: '🥗', value: `${Number(latestNutrition.meals.breakfast) + Number(latestNutrition.meals.lunch) + Number(latestNutrition.meals.dinner)} of 3 meals`, helper: 'paused context log' },
     { id: 'relationships', label: 'Relationships', icon: '🤝', value: `${daysAgo} days ago`, helper: 'last meaningful contact' },
     { id: 'finance', label: 'Finance', icon: '💷', value: `£${latestFinance.totalSpend}`, helper: 'today vs daily average' },
     { id: 'consumption', label: 'Consumption', icon: '🎵', value: `${Math.round(latestMusic.valence * 100)} valence`, helper: `${latestMusic.topGenre} this week` },
@@ -110,14 +107,12 @@ export function getWellbeingRings(period: Period, checkIns: DailyCheckIn[] = che
   const days = getPeriodDays(period);
   const moods = checkIns.slice(-days);
   const health = healthData.slice(-days);
-  const nutrition = nutritionData.slice(-days);
   const relationships = relationshipInteractions.filter((entry) => differenceInDays(entry.date, APP_TODAY) < days);
   const movement = avg(health.map((day) => Math.min(day.steps / 1200, 10)));
   const sleep = avg(health.map((day) => day.sleepQuality));
-  const food = avg(nutrition.map((day) => day.foodQuality * 3.1));
   const connection = Math.min((relationships.length / Math.max(days, 1)) * 10, 10);
   const moodAvg = avg(moods.map((day) => day.emotionalState));
-  const wellbeing = (movement + sleep + food + connection) / 4;
+  const wellbeing = (movement + sleep + connection) / 3;
   const streak = getWeeklyHabitCompletion();
 
   return [
@@ -152,20 +147,12 @@ export function getDashboardHeroInsight(checkIns: DailyCheckIn[] = checkInHistor
   const latestCheckIn = getLatestMood(checkIns);
   const lastMeaningful = relationshipInteractions.filter((entry) => entry.type === 'in_person' || entry.type === 'activity_together').slice(-1)[0];
   const daysAgo = lastMeaningful ? differenceInDays(lastMeaningful.date, APP_TODAY) : 0;
-  const latestNutrition = nutritionData[nutritionData.length - 1];
   const withinBudgetDays = financeData.slice(-7).filter((day) => day.totalSpend < avg(financeData.map((entry) => entry.totalSpend))).length;
 
   if (latestCheckIn.emotionalState <= 2 && daysAgo >= 3) {
     return {
       headline: `Your mood is lower today and you have not had meaningful in-person contact for ${daysAgo} days. SDT suggests your relatedness need may be going unmet.`,
       framework: 'SDT',
-    };
-  }
-
-  if (!latestNutrition.meals.breakfast) {
-    return {
-      headline: 'You slept well but skipped breakfast. In your data, low-nutrition mornings are followed by lower movement and flatter energy.',
-      framework: 'CBT',
     };
   }
 
@@ -178,7 +165,6 @@ export function getDashboardHeroInsight(checkIns: DailyCheckIn[] = checkInHistor
 export function getDashboardInsights(checkIns: DailyCheckIn[] = checkInHistory): ExpandedInsight[] {
   const latestCheckIn = getLatestMood(checkIns);
   const inPersonWeek = relationshipInteractions.filter((entry) => differenceInDays(entry.date, APP_TODAY) < 7 && (entry.type === 'in_person' || entry.type === 'activity_together'));
-  const breakfastMisses = nutritionData.slice(-14).filter((day) => !day.meals.breakfast).length;
   const lowValence = avg(musicData.slice(-5).map((day) => day.valence));
   const spendAverage = avg(financeData.slice(-7).map((day) => day.totalSpend));
   const todaySpend = financeData[financeData.length - 1].totalSpend;
@@ -195,16 +181,6 @@ export function getDashboardInsights(checkIns: DailyCheckIn[] = checkInHistory):
       action: 'Protect one real-world catch-up before the weekend.',
       domainId: 'relationships',
       viewLabel: 'View Relationships',
-    },
-    {
-      id: 'nutrition-pattern',
-      category: 'Nutrition',
-      categoryIcon: '🥗',
-      lens: 'CBT',
-      narrative: `You skipped breakfast ${breakfastMisses} times in the last two weeks. Those days line up with lower mood and flatter energy, which is exactly the kind of hidden pattern CBT helps make visible.`,
-      action: 'Choose a tiny breakfast default for low-energy mornings.',
-      domainId: 'nutrition',
-      viewLabel: 'View Nutrition',
     },
     {
       id: 'health-pattern',
@@ -259,10 +235,6 @@ export function getDashboardInsights(checkIns: DailyCheckIn[] = checkInHistory):
   ];
 
   return cards.sort((a, b) => Number(b.id === 'cross-relationships' && latestCheckIn.emotionalState <= 2) - Number(a.id === 'cross-relationships' && latestCheckIn.emotionalState <= 2) || 0);
-}
-
-export function getTodayScienceTip() {
-  return scienceTips[checkInHistory.length % scienceTips.length];
 }
 
 export function getRelationshipStatusCards() {

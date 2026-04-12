@@ -28,7 +28,7 @@ interface DashboardPageProps {
   onSettings: () => void;
   onOpenBrain?: () => void;
   onNavigateToTherapist: (context?: string) => void;
-  onOpenDomain?: (page: 'health' | 'nutrition' | 'relationships' | 'finance' | 'consumption' | 'location') => void;
+  onOpenDomain?: (page: 'health' | 'relationships' | 'finance' | 'consumption' | 'location') => void;
 }
 
 export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist, onOpenDomain }: DashboardPageProps) {
@@ -96,7 +96,7 @@ export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist, 
           )}
           {!isLoading && !error && heroInsight && canRenderDashboard && <HeroCard insight={heroInsight} onTalkAboutThis={onNavigateToTherapist} />}
           {!isLoading && !error && dataMode === 'real-only' && !canRenderDashboard && (
-            <RetryNotice message="Not enough real data yet to generate dashboard insights. Keep syncing sources or switch to Demo mode." onRetry={refetch} className="mx-4 w-[calc(100%-2rem)] p-5" />
+            <RetryNotice message="Not enough rows in the Real database yet to generate dashboard insights. Keep syncing sources or switch to the Demo sandbox." onRetry={refetch} className="mx-4 w-[calc(100%-2rem)] p-5" />
           )}
         </div>
 

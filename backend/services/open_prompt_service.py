@@ -16,7 +16,6 @@ from ..models.life_data import (
     LocationCompanionLogDemo as LocationCompanionLog,
     LocationDailySummaryDemo as LocationDailySummary,
     MusicDataDemo as MusicData,
-    NutritionLogDemo as NutritionLog,
     RelationshipDemo as Relationship,
     RelationshipInteractionDemo as RelationshipInteraction,
 )
@@ -105,26 +104,6 @@ class OpenPromptService:
                     primary_label="Reflect",
                     target_page="therapist",
                     priority=98,
-                )
-            )
-
-        latest_nutrition = db.scalar(select(NutritionLog).order_by(desc(NutritionLog.date)))
-        if latest_nutrition and (
-            latest_nutrition.food_quality is None
-            or not latest_nutrition.breakfast
-            or not latest_nutrition.lunch
-        ):
-            candidates.append(
-                PromptCandidate(
-                    prompt_key=f"nutrition_cleanup_{latest_nutrition.date.isoformat()}",
-                    category="nutrition",
-                    title="Nutrition cleanup",
-                    question="Your latest nutrition log still has gaps. Do you want to fill in the meals or quality so your patterns stay accurate?",
-                    supporting_text="Nutrition data is most useful when meal timing and food quality are complete.",
-                    primary_label="Update nutrition",
-                    target_page="nutrition",
-                    priority=91,
-                    target_date=latest_nutrition.date,
                 )
             )
 

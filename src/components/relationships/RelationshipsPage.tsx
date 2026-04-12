@@ -87,7 +87,7 @@ export function RelationshipsPage({ onBack, onSettings, onTalkAboutThis }: Relat
           <div className="mx-4 mb-4 rounded-[24px] px-4 py-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
             <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Not enough real relationship data yet</p>
             <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-              Real mode is now hiding demo people and demo interactions. Add real people, log interactions, or import message screenshots to build this view.
+              The Real database is separate from the Demo sandbox. Add real people, log interactions, or import message screenshots to build this view.
             </p>
             <button
               type="button"

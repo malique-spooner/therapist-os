@@ -13,7 +13,6 @@ from ..models.habits import HabitLog as LegacyHabitLog
 from ..models.health import HealthData as LegacyHealthData
 from ..models.location import LocationData as LegacyLocationData, LocationDailySummary as LegacyLocationDailySummary
 from ..models.music import MusicData as LegacyMusicData
-from ..models.nutrition import NutritionLog as LegacyNutritionLog
 from ..models.profile import MonthlyBudget as LegacyMonthlyBudget, UserProfile as LegacyUserProfile
 from ..models.relationship_imports import RelationshipScreenshotImport as LegacyRelationshipScreenshotImport
 from ..models.relationships import Relationship as LegacyRelationship, RelationshipInteraction as LegacyRelationshipInteraction
@@ -45,8 +44,6 @@ from ..models.life_data import (
     MusicDataReal,
     SpotifyPlayEventDemo,
     SpotifyPlayEventReal,
-    NutritionLogDemo,
-    NutritionLogReal,
     RelationshipDemo,
     RelationshipInteractionDemo,
     RelationshipInteractionReal,
@@ -71,8 +68,6 @@ LIFE_DATA_TABLES = [
     SpotifyPlayEventDemo.__table__,
     WeatherDataReal.__table__,
     WeatherDataDemo.__table__,
-    NutritionLogReal.__table__,
-    NutritionLogDemo.__table__,
     DailyCheckInReal.__table__,
     DailyCheckInDemo.__table__,
     HabitLogReal.__table__,
@@ -111,7 +106,6 @@ def bootstrap_life_data(db: Session) -> None:
     _copy_if_empty(db, LegacyFinanceData, FinanceDataDemo, is_demo=True)
     _copy_if_empty(db, LegacyMusicData, MusicDataDemo, is_demo=True)
     _copy_if_empty(db, LegacyWeatherData, WeatherDataDemo, is_demo=True)
-    _copy_if_empty(db, LegacyNutritionLog, NutritionLogDemo, is_demo=True)
     _copy_if_empty(db, LegacyDailyCheckIn, DailyCheckInDemo, is_demo=True)
     _copy_if_empty(db, LegacyHabitLog, HabitLogDemo, is_demo=True)
     _copy_if_empty(db, LegacyRelationship, RelationshipDemo, is_demo=True)
@@ -132,7 +126,6 @@ def bootstrap_life_data(db: Session) -> None:
     _copy_if_empty(db, LegacyLocationDailySummary, LocationDailySummaryReal, is_demo=False, allow_real=_source_synced(db, "owntracks"))
     _copy_if_empty(db, LegacyLocationCompanionLog, LocationCompanionLogReal, is_demo=False, allow_real=_source_synced(db, "owntracks"))
 
-    _copy_if_empty(db, LegacyNutritionLog, NutritionLogReal, is_demo=False)
     _copy_if_empty(db, LegacyDailyCheckIn, DailyCheckInReal, is_demo=False)
     _copy_if_empty(db, LegacyHabitLog, HabitLogReal, is_demo=False)
     _copy_if_empty(db, LegacyRelationship, RelationshipReal, is_demo=False)

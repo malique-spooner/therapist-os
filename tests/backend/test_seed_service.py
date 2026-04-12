@@ -9,7 +9,6 @@ from backend.models.life_data import (
     HealthDataDemo as HealthData,
     MonthlyBudgetDemo as MonthlyBudget,
     MusicDataDemo as MusicData,
-    NutritionLogDemo as NutritionLog,
     RelationshipDemo as Relationship,
     RelationshipInteractionDemo as RelationshipInteraction,
     RelationshipScreenshotImportDemo as RelationshipScreenshotImport,
@@ -26,7 +25,7 @@ def test_seed_demo_data_covers_last_90_days_and_is_idempotent(db_session):
     expected_start = date.today() - timedelta(days=89)
     expected_end = date.today()
 
-    for model in (HealthData, MusicData, NutritionLog, DailyCheckIn, WeatherData):
+    for model in (HealthData, MusicData, DailyCheckIn, WeatherData):
         count = db_session.scalar(select(func.count()).select_from(model))
         min_date = db_session.scalar(select(func.min(model.date)))
         max_date = db_session.scalar(select(func.max(model.date)))

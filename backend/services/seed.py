@@ -19,7 +19,6 @@ from ..models.life_data import (
     LocationDataDemo as LocationData,
     MonthlyBudgetDemo as MonthlyBudget,
     MusicDataDemo as MusicData,
-    NutritionLogDemo as NutritionLog,
     RelationshipDemo as Relationship,
     RelationshipInteractionDemo as RelationshipInteraction,
     RelationshipScreenshotImportDemo as RelationshipScreenshotImport,
@@ -84,7 +83,6 @@ def _cleanup_demo_window(db: Session, start: date, end: date) -> None:
         HealthData,
         MusicData,
         WeatherData,
-        NutritionLog,
         DailyCheckIn,
         LocationDailySummary,
         LocationCompanionLog,
@@ -281,30 +279,9 @@ def seed_demo_data(db: Session) -> None:
             },
         )
 
-        breakfast = r1 > (0.4 if is_weekend else 0.23)
-        lunch = r2 > 0.12
-        dinner = True
-        heavy_snacking = (not breakfast) and r3 > 0.45
-        alcohol_units = max(0, min(4, round((2 + r4 * 2) if is_weekend and r4 > 0.45 else (1 + r4 * 2) if r4 > 0.82 else 0)))
-        caffeine_count = max(0, min(4, round(1.2 + (7.1 - sleep_duration) + (r5 - 0.5) * 1.4)))
-        caffeine_before_noon = True if caffeine_count == 0 else r5 > 0.35
-        food_quality = int(max(1, min(3, round(2 + (1 if breakfast else 0) + (0.5 if lunch else -0.5) + (-0.7 if is_weekend else 0) + progress * 0.75 + (r1 - 0.5) * 0.9))))
-        _upsert_daily_demo(
-            db,
-            NutritionLog,
-            day,
-            breakfast=breakfast,
-            lunch=lunch,
-            dinner=dinner,
-            heavy_snacking=heavy_snacking,
-            food_quality=food_quality,
-            caffeine_count=caffeine_count,
-            caffeine_last_before_noon=caffeine_before_noon,
-            alcohol_units=alcohol_units,
-        )
-
-        mood = int(max(1, min(5, round(3.2 + (0.8 if breakfast else -0.5) + (0.24 * (sleep_quality - 6.5)) + (-0.45 if alcohol_units > 2 else 0) + (0.35 if r3 > 0.62 else -0.3 if r3 < 0.25 else 0) + (-0.8 if dow == 0 else 0.7 if dow == 4 else 0) + (r4 - 0.5) * 0.7))))
-        energy = int(max(1, min(5, round(3 + (sleep_duration - 6.8) * 0.55 + (food_quality - 2) * 0.5 + (0.35 if breakfast else -0.55) + (r2 - 0.5) * 0.5))))
+        recovery_boost = 0.35 if sleep_quality >= 7 and steps >= 7500 else 0
+        mood = int(max(1, min(5, round(3.2 + (0.24 * (sleep_quality - 6.5)) + recovery_boost + (0.35 if r3 > 0.62 else -0.3 if r3 < 0.25 else 0) + (-0.8 if dow == 0 else 0.7 if dow == 4 else 0) + (r4 - 0.5) * 0.7))))
+        energy = int(max(1, min(5, round(3 + (sleep_duration - 6.8) * 0.55 + min(steps / 12000, 1) * 0.45 + (r2 - 0.5) * 0.5))))
         one_words = ["tired", "okay", "hopeful", "anxious", "good", "stressed", "calm"]
         _upsert_daily_demo(
             db,

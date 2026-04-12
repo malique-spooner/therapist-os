@@ -16,7 +16,7 @@ It is designed to:
 - `src/components`
   Product UI grouped by feature area
 - `src/store`
-  Zustand stores for session state, settings, check-ins, nutrition, and relationships
+  Zustand stores for session state, settings, check-ins, and relationships
 - `src/lib`
   API client, brain blueprint data, date/domain utilities
 - `src/hooks`
@@ -33,7 +33,7 @@ It is designed to:
 - `HabitsPage`
   Identity-first habit experience with hold-to-complete bubbles
 - Domain pages
-  Health, Nutrition, Relationships, Finance, Consumption, Location
+  Health, Relationships, Finance, Consumption, Location
 - `SettingsPage`
   Local intelligence summary, data source connections, appearance, privacy
 

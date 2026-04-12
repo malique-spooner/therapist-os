@@ -155,7 +155,7 @@ export function FinancePage({ onBack, onSettings, onTalkAboutThis }: FinancePage
         )}
         {showEmptyRealState && (
           <RetryNotice
-            message={selectedBank === 'all' ? 'Not enough real finance data yet. Finish syncing a bank source or switch to Demo mode.' : `No finance data for ${selectedBank} in this range yet.`}
+            message={selectedBank === 'all' ? 'Not enough rows in the Real database yet. Finish syncing a bank source or switch to the Demo sandbox.' : `No finance data for ${selectedBank} in this range yet.`}
             onRetry={refetch}
             className="mx-4 mb-4 w-[calc(100%-2rem)]"
           />

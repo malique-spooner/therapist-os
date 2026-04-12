@@ -6,11 +6,10 @@ import { X } from 'lucide-react';
 interface DomainMenuProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (page: 'nutrition' | 'relationships' | 'finance' | 'consumption' | 'location') => void;
+  onSelect: (page: 'relationships' | 'finance' | 'consumption' | 'location') => void;
 }
 
 const items = [
-  { id: 'nutrition' as const, label: 'Nutrition', icon: '🥗', description: 'Paused log for food, caffeine, and alcohol context' },
   { id: 'relationships' as const, label: 'Relationships', icon: '🤝', description: 'Your people, interactions, coaching' },
   { id: 'finance' as const, label: 'Finance', icon: '💷', description: 'Spending patterns and emotional triggers' },
   { id: 'consumption' as const, label: 'Consumption', icon: '🎵', description: 'Music, YouTube, mood mirror' },

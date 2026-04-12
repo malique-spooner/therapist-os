@@ -4,12 +4,11 @@ import { motion } from 'framer-motion';
 import { getDashboardSnapshots } from '@/lib/domainData';
 
 interface TodaySnapshotProps {
-  onSelect: (page: 'health' | 'nutrition' | 'relationships' | 'finance' | 'consumption' | 'location') => void;
+  onSelect: (page: 'health' | 'relationships' | 'finance' | 'consumption' | 'location') => void;
 }
 
 const routeMap = {
   physical: 'health',
-  nutrition: 'nutrition',
   relationships: 'relationships',
   finance: 'finance',
   consumption: 'consumption',

@@ -55,7 +55,6 @@ Frontend feature folders include:
 - `therapist`
 - `habits`
 - `health`
-- `nutrition`
 - `relationships`
 - `finance`
 - `consumption`

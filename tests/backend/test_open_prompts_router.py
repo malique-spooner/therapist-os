@@ -6,7 +6,6 @@ def test_open_prompt_returns_candidate(client):
     assert payload is not None
     assert payload["category"] in {
         "mood",
-        "nutrition",
         "location",
         "relationships",
         "health",
@@ -15,7 +14,6 @@ def test_open_prompt_returns_candidate(client):
     }
     assert payload["targetPage"] in {
         "therapist",
-        "nutrition",
         "location",
         "relationships",
         "health",

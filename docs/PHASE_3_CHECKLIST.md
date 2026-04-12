@@ -105,16 +105,16 @@ Phase 3 goal:
 - [ ] Confirm demo people never leak into `real-only`
 - [ ] Confirm imports and interaction logs only reflect the active dataset
 
-## 5. Nutrition Archive
+## 5. Nutrition Removal
 
-### 5.1 De-emphasis
-- [ ] Remove Nutrition from the “active focus” of Phase 3
-- [ ] Keep the code and page intact
-- [ ] Make sure the app does not imply Nutrition is a polished core surface right now
+### 5.1 Active Surface
+- [x] Remove Nutrition from the “active focus” of Phase 3
+- [x] Remove the frontend Nutrition page, store, demo data, nav item, and dashboard entry points
+- [x] Remove Nutrition open-prompt nudges and API-client methods
 
-### 5.2 UX Handling
-- [ ] Add copy or visual treatment that makes its paused status clear if needed
-- [ ] Make sure it does not distract from the stronger Phase 3 surfaces
+### 5.2 Backend Handling
+- [x] Remove the active router from the FastAPI app
+- [ ] Drop archived Nutrition tables and migrations only after explicit approval for a destructive database migration
 
 ## 6. Spotify / Media Core
 
@@ -170,7 +170,7 @@ Phase 3 goal:
 - [ ] Mind works
 - [ ] Habits feels strong
 - [ ] People feels strong
-- [ ] Nutrition is clearly de-emphasized
+- [x] Nutrition is removed from active navigation and app routes
 - [ ] Spotify is a dependable core source
 - [ ] Google Takeout imports for YouTube and Search are usable
 
@@ -180,7 +180,7 @@ Phase 3 goal:
 2. Mind AI
 3. Habits page
 4. People page
-5. Nutrition archive/de-emphasis
+5. Nutrition removal
 6. Spotify/media polish
 7. Google Takeout import
 8. Final QA and Phase 3 signoff

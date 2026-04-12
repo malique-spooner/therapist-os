@@ -20,7 +20,7 @@ Includes:
 - improve the Habits page
 - improve the People page
 - keep Spotify solid as a core source
-- archive or de-emphasize Nutrition for now
+- remove Nutrition from the active product surface for now
 - add Google Takeout import for:
   - YouTube watch history
   - Google search history

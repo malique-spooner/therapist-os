@@ -34,8 +34,6 @@ from ..models.life_data import (
     MusicDataReal,
     SpotifyPlayEventDemo,
     SpotifyPlayEventReal,
-    NutritionLogDemo,
-    NutritionLogReal,
     RelationshipDemo,
     RelationshipInteractionDemo,
     RelationshipInteractionReal,

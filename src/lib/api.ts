@@ -3,7 +3,6 @@ import type { BrainPayload, BrainLayer, BrainVersion, BrainOverview } from '@/li
 import type { HabitDef } from '@/data/habits';
 import type { DayHealth } from '@/data/health';
 import type { DayFinance } from '@/data/finance';
-import type { NutritionDay } from '@/data/nutrition';
 import type { RelationshipInteraction, RelationshipPerson } from '@/data/relationships';
 import type { DailyCheckIn } from '@/data/checkins';
 
@@ -228,7 +227,6 @@ export interface AppOpenPromptPayload {
   personIds?: string[] | null;
 }
 
-export type NutritionPayload = NutritionDay;
 export type RelationshipPayload = RelationshipPerson;
 export type RelationshipInteractionPayload = RelationshipInteraction;
 export type DailyCheckInPayload = DailyCheckIn;
@@ -569,16 +567,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ newPlaceKey, label: label ?? null }),
     }),
-  getNutrition: (query: string | DateQuery) =>
-    request<NutritionPayload[]>(withDataMode(withDateQuery('/api/nutrition', typeof query === 'string' ? { period: query } : query))),
-  getNutritionForDate: (date: string) => request<NutritionPayload>(withDataMode(`/api/nutrition/day?date=${date}`)),
-  getTodayNutrition: () => request<NutritionPayload>(withDataMode('/api/nutrition/today')),
-  saveTodayNutrition: (payload: Omit<NutritionPayload, 'date'>) =>
-    request<NutritionPayload>('/api/nutrition/today', { method: 'POST', body: JSON.stringify(payload) }),
-  updateTodayNutrition: (payload: Omit<NutritionPayload, 'date'>) =>
-    request<NutritionPayload>('/api/nutrition/today', { method: 'PUT', body: JSON.stringify(payload) }),
-  saveNutritionForDate: (date: string, payload: Omit<NutritionPayload, 'date'>) =>
-    request<NutritionPayload>(`/api/nutrition/day?date=${date}`, { method: 'PUT', body: JSON.stringify(payload) }),
   getRelationships: () => request<RelationshipPayload[]>(withDataMode('/api/relationships')),
   createRelationship: (payload: Omit<RelationshipPayload, 'id' | 'avatarColour'>) =>
     request<RelationshipPayload>('/api/relationships', { method: 'POST', body: JSON.stringify(payload) }),

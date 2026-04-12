@@ -548,7 +548,7 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
             <div>
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Sync Activity Log</p>
               <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                Review demo vs real update history, row counts, and recent collection attempts across all connections.
+                Review Demo database vs Real database history, row counts, and recent collection attempts across all connections.
               </p>
             </div>
             <span className="text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>Open</span>
@@ -622,14 +622,14 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
         <SectionHeader title="Appearance" />
         <div className="mx-4 rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
           <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
-            <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>Data mode</p>
+            <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>Dataset</p>
             <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
-              Compare the 90-day demo dataset against only real records saved in the app. Real mode will now show empty states when a domain does not have enough real data yet.
+              Demo sandbox and Real database are separate stores. Switching here changes which backend tables the app reads; Real never fills gaps with demo rows.
             </p>
             <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
               {([
-                { value: 'demo-only', label: 'Demo' },
-                { value: 'real-only', label: 'Real only' },
+                { value: 'demo-only', label: 'Demo sandbox' },
+                { value: 'real-only', label: 'Real database' },
               ] as const).map((item) => (
                 <button
                   key={item.value}

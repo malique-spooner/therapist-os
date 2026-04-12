@@ -39,13 +39,13 @@ function absoluteLabel(timestamp: string | null | undefined) {
 function modeCopy(mode: ActivityMode) {
   return mode === 'demo-only'
     ? {
-        title: 'Demo dataset',
-        description: 'This shows the rolling 90-day demo records and when each demo source last refreshed.',
+        title: 'Demo database',
+        description: 'This reads the demo tables only. It is a sandbox with generated records and does not borrow from your real history.',
         accent: 'var(--color-accent)',
       }
     : {
-        title: 'Real dataset',
-        description: 'This shows actual synced records only. Sparse sections here mean the source has not written real data yet.',
+        title: 'Real database',
+        description: 'This reads the real tables only. Sparse sections mean that source has not written real rows yet, not that demo rows are filling in.',
         accent: 'var(--color-success)',
       };
 }
@@ -213,8 +213,8 @@ export function SyncActivityPage({ initialMode, onBack }: SyncActivityPageProps)
           </p>
           <div className="mt-4 inline-flex rounded-2xl p-1" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
             {([
-              ['demo-only', 'Demo data'],
-              ['real-only', 'Real data'],
+              ['demo-only', 'Demo database'],
+              ['real-only', 'Real database'],
             ] as const).map(([value, label]) => (
               <button
                 key={value}

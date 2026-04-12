@@ -2,7 +2,6 @@ import { checkInHistory } from '@/data/checkins';
 import { financeData } from '@/data/finance';
 import { healthData } from '@/data/health';
 import { musicData } from '@/data/music';
-import { nutritionData } from '@/data/nutrition';
 import { relationshipInteractions } from '@/data/relationships';
 import { APP_TODAY, differenceInDays, getDateRange, parseIsoDate } from '@/lib/date';
 
@@ -100,7 +99,6 @@ function createVisit(
 function buildDay(date: string, index: number): LocationDay {
   const health = healthData[index];
   const mood = checkInHistory[index];
-  const nutrition = nutritionData[index];
   const finance = financeData[index];
   const music = musicData[index];
   const day = parseIsoDate(date).getUTCDay();
@@ -112,7 +110,7 @@ function buildDay(date: string, index: number): LocationDay {
   const previousHomeOnly = index > 0 ? locationData[index - 1]?.placesVisitedCount === 1 : false;
 
   const lowActivation = mood.emotionalState <= 2 || health.steps < 6200;
-  const overscheduled = finance.social > 18 && finance.transport > 8 && nutrition.alcohol.units > 1;
+  const overscheduled = finance.social > 18 && finance.transport > 8 && health.sleepQuality < 6.5;
   const restorativeDay = mood.emotionalState >= 4 && health.sleepQuality >= 7 && (health.hadWorkout || inPersonCount > 0);
 
   const visits: LocationVisit[] = [createVisit(date, 'home', 0, 7 * 60, 'neutral')];

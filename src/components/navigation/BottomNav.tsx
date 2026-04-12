@@ -1,11 +1,11 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Brain, Coins, HeartPulse, Home, MapPinned, MessageCircleHeart, Music4, Repeat2, Salad, Users2 } from 'lucide-react';
+import { Brain, Coins, HeartPulse, Home, MapPinned, MessageCircleHeart, Music4, Repeat2, Users2 } from 'lucide-react';
 
 interface BottomNavProps {
-  current: 'dashboard' | 'health' | 'therapist' | 'habits' | 'nutrition' | 'relationships' | 'finance' | 'consumption' | 'location' | 'brain';
-  onNavigate: (page: 'dashboard' | 'health' | 'therapist' | 'habits' | 'nutrition' | 'relationships' | 'finance' | 'consumption' | 'location' | 'brain') => void;
+  current: 'dashboard' | 'health' | 'therapist' | 'habits' | 'relationships' | 'finance' | 'consumption' | 'location' | 'brain';
+  onNavigate: (page: 'dashboard' | 'health' | 'therapist' | 'habits' | 'relationships' | 'finance' | 'consumption' | 'location' | 'brain') => void;
 }
 
 const items = [
@@ -13,7 +13,6 @@ const items = [
   { id: 'health' as const, label: 'Health', icon: HeartPulse },
   { id: 'therapist' as const, label: 'Mind', icon: MessageCircleHeart },
   { id: 'habits' as const, label: 'Habits', icon: Repeat2 },
-  { id: 'nutrition' as const, label: 'Food log', icon: Salad },
   { id: 'relationships' as const, label: 'People', icon: Users2 },
   { id: 'finance' as const, label: 'Money', icon: Coins },
   { id: 'consumption' as const, label: 'Media', icon: Music4 },

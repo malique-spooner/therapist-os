@@ -7,7 +7,6 @@ const PAGE_SEQUENCE = [
   { id: 'health', label: 'Health' },
   { id: 'therapist', label: 'Mind' },
   { id: 'habits', label: 'Habits' },
-  { id: 'nutrition', label: 'Food' },
   { id: 'relationships', label: 'People' },
   { id: 'finance', label: 'Money' },
   { id: 'consumption', label: 'Media' },

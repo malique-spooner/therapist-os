@@ -18,7 +18,6 @@ import { useSettingsStore } from '@/store/settings';
 import { HealthPage } from './health/HealthPage';
 import { FinancePage } from './finance/FinancePage';
 import { ConsumptionPage } from './consumption/ConsumptionPage';
-import { NutritionPage } from './nutrition/NutritionPage';
 import { RelationshipsPage } from './relationships/RelationshipsPage';
 import { LocationPage } from './location/LocationPage';
 import { api, type AppOpenPromptPayload } from '@/lib/api';
@@ -30,7 +29,6 @@ type PageId =
   | 'therapist'
   | 'habits'
   | 'brain'
-  | 'nutrition'
   | 'relationships'
   | 'finance'
   | 'consumption'
@@ -42,7 +40,6 @@ const pageDepth: Record<PageId, number> = {
   therapist: 0,
   habits: 0,
   brain: 1,
-  nutrition: 1,
   relationships: 1,
   finance: 1,
   consumption: 1,
@@ -222,9 +219,6 @@ export function AppShell() {
       break;
     case 'brain':
       currentContent = <BrainPage onBack={navigateHome} />;
-      break;
-    case 'nutrition':
-      currentContent = <NutritionPage onBack={navigateHome} onSettings={() => setShowSettings(true)} onTalkAboutThis={navigateToTherapist} />;
       break;
     case 'relationships':
       currentContent = <RelationshipsPage onBack={navigateHome} onSettings={() => setShowSettings(true)} onTalkAboutThis={navigateToTherapist} />;

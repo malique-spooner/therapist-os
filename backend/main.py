@@ -10,7 +10,7 @@ from .config import settings
 from .core.logging import configure_logging, get_logger
 from .database import SessionLocal, engine
 from .middleware.request_context import RequestContextMiddleware
-from .routers import ai, auth, brain, checkins, consumption, dashboard, data_sources, finance, habits, health, location, nutrition, open_prompts, profile, relationships, weather
+from .routers import ai, auth, brain, checkins, consumption, dashboard, data_sources, finance, habits, health, location, open_prompts, profile, relationships, weather
 from .services.auth import ensure_admin_user
 from .services.life_data_bootstrap import bootstrap_life_data
 from .services.seed import seed_demo_data
@@ -101,7 +101,6 @@ app.include_router(health.router, prefix=settings.API_V1_PREFIX)
 app.include_router(finance.router, prefix=settings.API_V1_PREFIX)
 app.include_router(consumption.router, prefix=settings.API_V1_PREFIX)
 app.include_router(location.router, prefix=settings.API_V1_PREFIX)
-app.include_router(nutrition.router, prefix=settings.API_V1_PREFIX)
 app.include_router(relationships.router, prefix=settings.API_V1_PREFIX)
 app.include_router(checkins.router, prefix=settings.API_V1_PREFIX)
 app.include_router(habits.router, prefix=settings.API_V1_PREFIX)

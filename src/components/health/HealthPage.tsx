@@ -96,7 +96,7 @@ export function HealthPage({ onBack, onSettings, onTalkAboutThis }: HealthPagePr
         />
         {showEmptyRealState && (
           <RetryNotice
-            message="Not enough real health data yet. Sync Garmin or switch to Demo mode."
+            message="Not enough rows in the Real database yet. Sync Garmin or switch to the Demo sandbox."
             onRetry={refetch}
             className="mx-4 mb-4 w-[calc(100%-2rem)]"
           />

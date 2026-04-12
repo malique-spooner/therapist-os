@@ -161,10 +161,10 @@ export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: Consump
           <RetryNotice
             message={
               selectedProvider === 'youtube'
-                ? 'YouTube data is not connected yet for this range. Switch providers or Demo mode for now.'
+                ? 'YouTube data is not connected yet for this range. Switch providers or the Demo sandbox for now.'
                 : selectedProvider === 'spotify'
-                  ? 'Spotify data is not connected yet for this range. Switch providers or Demo mode for now.'
-                  : 'Not enough real media data yet for this range. Connect Spotify or YouTube, or switch to Demo mode.'
+                  ? 'Spotify data is not connected yet for this range. Switch providers or the Demo sandbox for now.'
+                  : 'Not enough rows in the Real database yet for this range. Connect Spotify or YouTube, or switch to the Demo sandbox.'
             }
             onRetry={refetch}
             className="mx-4 mb-4 w-[calc(100%-2rem)]"
