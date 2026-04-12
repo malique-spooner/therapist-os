@@ -35,7 +35,7 @@ const eveningReflectionOptions = [
   { value: 5 as const, emoji: '😊', label: 'Great Day' },
 ];
 
-export function DailyCheckIn({ onComplete }: DailyCheckInProps) {
+export function DailyCheckIn({ onComplete, isEvening = false }: DailyCheckInProps) {
   const completeCheckIn = useCheckInStore((state) => state.completeCheckIn);
   const [emotionalState, setEmotionalState] = useState<1 | 2 | 3 | 4 | 5 | undefined>();
   const [energyLevel, setEnergyLevel] = useState<1 | 2 | 3 | 4 | 5 | undefined>();
@@ -119,7 +119,7 @@ export function DailyCheckIn({ onComplete }: DailyCheckInProps) {
                 className="w-full h-[52px] rounded-xl font-semibold transition-opacity"
                 style={{ backgroundColor: canStart ? 'var(--color-primary)' : 'var(--color-border)', color: canStart ? '#fff' : 'var(--color-text-muted)' }}
               >
-                Start my day
+                {isEvening ? 'Complete reflection' : 'Start my day'}
               </button>
             </motion.div>
           )}
