@@ -8,6 +8,7 @@ import { useCheckInStore } from '@/store/checkin';
 
 interface DailyCheckInProps {
   onComplete: () => void;
+  isEvening?: boolean;
 }
 
 const emotionOptions = [
@@ -19,11 +20,19 @@ const emotionOptions = [
 ];
 
 const energyOptions = [
-  { value: 1 as const, label: 'Exhausted' },
-  { value: 2 as const, label: 'Tired' },
-  { value: 3 as const, label: 'Okay' },
-  { value: 4 as const, label: 'Energised' },
-  { value: 5 as const, label: 'Buzzing' },
+  { value: 1 as const, emoji: '😴', label: 'Exhausted' },
+  { value: 2 as const, emoji: '🥱', label: 'Tired' },
+  { value: 3 as const, emoji: '😌', label: 'Okay' },
+  { value: 4 as const, emoji: '😃', label: 'Energised' },
+  { value: 5 as const, emoji: '🤩', label: 'Buzzing' },
+];
+
+const eveningReflectionOptions = [
+  { value: 1 as const, emoji: '😞', label: 'Rough Day' },
+  { value: 2 as const, emoji: '😕', label: 'Challenging' },
+  { value: 3 as const, emoji: '😐', label: 'Neutral' },
+  { value: 4 as const, emoji: '🙂', label: 'Good Day' },
+  { value: 5 as const, emoji: '😊', label: 'Great Day' },
 ];
 
 export function DailyCheckIn({ onComplete }: DailyCheckInProps) {
@@ -44,12 +53,22 @@ export function DailyCheckIn({ onComplete }: DailyCheckInProps) {
   }, [emotionalState, energyLevel]);
 
   function handleSubmit() {
-    if (!emotionalState) return;
-    completeCheckIn({
-      emotionalState,
-      energyLevel: energyLevel ?? 3,
-      oneWord: oneWord.trim() || undefined,
-    });
+    if (isEvening) {
+      if (!eveningReflection) return;
+      completeCheckIn({
+        type: 'evening',
+        eveningReflection,
+        timestamp: Date.now(),
+      });
+    } else {
+      if (!emotionalState || !energyLevel) return;
+      completeCheckIn({
+        type: 'morning',
+        emotionalState,
+        energyLevel,
+        timestamp: Date.now(),
+      });
+    }
     setShowComplete(true);
   }
 

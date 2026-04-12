@@ -12,8 +12,18 @@ export interface Message {
   isTyping?: boolean;
 }
 
+interface CheckInRecord {
+  timestamp: number;
+  type: 'morning' | 'evening';
+  emotionalState?: number;
+  energyLevel?: number;
+  eveningReflection?: number;
+}
+
 interface SessionState {
   messages: Message[];
+  checkIns: CheckInRecord[];
+  lastCheckInType?: 'morning' | 'evening';
   isTyping: boolean;
   mode: 'async' | 'live';
   liveState: 'idle' | 'listening' | 'processing' | 'speaking';
