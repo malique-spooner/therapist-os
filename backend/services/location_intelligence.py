@@ -301,10 +301,14 @@ class LocationIntelligenceService:
             row.tone = row.tone or key_visits[0].tone
             row.latitude = sum(visit.latitude for visit in key_visits) / len(key_visits)
             row.longitude = sum(visit.longitude for visit in key_visits) / len(key_visits)
-            row.visit_count = len(key_visits)
-            row.total_minutes = sum(visit.dwell_minutes for visit in key_visits)
-            row.first_seen_at = min(datetime.fromisoformat(visit.start_timestamp) for visit in key_visits)
-            row.last_seen_at = max(datetime.fromisoformat(visit.end_timestamp) for visit in key_visits)
+            visit_count = len(key_visits)
+            total_minutes = sum(visit.dwell_minutes for visit in key_visits)
+            first_seen_at = min(datetime.fromisoformat(visit.start_timestamp) for visit in key_visits)
+            last_seen_at = max(datetime.fromisoformat(visit.end_timestamp) for visit in key_visits)
+            row.visit_count = max(row.visit_count or 0, visit_count)
+            row.total_minutes = max(row.total_minutes or 0, total_minutes)
+            row.first_seen_at = min(row.first_seen_at, first_seen_at) if row.first_seen_at else first_seen_at
+            row.last_seen_at = max(row.last_seen_at, last_seen_at) if row.last_seen_at else last_seen_at
             row.confidence_score = self._confidence_for_place(row.visit_count, row.total_minutes)
             if row.status is None:
                 row.status = "active"
@@ -328,9 +332,9 @@ class LocationIntelligenceService:
                 "description": f"You spent {(selected_day or {}).get('homeHours', 0):.1f} hours at home on the selected day.",
                 "latitude": home.latitude or settings.USER_LATITUDE,
                 "longitude": home.longitude or settings.USER_LONGITUDE,
-                "zoom": 13,
-                "heading": 0,
-                "tilt": 35,
+                "zoom": 16,
+                "heading": 35,
+                "tilt": 45,
                 "accent": "Home rhythm",
                 "durationMs": 5200,
             }
@@ -343,9 +347,9 @@ class LocationIntelligenceService:
                     "description": f"{self._format_minutes(visit.dwell_minutes)} here. {visit.highlight}.",
                     "latitude": visit.latitude,
                     "longitude": visit.longitude,
-                    "zoom": 16,
+                    "zoom": 17,
                     "heading": 65 + index * 45,
-                    "tilt": 60,
+                    "tilt": 48,
                     "accent": "Flyover",
                     "durationMs": 4800,
                 }
@@ -359,9 +363,9 @@ class LocationIntelligenceService:
                     "description": "OwnTracks picked up a waypoint transition here, so this place can become a teachable recurring scene rather than a loose dot on the map.",
                     "latitude": transition_event.latitude or settings.USER_LATITUDE,
                     "longitude": transition_event.longitude or settings.USER_LONGITUDE,
-                    "zoom": 17,
+                    "zoom": 18,
                     "heading": 155,
-                    "tilt": 67,
+                    "tilt": 50,
                     "accent": "Geofence memory",
                     "durationMs": 4600,
                 }
@@ -375,9 +379,9 @@ class LocationIntelligenceService:
                     "description": f"{strong_place.label or strong_place.place_key} keeps behaving like a regulating place.",
                     "latitude": strong_place.latitude or settings.USER_LATITUDE,
                     "longitude": strong_place.longitude or settings.USER_LONGITUDE,
-                    "zoom": 14,
+                    "zoom": 16,
                     "heading": 120,
-                    "tilt": 55,
+                    "tilt": 46,
                     "accent": "Keep this in rotation",
                     "durationMs": 5200,
                 }

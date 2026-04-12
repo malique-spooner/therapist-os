@@ -17,6 +17,8 @@ from ..models.life_data import (
     LocationCompanionLogDemo as LocationCompanionLog,
     LocationDailySummaryDemo as LocationDailySummary,
     LocationDataDemo as LocationData,
+    LocationPlaceHistoryDemo as LocationPlaceHistory,
+    LocationPlaceMemoryDemo as LocationPlaceMemory,
     MonthlyBudgetDemo as MonthlyBudget,
     MusicDataDemo as MusicData,
     RelationshipDemo as Relationship,
@@ -27,6 +29,32 @@ from ..models.life_data import (
 )
 
 DEMO_SOURCE_IDS = ("garmin", "truelayer", "spotify", "youtube", "weather", "owntracks")
+DEMO_PLACES = [
+    ("home", "Home", "home", "neutral", 51.5074, -0.1278, "Base, recovery, late evenings."),
+    ("work", "Studio Office", "work", "draining", 51.5156, -0.0919, "Deep work and deadline pressure."),
+    ("university", "University Library", "work", "neutral", 51.5232, -0.1329, "Study blocks and focused reading."),
+    ("gym", "Movement Studio", "gym", "positive", 51.5033, -0.1195, "Training, sport, and better energy after."),
+    ("park", "Riverside Park", "green_space", "positive", 51.5055, -0.1049, "Walks that usually settle the day."),
+    ("pub", "The Anchor Pub", "social", "positive", 51.5081, -0.0974, "Friends, football, and noisy decompression."),
+    ("cafe", "Corner Cafe", "cafe", "positive", 51.5111, -0.1013, "Coffee, laptop time, and low-stakes reset."),
+    ("supermarket", "Market Run", "errands", "neutral", 51.5142, -0.1161, "Groceries and practical errands."),
+    ("station", "Tube Junction", "transit", "draining", 51.5098, -0.1180, "Commute handoff and friction."),
+    ("football", "Five-a-side Pitch", "social", "positive", 51.5202, -0.1029, "Team sport, competition, and connection."),
+]
+DEMO_TRACKS = [
+    ("Nights", "Frank Ocean", "alt r&b"),
+    ("Pink + White", "Frank Ocean", "alt r&b"),
+    ("Seigfried", "Frank Ocean", "alt r&b"),
+    ("Dang!", "Mac Miller", "neo-soul"),
+    ("Good News", "Mac Miller", "neo-soul"),
+    ("Sweet Disposition", "The Temper Trap", "indie rock"),
+    ("Midnight City", "M83", "electronic"),
+    ("Glue", "Bicep", "electronic"),
+    ("Motion Sickness", "Phoebe Bridgers", "indie rock"),
+    ("Garden Song", "Phoebe Bridgers", "indie folk"),
+    ("Breathe Deeper", "Tame Impala", "psychedelic pop"),
+    ("Eventually", "Tame Impala", "psychedelic pop"),
+]
 
 DEFAULT_HABITS = [
     {"id": "racket-sport", "name": "I will play racket sports three times a week because I am an athlete.", "action_text": "play racket sports", "when_text": "three times a week", "why_text": "I am an athlete", "habit_mode": "good", "cadence_type": "weekly-count", "target_count": 3, "sub_label": None, "category": "Movement", "category_icon": "🎾", "habit_type": "boolean", "frequency": "3x per week"},
@@ -95,6 +123,7 @@ def _cleanup_demo_window(db: Session, start: date, end: date) -> None:
     db.execute(delete(FinanceData).where((FinanceData.date < start) | (FinanceData.date > end)))
     db.execute(delete(HabitLog).where((HabitLog.date < start) | (HabitLog.date > end)))
     db.execute(delete(RelationshipInteraction).where((RelationshipInteraction.date < start) | (RelationshipInteraction.date > end)))
+    db.execute(delete(LocationPlaceHistory).where(LocationPlaceHistory.created_at < datetime(start.year, start.month, start.day)))
     db.execute(
         delete(LocationData).where(
             (LocationData.timestamp < datetime(start.year, start.month, start.day))
@@ -116,6 +145,39 @@ def _upsert_daily_demo(
     for key, value in values.items():
         setattr(row, key, value)
     return row
+
+
+def _upsert_location_point(db: Session, when: datetime, lat: float, lng: float, index: int) -> None:
+    row = db.scalar(select(LocationData).where(LocationData.timestamp == when))
+    if not row:
+        row = LocationData(timestamp=when, latitude=lat, longitude=lng)
+        db.add(row)
+    row.latitude = lat
+    row.longitude = lng
+    row.accuracy = 10 + (index % 4) * 4
+    row.battery_level = max(18, 94 - (index % 8) * 7)
+
+
+def _seed_place_memory(db: Session, start: date, end: date) -> None:
+    for place_key, label, category, tone, lat, lng, note in DEMO_PLACES:
+        row = db.scalar(select(LocationPlaceMemory).where(LocationPlaceMemory.place_key == place_key))
+        if not row:
+            row = LocationPlaceMemory(place_key=place_key)
+            db.add(row)
+        row.label = label
+        row.category = category
+        row.tone = tone
+        row.note = note
+        row.latitude = lat
+        row.longitude = lng
+        row.status = "active"
+        row.visit_count = 90 if place_key == "home" else max(8, int(12 + _seed(len(place_key)) * 34))
+        row.total_minutes = row.visit_count * (480 if place_key == "home" else 80 + int(_seed(len(label)) * 110))
+        row.first_seen_at = datetime.combine(start, datetime.min.time()).replace(hour=8)
+        row.last_seen_at = datetime.combine(end, datetime.min.time()).replace(hour=22)
+        row.confidence_score = 0.96 if place_key in {"home", "work", "gym"} else 0.72 + _seed(len(note)) * 0.2
+        if not db.scalar(select(LocationPlaceHistory.id).where(LocationPlaceHistory.place_key == place_key).limit(1)):
+            db.add(LocationPlaceHistory(place_key=place_key, action="seeded", detail_json={"label": label, "category": category}))
 
 
 def _upsert_demo_sync_attempt(
@@ -192,6 +254,7 @@ def seed_demo_data(
 
     daily_categories: dict[date, dict[str, int]] = {}
     daily_social_evenings: dict[date, bool] = {}
+    _seed_place_memory(db, start, end)
 
     for i in range(90):
         day = start + timedelta(days=i)
@@ -269,6 +332,21 @@ def seed_demo_data(
             condition="cloudy" if r3 < 0.4 else "rainy" if r3 < 0.55 else "sunny",
             uv_index=round(1 + progress * 4 + r4 * 2, 1),
         )
+        day_places = [DEMO_PLACES[0]]
+        if not is_weekend:
+            day_places += [DEMO_PLACES[8], DEMO_PLACES[1 if i % 4 else 2]]
+        if workout_logged:
+            day_places.append(DEMO_PLACES[3])
+        if r5 > 0.5:
+            day_places.append(DEMO_PLACES[4])
+        if has_social_evening:
+            day_places.append(DEMO_PLACES[5 if r4 > 0.45 else 9])
+        if r2 > 0.62:
+            day_places.append(DEMO_PLACES[6])
+        if r3 > 0.64:
+            day_places.append(DEMO_PLACES[7])
+        day_places.append(DEMO_PLACES[0])
+
         _upsert_daily_demo(
             db,
             LocationDailySummary,
@@ -280,6 +358,23 @@ def seed_demo_data(
             commute_detected=(not is_weekend and r4 > 0.25),
             time_outdoors_minutes=max(20, round(_lerp(55, 110, progress) + (r5 - 0.5) * 45)),
         )
+        base_hours = [7, 8, 10, 13, 17, 19, 21, 22]
+        for idx, place in enumerate(day_places[: len(base_hours)]):
+            _, _, _, _, lat, lng, _ = place
+            arrive = datetime(day.year, day.month, day.day, base_hours[idx], (idx * 7) % 50)
+            dwell = 35 if place[0] in {"station", "supermarket"} else 75 if place[0] not in {"home", "work", "university"} else 120
+            _upsert_location_point(db, arrive, lat + (r1 - 0.5) * 0.00045, lng + (r2 - 0.5) * 0.00045, idx * 2)
+            _upsert_location_point(db, arrive + timedelta(minutes=dwell), lat + (r3 - 0.5) * 0.00045, lng + (r4 - 0.5) * 0.00045, idx * 2 + 1)
+
+        track_rotation = [
+            DEMO_TRACKS[(i + offset * 3) % len(DEMO_TRACKS)]
+            for offset in range(4)
+        ]
+        top_tracks = [
+            {"name": name, "artist": artist, "plays": 1 + int(_seed(i * 19 + idx) * 5)}
+            for idx, (name, artist, _) in enumerate(track_rotation)
+        ]
+        top_genres = list(dict.fromkeys([genre for _, _, genre in track_rotation]))[:3]
         _upsert_daily_demo(
             db,
             MusicData,
@@ -289,11 +384,8 @@ def seed_demo_data(
             average_energy=round(0.4 + r4 * 0.45, 3),
             average_danceability=round(0.3 + r5 * 0.5, 3),
             new_discoveries=2 if r1 > 0.65 else 1,
-            top_genres=["indie pop", "alt r&b", "ambient"] if r3 > 0.5 else ["indie rock", "electronic", "neo-soul"],
-            top_tracks=[
-                {"name": "Seed Track A", "artist": "Artist One", "plays": 3},
-                {"name": "Seed Track B", "artist": "Artist Two", "plays": 2},
-            ],
+            top_genres=top_genres,
+            top_tracks=top_tracks,
             provider_breakdown={
                 "spotify": {
                     "label": "Spotify",
@@ -302,7 +394,8 @@ def seed_demo_data(
                     "averageEnergy": round(0.4 + r4 * 0.45, 3),
                     "averageDanceability": round(0.3 + r5 * 0.5, 3),
                     "newDiscoveries": 2 if r1 > 0.65 else 1,
-                    "topGenres": ["indie pop", "alt r&b", "ambient"] if r3 > 0.5 else ["indie rock", "electronic", "neo-soul"],
+                    "topGenres": top_genres,
+                    "topTracks": top_tracks,
                 },
                 "youtube": {
                     "label": "YouTube",
@@ -337,27 +430,6 @@ def seed_demo_data(
             companion_log.person_ids = ["alex"] if has_social_evening else []
             companion_log.context_label = "social evening" if has_social_evening else None
             companion_log.note = "Seeded demo companion context"
-
-        point_times = [8, 12, 18, 22]
-        point_offsets = [
-            (0.0002, -0.0001),
-            (0.004 + r1 * 0.002, -0.003 - r2 * 0.002),
-            (0.007 + r3 * 0.003, -0.005 - r4 * 0.003) if has_social_evening else (0.0015, -0.0012),
-            (0.0004, -0.0002),
-        ]
-        for idx, hour in enumerate(point_times):
-            point_id = None
-            point_time = datetime(day.year, day.month, day.day, hour, 0)
-            existing_point = db.scalar(select(LocationData).where(LocationData.timestamp == point_time))
-            if not existing_point:
-                existing_point = LocationData(timestamp=point_time, latitude=0, longitude=0)
-                db.add(existing_point)
-            lat_offset, lon_offset = point_offsets[idx]
-            existing_point.timestamp = point_time
-            existing_point.latitude = 51.5074 + lat_offset
-            existing_point.longitude = -0.1278 + lon_offset
-            existing_point.accuracy = 18 + idx * 4
-            existing_point.battery_level = max(22, 96 - idx * 17)
 
     for person in RELATIONSHIP_PEOPLE:
         existing = db.get(Relationship, person["id"])

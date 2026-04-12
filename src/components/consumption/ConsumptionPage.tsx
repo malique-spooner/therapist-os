@@ -91,8 +91,8 @@ export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: Consump
             averageEnergy: spotify.averageEnergy,
             averageDanceability: spotify.averageDanceability,
             newDiscoveries: spotify.newDiscoveries,
-            topGenres: spotify.topGenres,
-            topTracks: spotify.topTracks,
+            topGenres: spotify.topGenres ?? day.topGenres ?? [],
+            topTracks: spotify.topTracks ?? day.topTracks ?? [],
           };
         })
         .filter((day): day is NonNullable<typeof day> => Boolean(day)),

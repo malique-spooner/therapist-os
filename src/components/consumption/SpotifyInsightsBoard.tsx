@@ -28,7 +28,7 @@ function moodReadout(valence: number, energy: number, danceability: number) {
 function aggregateTopGenres(days: ConsumptionPayload[]) {
   const genreScores = new Map<string, number>();
   days.forEach((day) => {
-    day.topGenres.forEach((genre, index) => {
+    (day.topGenres ?? []).forEach((genre, index) => {
       genreScores.set(genre, (genreScores.get(genre) ?? 0) + (5 - index));
     });
   });
@@ -41,7 +41,7 @@ function aggregateTopGenres(days: ConsumptionPayload[]) {
 function aggregateTopTracks(days: ConsumptionPayload[]) {
   const tracks = new Map<string, { name: string; artist: string; plays: number; days: number }>();
   days.forEach((day) => {
-    day.topTracks.forEach((track) => {
+    (day.topTracks ?? []).forEach((track) => {
       const name = track.name?.trim() || 'Unknown track';
       const artist = track.artist?.trim() || 'Unknown artist';
       const key = `${name}__${artist}`;
@@ -60,7 +60,7 @@ function aggregateTopTracks(days: ConsumptionPayload[]) {
 function aggregateTopArtists(days: ConsumptionPayload[]) {
   const artists = new Map<string, { artist: string; plays: number }>();
   days.forEach((day) => {
-    day.topTracks.forEach((track) => {
+    (day.topTracks ?? []).forEach((track) => {
       const artist = track.artist?.trim() || 'Unknown artist';
       artists.set(artist, {
         artist,

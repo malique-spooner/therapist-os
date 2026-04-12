@@ -12,6 +12,7 @@ interface GoogleMapCanvasProps {
   places: Array<LocationPlaceMemoryPayload & { key?: string; averageDwellMinutes?: number | null }>;
   highlightedPlaceKey?: string | null;
   activeScene?: LocationRecapScenePayload | null;
+  onPlaceSelect?: (placeKey: string) => void;
   className?: string;
 }
 
@@ -24,6 +25,7 @@ interface GoogleMapsNamespace {
 
 interface GoogleMapOverlay {
   setMap(map: GoogleMapInstance | null): void;
+  addListener?(eventName: string, handler: () => void): void;
 }
 
 interface GoogleLatLng {
@@ -93,10 +95,12 @@ function MapFallback({
   points,
   places,
   highlightedPlaceKey,
+  onPlaceSelect,
 }: {
   points: LocationPointPayload[];
   places: Array<LocationPlaceMemoryPayload & { key?: string }>;
   highlightedPlaceKey?: string | null;
+  onPlaceSelect?: (placeKey: string) => void;
 }) {
   const coordinates = [
     ...points.map((point) => ({ lat: point.latitude, lng: point.longitude })),
@@ -149,7 +153,11 @@ function MapFallback({
           const mapped = mapPoint(place.latitude ?? 51.5074, place.longitude ?? -0.1278);
           const isHighlighted = (place.key ?? place.placeKey) === highlightedPlaceKey;
           return (
-            <g key={place.key ?? place.placeKey}>
+            <g
+              key={place.key ?? place.placeKey}
+              onClick={() => onPlaceSelect?.(place.key ?? place.placeKey)}
+              style={{ cursor: 'pointer' }}
+            >
               <circle
                 cx={mapped.x}
                 cy={mapped.y}
@@ -177,6 +185,7 @@ export function GoogleMapCanvas({
   places,
   highlightedPlaceKey,
   activeScene,
+  onPlaceSelect,
   className,
 }: GoogleMapCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -274,16 +283,18 @@ export function GoogleMapCanvas({
     }
 
     places.forEach((place) => {
+      const placeKey = place.key ?? place.placeKey;
       const circle = new maps.Circle({
-        strokeColor: (place.key ?? place.placeKey) === highlightedPlaceKey ? '#f8fafc' : '#ffffff',
+        strokeColor: placeKey === highlightedPlaceKey ? '#f8fafc' : '#0f172a',
         strokeOpacity: 0.9,
-        strokeWeight: (place.key ?? place.placeKey) === highlightedPlaceKey ? 2 : 1,
+        strokeWeight: placeKey === highlightedPlaceKey ? 3 : 1,
         fillColor: place.tone === 'positive' ? '#f4a261' : place.tone === 'draining' ? '#ef4444' : '#f8fafc',
-        fillOpacity: (place.key ?? place.placeKey) === highlightedPlaceKey ? 0.9 : 0.68,
+        fillOpacity: placeKey === highlightedPlaceKey ? 0.95 : 0.72,
         map,
         center: { lat: place.latitude ?? 51.5074, lng: place.longitude ?? -0.1278 },
-        radius: (place.key ?? place.placeKey) === 'home' ? 110 : Math.max(45, Math.min(160, (place.averageDwellMinutes ?? 60) * 1.7)),
+        radius: placeKey === 'home' ? 130 : Math.max(55, Math.min(180, (place.averageDwellMinutes ?? 60) * 1.9)),
       });
+      circle.addListener?.('click', () => onPlaceSelect?.(placeKey));
       overlaysRef.current.push(circle);
     });
 
@@ -353,10 +364,10 @@ export function GoogleMapCanvas({
       map.panTo(defaultCenter);
       map.setZoom(13);
     }
-  }, [activeScene, defaultCenter, highlightedPlaceKey, mapReady, places, points]);
+  }, [activeScene, defaultCenter, highlightedPlaceKey, mapReady, onPlaceSelect, places, points]);
 
   if (!apiKey || loadError) {
-    return <MapFallback points={points} places={places} highlightedPlaceKey={highlightedPlaceKey} />;
+    return <MapFallback points={points} places={places} highlightedPlaceKey={highlightedPlaceKey} onPlaceSelect={onPlaceSelect} />;
   }
 
   return (

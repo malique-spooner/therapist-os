@@ -18,7 +18,7 @@ import { RetryNotice } from '@/components/ui/retry-notice';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { api, type LocationIntelligencePayload, type LocationPlaceHistoryPayload } from '@/lib/api';
-import { addDays, APP_TODAY, clampIsoDate, differenceInDays, getDayLabel } from '@/lib/date';
+import { addDays, APP_TODAY, clampIsoDate, getDayLabel } from '@/lib/date';
 import { useApiQuery } from '@/hooks/useApiQuery';
 import { useRelationshipsStore } from '@/store/relationships';
 import { useSettingsStore } from '@/store/settings';
@@ -309,60 +309,39 @@ export function LocationPage({ onBack, onSettings, onTalkAboutThis }: LocationPa
           <RetryNotice onRetry={refetch} className="mx-4 mb-4 mt-4 w-[calc(100%-2rem)]" />
         )}
 
-        <div className="px-4 pt-4">
+        <div className="pt-2">
           <motion.div
-            className="relative overflow-hidden rounded-[34px] p-4"
+            className="relative overflow-hidden"
             style={{
-              background:
-                'linear-gradient(135deg, #08111f 0%, #102437 55%, #183a4b 100%)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              backgroundColor: '#08111f',
             }}
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
           >
-            <div className="relative h-[48vh] min-h-[360px]">
+            <div className="relative h-[70vh] min-h-[520px]">
               <GoogleMapCanvas
                 apiKey={googleMapsApiKey}
-                points={experience.selectedDayPoints.length ? experience.selectedDayPoints : experience.points.slice(-32)}
+                points={experience.selectedDayPoints.length ? experience.selectedDayPoints : experience.points.slice(-90)}
                 places={experience.places}
                 highlightedPlaceKey={selectedPlace?.key ?? null}
                 activeScene={recapPlaying ? activeScene : null}
+                onPlaceSelect={(placeKey) => {
+                  setSelectedPlaceKey(placeKey);
+                  setDetailMode('place');
+                  setDetailOpen(true);
+                }}
+                className="rounded-none border-0"
               />
 
-              <div className="pointer-events-none absolute inset-x-4 top-4 flex items-start justify-between gap-4">
-                <div className="max-w-[70%] rounded-[26px] px-4 py-3" style={{ backgroundColor: 'rgba(8,17,31,0.68)', backdropFilter: 'blur(16px)', color: '#fff' }}>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                    {recapPlaying ? 'Weekly story mode' : 'Live story map'}
-                  </p>
-                  <p className="mt-2 text-xl font-semibold leading-tight">{recapPlaying && activeScene ? activeScene.title : experience.heroTitle}</p>
-                  <p className="mt-2 text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.78)' }}>
-                    {recapPlaying && activeScene ? activeScene.description : experience.heroBody}
-                  </p>
-                </div>
-
-                <div className="rounded-[24px] px-3 py-3 text-right" style={{ backgroundColor: 'rgba(8,17,31,0.68)', backdropFilter: 'blur(16px)', color: '#fff' }}>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                    {recapPlaying ? 'Scene' : 'Selected range'}
-                  </p>
-                  <p className="mt-2 text-sm font-semibold">
-                    {recapPlaying && activeScene ? activeScene.accent : getDayLabel(range.endDate, { weekday: 'short', day: 'numeric', month: 'short' })}
-                  </p>
-                  <p className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                    {recapPlaying ? `${activeSceneIndex + 1} of ${experience.recapScenes.length}` : `${differenceInDays(range.startDate, range.endDate) + 1} day window`}
-                  </p>
-                </div>
-              </div>
-
-              <div className="absolute inset-x-4 bottom-4 flex flex-wrap gap-2">
-                {experience.rangeStats.map((stat) => (
-                  <div key={stat.label} className="rounded-[22px] px-3 py-2" style={{ backgroundColor: 'rgba(8,17,31,0.68)', backdropFilter: 'blur(16px)' }}>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'rgba(255,255,255,0.6)' }}>{stat.label}</p>
-                    <p className="mt-1 text-sm font-semibold text-white">{stat.value}</p>
-                    <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.62)' }}>{stat.detail}</p>
-                  </div>
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={() => selectedPlace && setDetailOpen(true)}
+                className="absolute bottom-4 left-4 rounded-2xl px-3 py-2 text-xs font-semibold"
+                style={{ backgroundColor: 'rgba(8,17,31,0.72)', color: '#fff', backdropFilter: 'blur(12px)' }}
+              >
+                {recapPlaying && activeScene ? activeScene.title : 'Tap a place for details'}
+              </button>
             </div>
 
             {!googleMapsApiKey && (
