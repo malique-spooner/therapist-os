@@ -917,6 +917,8 @@ class DataSourceService:
         self._store_config(source_id, record, next_config)
         record.available = self._availability(db).get(source_id, False)
         record.connected = self._is_connected(source_id, next_config, record.available, record.last_sync_status)
+        if source_id in {"owntracks", "garmin", "instagram", "snapchat", "youtube", "chrome"}:
+            record.last_sync_status = None
         record.last_error = None
         record.connection_hint = self._connection_hint(source_id, next_config, record.available, record.connected)
         if source_id == "garmin":
