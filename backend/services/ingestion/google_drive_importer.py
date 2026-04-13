@@ -4,6 +4,7 @@ import csv
 from dataclasses import dataclass
 from datetime import datetime
 import hashlib
+from html.parser import HTMLParser
 import io
 import json
 from typing import Any
@@ -38,7 +39,38 @@ SOURCE_FOLDER_NAMES = {
     "chrome": ("Google",),
 }
 
-TEXT_SUFFIXES = (".csv", ".json", ".txt")
+TEXT_SUFFIXES = (".csv", ".json", ".txt", ".html")
+
+
+class TableHTMLParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.rows: list[list[str]] = []
+        self._in_cell = False
+        self._current_cell: list[str] = []
+        self._current_row: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "tr":
+            self._current_row = []
+        elif tag in {"td", "th"} and self._current_row is not None:
+            self._in_cell = True
+            self._current_cell = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"td", "th"} and self._in_cell and self._current_row is not None:
+            text = " ".join("".join(self._current_cell).split())
+            self._current_row.append(text)
+            self._current_cell = []
+            self._in_cell = False
+        elif tag == "tr" and self._current_row is not None:
+            if any(cell for cell in self._current_row):
+                self.rows.append(self._current_row)
+            self._current_row = None
+
+    def handle_data(self, data: str) -> None:
+        if self._in_cell:
+            self._current_cell.append(data)
 
 
 @dataclass(frozen=True)
@@ -314,6 +346,11 @@ class GoogleDriveImportService:
                     if entry.filename.lower().endswith(".json"):
                         rows.extend(self._extract_json_rows(entry.filename, entry_bytes))
                         continue
+                    if entry.filename.lower().endswith(".html"):
+                        html_rows = self._extract_html_rows(entry.filename, entry_bytes)
+                        if html_rows:
+                            rows.extend(html_rows)
+                            continue
                     payload["text"] = self._decode_text(entry_bytes)[:20000]
                 rows.append(payload)
         return rows
@@ -333,6 +370,22 @@ class GoogleDriveImportService:
                     rows.extend({"kind": "json_item", "path": file_name, "key": key, "row": item} for item in value)
             return rows or [{"kind": "json_document", "path": file_name, "row": data}]
         return [{"kind": "json_value", "path": file_name, "row": data}]
+
+    def _extract_html_rows(self, file_name: str, content: bytes) -> list[dict[str, Any]]:
+        parser = TableHTMLParser()
+        parser.feed(self._decode_text(content))
+        if not parser.rows:
+            return []
+        header = parser.rows[0]
+        body = parser.rows[1:] if len(parser.rows) > 1 else parser.rows
+        rows: list[dict[str, Any]] = []
+        for index, cells in enumerate(body, start=1):
+            if len(header) == len(cells) and len(set(header)) == len(header):
+                row: dict[str, Any] = dict(zip(header, cells))
+            else:
+                row = {"cells": cells}
+            rows.append({"kind": "html_table_row", "path": file_name, "row_index": index, "row": row})
+        return rows
 
     @staticmethod
     def _decode_text(content: bytes) -> str:
