@@ -49,17 +49,19 @@ function SourceActivityCard({ item }: { item: DataSourceActivityItemPayload }) {
   const hasRows = item.recordsAvailable > 0;
   const statusLabel = item.syncBlocked
     ? 'Cooldown'
-    : item.lastSyncStatus === 'failed'
-      ? 'Sync failed'
+    : ['garmin', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(item.id) && item.available
+      ? 'Import folder set'
+      : item.id === 'owntracks' && item.available && !item.connected
+        ? 'Waiting for phone'
+        : item.lastSyncStatus === 'failed'
+          ? 'Sync failed'
       : item.lastSyncStatus === 'automatic-only'
         ? 'Auto only'
         : item.connected
           ? 'Connected'
-          : item.id === 'owntracks' && item.available
-            ? 'Waiting for ping'
           : item.available
             ? 'Ready'
-            : 'Setup';
+            : 'Needs setup';
 
   return (
     <div className="rounded-[24px] p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>

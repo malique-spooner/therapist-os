@@ -146,22 +146,21 @@ DEFAULT_SOURCES = {
         },
     },
     "google_maps": {
-        "name": "Google Maps",
-        "category": "Backend settings - Maps",
+        "name": "Google Console",
+        "category": "Backend - API keys",
         "icon": "🗺️",
-        "hint": "Save a Google Maps browser API key so Therapist OS can render map views and later power 3D recap scenes.",
+        "hint": "Save a Google Maps API key from Google Cloud Console.",
         "setup": {
             "mode": "api-key",
-            "title": "Connect Google Maps",
-            "description": "Save a Google Maps browser API key for the map canvas, place visuals, and future cinematic 3D recap work.",
-            "actionLabel": "Save Maps API key",
+            "title": "Connect Google Console",
+            "description": "Save the Google Maps API key used for map views.",
+            "actionLabel": "Save API key",
             "instructions": [
-                "Create a Google Maps Platform browser API key in the Google Cloud console.",
-                "Restrict the key to the Maps JavaScript API and the domains you control before using it in production.",
-                "This key is for frontend map rendering, so it is expected to be a browser-safe key rather than a secret server key.",
+                "Create a Google Maps Platform browser API key in Google Cloud Console.",
+                "Restrict it to Maps JavaScript API and your domains.",
             ],
             "fields": [
-                {"key": "api_key", "label": "Google Maps browser API key", "type": "password", "placeholder": "AIza...", "required": True},
+                {"key": "api_key", "label": "Google Maps API key", "type": "password", "placeholder": "AIza...", "required": True},
             ],
         },
     },
@@ -242,6 +241,19 @@ DEFAULT_SOURCES = {
     },
 }
 
+VISIBLE_SOURCE_IDS = (
+    "owntracks",
+    "spotify",
+    "truelayer",
+    "garmin",
+    "instagram",
+    "snapchat",
+    "youtube",
+    "chrome",
+    "weather",
+    "google_maps",
+)
+
 SENSITIVE_FIELD_KEYS: dict[str, set[str]] = {
     "garmin": {"password"},
     "truelayer": {"client_secret", "refresh_token", "access_token", "pkce_verifier", "oauth_state"},
@@ -285,7 +297,7 @@ class DataSourceService:
 
     @staticmethod
     def _manual_sync_allowed(source_id: str) -> bool:
-        return source_id not in {"garmin", "owntracks", "google_maps"}
+        return source_id not in {"garmin", "owntracks", "google_maps", "instagram", "snapchat", "youtube", "chrome"}
 
     def _config(self, record: DataSourceConnection | None) -> dict[str, str]:
         if not record:
@@ -347,6 +359,8 @@ class DataSourceService:
             return False
         if source_id == "owntracks":
             return last_sync_status == "success"
+        if source_id in {"garmin", "instagram", "snapchat", "youtube", "chrome"}:
+            return available
         if source_id in {"spotify", "truelayer", "google_drive"}:
             return bool(config.get("refresh_token"))
         return True
@@ -628,7 +642,8 @@ class DataSourceService:
     def list_sources(self, db: Session) -> list[dict]:
         availability = self._availability(db)
         payload: list[dict] = []
-        for source_id, default in DEFAULT_SOURCES.items():
+        for source_id in VISIBLE_SOURCE_IDS:
+            default = DEFAULT_SOURCES[source_id]
             record = self._record(source_id, db)
             record.display_name = default["name"]
             record.category = default["category"]
@@ -706,7 +721,7 @@ class DataSourceService:
             return self.serialize(record, DEFAULT_SOURCES[source_id]["icon"])
         if trigger == "manual" and not self._manual_sync_allowed(source_id):
             record.last_sync_status = "automatic-only"
-            record.last_error = "Garmin sync is automatic only. Therapist OS runs it once per day in the background."
+            record.last_error = "Manual sync is not available for this source yet."
             self._append_sync_attempt(
                 source_id,
                 "automatic-only",
@@ -1173,7 +1188,8 @@ class DataSourceService:
         self._backfill_sync_attempts(db)
         items: list[dict] = []
         availability = self._availability(db)
-        for source_id, default in DEFAULT_SOURCES.items():
+        for source_id in VISIBLE_SOURCE_IDS:
+            default = DEFAULT_SOURCES[source_id]
             record = self._record(source_id, db)
             record.display_name = default["name"]
             record.category = default["category"]

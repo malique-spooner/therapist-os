@@ -90,12 +90,13 @@ export function DataSourceSetupSheet({
   const statusLabel = useMemo(() => {
     const currentSource = source;
     if (!currentSource) return 'Setup required';
+    if (['garmin', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(currentSource.id) && currentSource.available) return 'Import folder set';
+    if (currentSource.id === 'owntracks' && currentSource.available && !currentSource.connected) return 'Waiting for phone';
     if (currentSource.syncBlocked) return 'Cooldown';
     if (currentSource.lastSyncStatus === 'failed') return 'Sync failed';
     if (currentSource.lastSyncStatus === 'automatic-only') return 'Automatic only';
     if (currentSource.connected) return 'Connected';
     if (currentSource.connectionState === 'authorization-required') return 'Finish sign-in';
-    if (currentSource.id === 'owntracks' && currentSource.available) return 'Waiting for ping';
     if (currentSource.available) return 'Ready to sync';
     return 'Setup required';
   }, [source]);
@@ -122,6 +123,14 @@ export function DataSourceSetupSheet({
           'Put Garmin export files in the TherapistOS Google Drive folder.',
           'Save the folder here.',
           'Therapist OS will use this folder for semi-automated health imports.',
+        ];
+      case 'instagram':
+      case 'snapchat':
+      case 'youtube':
+      case 'chrome':
+        return [
+          'Put export files in the TherapistOS Google Drive folder.',
+          'Therapist OS will use this folder for semi-automated imports.',
         ];
       case 'truelayer':
         return [

@@ -80,22 +80,6 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     manualSyncAllowed: false,
   },
   {
-    id: 'google_drive',
-    name: 'Google Drive Imports',
-    category: 'Semi-automated - Export folders',
-    icon: '🗂️',
-    connected: false,
-    available: false,
-    lastSync: null,
-    lastSyncStatus: null,
-    folderPath: 'Therapist OS / Google Takeout',
-    connectionHint: 'Planned import source for Google Takeout. Point recurring exports at the Therapist OS / Google Takeout folder.',
-    lastError: null,
-    syncBlocked: false,
-    syncGuardMessage: null,
-    manualSyncAllowed: true,
-  },
-  {
     id: 'instagram',
     name: 'Instagram',
     category: 'Semi-automated - People export folder',
@@ -172,14 +156,14 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
   },
   {
     id: 'google_maps',
-    name: 'Google Maps',
-    category: 'Backend settings - Maps',
+    name: 'Google Console',
+    category: 'Backend - API keys',
     icon: '🗺️',
     connected: false,
     available: false,
     lastSync: null,
     lastSyncStatus: null,
-    connectionHint: 'Save a Google Maps browser API key so Therapist OS can render map views and future 3D recap scenes.',
+    connectionHint: 'Save the Google Maps API key from Google Cloud Console.',
     lastError: null,
     syncBlocked: false,
     syncGuardMessage: null,
@@ -200,29 +184,14 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     syncGuardMessage: null,
     manualSyncAllowed: true,
   },
-  {
-    id: 'voice_journal',
-    name: 'Voice & Audio',
-    category: 'Backend settings - Dictation and text to speech',
-    icon: '🎙️',
-    connected: false,
-    available: false,
-    lastSync: null,
-    lastSyncStatus: null,
-    connectionHint: 'Voice journaling depends on the Whisper flow.',
-    lastError: null,
-    syncBlocked: false,
-    syncGuardMessage: null,
-    manualSyncAllowed: true,
-  },
 ];
 
 const DATA_SOURCES_FALLBACK_MESSAGE = 'Live connection status unavailable. Showing saved connections. Tap to retry.';
+const VISIBLE_DATA_SOURCE_IDS = new Set(DEFAULT_DATA_SOURCES.map((source) => source.id));
 const DATA_SOURCE_GROUPS = [
-  { title: 'Automated', ids: ['owntracks', 'spotify', 'truelayer'] },
-  { title: 'Semi-Automated', ids: ['garmin', 'google_drive', 'instagram', 'snapchat', 'youtube', 'chrome'] },
+  { title: 'Live Connections', ids: ['owntracks', 'spotify', 'truelayer', 'weather', 'google_maps'] },
+  { title: 'File Imports', ids: ['garmin', 'instagram', 'snapchat', 'youtube', 'chrome'] },
   { title: 'Manual', ids: ['habits'] },
-  { title: 'Backend Settings', ids: ['weather', 'google_maps', 'voice_journal'] },
 ];
 
 function SectionHeader({ title }: { title: string }) {
@@ -236,14 +205,14 @@ function SectionHeader({ title }: { title: string }) {
 }
 
 function mergeDataSources(sources: DataSourcePayload[]) {
-  const byId = new Map(sources.map((source) => [source.id, source]));
+  const visibleSources = sources.filter((source) => VISIBLE_DATA_SOURCE_IDS.has(source.id));
+  const byId = new Map(visibleSources.map((source) => [source.id, source]));
   const mergedDefaults = DEFAULT_DATA_SOURCES.map((source) => ({
     ...source,
     ...byId.get(source.id),
   }));
 
-  const unknownSources = sources.filter((source) => !DEFAULT_DATA_SOURCES.some((item) => item.id === source.id));
-  return [...mergedDefaults, ...unknownSources];
+  return mergedDefaults;
 }
 
 function mergeDataSource(source: DataSourcePayload) {
@@ -259,14 +228,15 @@ function getSourceActionLabel(source: DataSourcePayload) {
 
 function getSourceStatusLabel(source: DataSourcePayload) {
   if (source.id === 'habits') return 'Built in';
+  if (['garmin', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(source.id) && source.available) return 'Import folder set';
+  if (source.id === 'owntracks' && source.available && !source.connected) return 'Waiting for phone';
   if (source.syncBlocked) return 'Cooldown';
   if (source.lastSyncStatus === 'failed') return 'Sync failed';
   if (source.lastSyncStatus === 'automatic-only') return 'Auto only';
   if (source.connected) return 'Connected';
   if (source.connectionState === 'authorization-required') return 'Finish sign-in';
-  if (source.id === 'owntracks' && source.available) return 'Waiting for ping';
   if (source.available) return 'Ready';
-  return 'Setup';
+  return 'Needs setup';
 }
 
 function canOpenSource(source: DataSourcePayload) {
