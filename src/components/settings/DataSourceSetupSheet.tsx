@@ -105,6 +105,18 @@ export function DataSourceSetupSheet({
     const currentSource = source;
     if (!currentSource) return [];
     switch (currentSource.id) {
+      case 'google_drive':
+        return [
+          'Save the TherapistOS Drive folder plus Google OAuth client ID and secret.',
+          'Tap Continue with Google.',
+          'Approve Drive read-only access so imports can read Garmin, finance, people, YouTube, and Chrome exports.',
+        ];
+      case 'google_maps':
+        return [
+          'Save a Google Maps JavaScript API key.',
+          'Use this only for the live location map canvas.',
+          'Google Drive sign-in is separate.',
+        ];
       case 'weather':
         return [
           'Create an OpenWeather API key with One Call access.',

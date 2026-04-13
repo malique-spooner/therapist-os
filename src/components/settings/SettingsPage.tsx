@@ -50,6 +50,21 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     manualSyncAllowed: true,
   },
   {
+    id: 'google_drive',
+    name: 'Google Drive',
+    category: 'Import hub - OAuth',
+    icon: '🗂️',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Connect Google Drive so Therapist OS can read your export folders.',
+    lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
+  },
+  {
     id: 'garmin',
     name: 'Garmin Connect',
     category: 'Semi-automated - Health export folder',
@@ -171,8 +186,8 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
   },
   {
     id: 'google_maps',
-    name: 'Google Console',
-    category: 'Backend - API keys',
+    name: 'Google Maps API',
+    category: 'API keys',
     icon: '🗺️',
     connected: false,
     available: false,
@@ -204,8 +219,10 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
 const DATA_SOURCES_FALLBACK_MESSAGE = 'Live connection status unavailable. Showing saved connections. Tap to retry.';
 const VISIBLE_DATA_SOURCE_IDS = new Set(DEFAULT_DATA_SOURCES.map((source) => source.id));
 const DATA_SOURCE_GROUPS = [
-  { title: 'Live Connections', ids: ['owntracks', 'spotify', 'weather', 'google_maps'] },
+  { title: 'Live Connections', ids: ['owntracks', 'spotify', 'weather'] },
+  { title: 'Import Hub', ids: ['google_drive'] },
   { title: 'File Imports', ids: ['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'] },
+  { title: 'API Keys', ids: ['google_maps'] },
   { title: 'Manual', ids: ['habits'] },
 ];
 
@@ -243,6 +260,7 @@ function getSourceActionLabel(source: DataSourcePayload) {
 
 function getSourceStatusLabel(source: DataSourcePayload) {
   if (source.id === 'habits') return 'Built in';
+  if (source.id === 'google_drive' && source.connectionState === 'authorization-required') return 'Needs sign-in';
   if (['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(source.id) && source.available) return 'Import folder set';
   if (source.id === 'owntracks' && source.available && !source.connected) return 'Waiting for phone';
   if (source.syncBlocked) return 'Cooldown';

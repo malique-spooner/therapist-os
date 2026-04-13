@@ -108,8 +108,8 @@ DEFAULT_SOURCES = {
         },
     },
     "google_drive": {
-        "name": "Google Drive Imports",
-        "category": "Semi-automated - Export folders",
+        "name": "Google Drive",
+        "category": "Import hub - OAuth",
         "icon": "🗂️",
         "hint": "Set the Takeout folder path and save your Google OAuth credentials so Therapist OS can read export archives.",
         "folder_path": "TherapistOS",
@@ -133,13 +133,13 @@ DEFAULT_SOURCES = {
         },
     },
     "google_maps": {
-        "name": "Google Console",
-        "category": "Backend - API keys",
+        "name": "Google Maps API",
+        "category": "API keys",
         "icon": "🗺️",
         "hint": "Save a Google Maps API key from Google Cloud Console.",
         "setup": {
             "mode": "api-key",
-            "title": "Connect Google Console",
+            "title": "Connect Google Maps API",
             "description": "Save the Google Maps API key used for map views.",
             "actionLabel": "Save API key",
             "instructions": [
@@ -231,6 +231,7 @@ DEFAULT_SOURCES = {
 VISIBLE_SOURCE_IDS = (
     "owntracks",
     "spotify",
+    "google_drive",
     "garmin",
     "revolut",
     "natwest",
