@@ -148,29 +148,35 @@ class GoogleDriveImportService:
                 import_record.status = "failed"
                 import_record.error = str(exc)
         db.commit()
+        from .source_cleaner import SourceCleanerService
+
+        clean_rows = SourceCleanerService().clean_source(source_id, db)
         return {
             "source_id": source_id,
             "status": "scanned",
             "folder_path": folder_path,
             "files_discovered": len(files),
             "raw_rows": raw_rows,
-            "rows_synced": raw_rows,
+            "clean_rows": clean_rows,
+            "rows_synced": clean_rows,
         }
 
     async def scan_all(self, db: Session) -> dict[str, Any]:
-        totals = {"files_discovered": 0, "raw_rows": 0}
+        totals = {"files_discovered": 0, "raw_rows": 0, "clean_rows": 0}
         sources = ("garmin", "revolut", "natwest", "instagram", "snapchat", "youtube", "chrome")
         for source_id in sources:
             result = await self.scan_source(source_id, db)
             totals["files_discovered"] += int(result.get("files_discovered", 0))
             totals["raw_rows"] += int(result.get("raw_rows", 0))
+            totals["clean_rows"] += int(result.get("clean_rows", 0))
         return {
             "source_id": "google_drive",
             "status": "scanned",
             "folder_path": self._config.get("folder_path") or THERAPIST_OS_DRIVE_FOLDER,
             "files_discovered": totals["files_discovered"],
             "raw_rows": totals["raw_rows"],
-            "rows_synced": totals["raw_rows"],
+            "clean_rows": totals["clean_rows"],
+            "rows_synced": totals["clean_rows"],
         }
 
     def list_imports(self, db: Session, source_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:

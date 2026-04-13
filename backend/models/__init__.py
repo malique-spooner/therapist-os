@@ -54,6 +54,24 @@ from .nutrition import NutritionLog
 from .profile import MonthlyBudget, UserProfile
 from .relationship_imports import RelationshipScreenshotImport
 from .relationships import Relationship, RelationshipInteraction
+from .source_data import (
+    ChromeBookmark,
+    ChromeHistoryEvent,
+    GarminBodyMetric,
+    GarminDailyWellness,
+    GarminFitnessMetric,
+    GarminHydrationLog,
+    GarminSleepSession,
+    InstagramInteraction,
+    NatWestTransaction,
+    RevolutTransaction,
+    SnapchatInteraction,
+    SpotifyPlayEvent,
+    SpotifyTrack,
+    YoutubeSearchEvent,
+    YoutubeSubscription,
+    YoutubeWatchEvent,
+)
 from .weather import WeatherData
 
 __all__ = [
@@ -83,6 +101,22 @@ __all__ = [
     "HealthData",
     "HealthDataDemo",
     "HealthDataReal",
+    "GarminBodyMetric",
+    "GarminDailyWellness",
+    "GarminFitnessMetric",
+    "GarminHydrationLog",
+    "GarminSleepSession",
+    "RevolutTransaction",
+    "NatWestTransaction",
+    "SpotifyPlayEvent",
+    "SpotifyTrack",
+    "YoutubeSearchEvent",
+    "YoutubeSubscription",
+    "YoutubeWatchEvent",
+    "ChromeBookmark",
+    "ChromeHistoryEvent",
+    "InstagramInteraction",
+    "SnapchatInteraction",
     "LocationData",
     "LocationDataDemo",
     "LocationDataReal",
