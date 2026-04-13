@@ -93,3 +93,30 @@ class DataSourceOAuthCallbackSchema(BaseModel):
 
 class DataSourceSetupUpdateSchema(BaseModel):
     values: dict[str, str]
+
+
+class RawDataImportSchema(BaseModel):
+    id: int
+    sourceId: str
+    externalFileId: str
+    fileName: str
+    mimeType: str | None = None
+    folderPath: str | None = None
+    webUrl: str | None = None
+    sizeBytes: int | None = None
+    checksum: str | None = None
+    modifiedAt: str | None = None
+    discoveredAt: str
+    downloadedAt: str | None = None
+    parsedAt: str | None = None
+    status: str
+    parserVersion: str | None = None
+    rawMetadata: dict | None = None
+    error: str | None = None
+
+
+class ImportScanSchema(BaseModel):
+    source_id: str
+    status: str
+    folder_path: str | None = None
+    files_discovered: int

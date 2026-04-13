@@ -43,12 +43,10 @@ from ..models.life_data import (
     WeatherDataReal,
 )
 from .ingestion.garmin import GarminIngestionService
+from .ingestion.google_drive_importer import FILE_IMPORT_FOLDERS, THERAPIST_OS_DRIVE_FOLDER
 from .ingestion.spotify import SpotifyIngestionService
 from .data_mode import dataset_model, normalize_data_mode
 from .whisper_service import WhisperService
-
-
-THERAPIST_OS_DRIVE_FOLDER = "https://drive.google.com/drive/folders/1W-aD74h2TlVovpS5oWi8IUR-TC-0JHIAwDsIiIX9Ik4H5H3qovf8_0Qzms_MFXI_QVpsmm6i"
 
 
 DEFAULT_SOURCES = {
@@ -57,7 +55,7 @@ DEFAULT_SOURCES = {
         "category": "Semi-automated - Health export folder",
         "icon": "⌚",
         "hint": "Save Garmin exports into the TherapistOS Google Drive folder so Therapist OS can import health data periodically.",
-        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
+        "folder_path": FILE_IMPORT_FOLDERS["garmin"],
         "setup": {
             "mode": "folder",
             "title": "Connect Garmin exports",
@@ -68,7 +66,7 @@ DEFAULT_SOURCES = {
                 "Therapist OS will use this folder for semi-automated health imports.",
             ],
             "fields": [
-                {"key": "folder_path", "label": "Garmin export folder", "type": "text", "placeholder": THERAPIST_OS_DRIVE_FOLDER, "required": True},
+                {"key": "folder_path", "label": "Garmin export folder", "type": "text", "placeholder": FILE_IMPORT_FOLDERS["garmin"], "required": True},
             ],
         },
     },
@@ -77,14 +75,14 @@ DEFAULT_SOURCES = {
         "category": "Semi-automated - Finance export folder",
         "icon": "💷",
         "hint": "Save Revolut exports into the TherapistOS Google Drive folder so Therapist OS can import finance data periodically.",
-        "folder_path": f"{THERAPIST_OS_DRIVE_FOLDER}/Finance/Revolut",
+        "folder_path": FILE_IMPORT_FOLDERS["revolut"],
     },
     "natwest": {
         "name": "NatWest",
         "category": "Semi-automated - Finance export folder",
         "icon": "🏦",
         "hint": "Save NatWest exports into the TherapistOS Google Drive folder so Therapist OS can import finance data periodically.",
-        "folder_path": f"{THERAPIST_OS_DRIVE_FOLDER}/Finance/NatWest",
+        "folder_path": FILE_IMPORT_FOLDERS["natwest"],
     },
     "spotify": {
         "name": "Spotify",
@@ -114,7 +112,7 @@ DEFAULT_SOURCES = {
         "category": "Semi-automated - Export folders",
         "icon": "🗂️",
         "hint": "Set the Takeout folder path and save your Google OAuth credentials so Therapist OS can read export archives.",
-        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
+        "folder_path": "TherapistOS",
         "setup": {
             "mode": "oauth-credentials",
             "title": "Connect Google Drive",
@@ -158,28 +156,28 @@ DEFAULT_SOURCES = {
         "category": "Semi-automated - Media export folder",
         "icon": "▶️",
         "hint": "Save YouTube exports into Google Drive so Therapist OS can import watch history periodically.",
-        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
+        "folder_path": FILE_IMPORT_FOLDERS["youtube"],
     },
     "chrome": {
         "name": "Chrome",
         "category": "Semi-automated - Browser export folder",
         "icon": "🌐",
         "hint": "Save Chrome history exports into Google Drive so Therapist OS can import browser patterns periodically.",
-        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
+        "folder_path": FILE_IMPORT_FOLDERS["chrome"],
     },
     "instagram": {
         "name": "Instagram",
         "category": "Semi-automated - People export folder",
         "icon": "📸",
         "hint": "Save Instagram exports into Google Drive so Therapist OS can import people and interaction signals periodically.",
-        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
+        "folder_path": FILE_IMPORT_FOLDERS["instagram"],
     },
     "snapchat": {
         "name": "Snapchat",
         "category": "Semi-automated - People export folder",
         "icon": "👻",
         "hint": "Save Snapchat exports into Google Drive so Therapist OS can import people and interaction signals periodically.",
-        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
+        "folder_path": FILE_IMPORT_FOLDERS["snapchat"],
     },
     "owntracks": {
         "name": "OwnTracks",
