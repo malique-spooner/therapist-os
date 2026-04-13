@@ -9,7 +9,6 @@ import { api } from '@/lib/api';
 
 const SOURCE_MAP: Record<string, string> = {
   spotify: 'spotify',
-  truelayer: 'truelayer',
   'google-drive': 'google_drive',
 };
 

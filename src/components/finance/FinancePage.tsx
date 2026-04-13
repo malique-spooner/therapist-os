@@ -121,7 +121,7 @@ export function FinancePage({ onBack, onSettings }: FinancePageProps) {
         )}
         {showEmptyRealState && (
           <RetryNotice
-            message={selectedBank === 'all' ? 'Not enough finance rows yet. Connect TrueLayer and sync data.' : `No finance data for ${selectedBank} in this range yet.`}
+            message={selectedBank === 'all' ? 'Not enough finance rows yet. Add Revolut or NatWest exports to the finance import folder.' : `No finance data for ${selectedBank} in this range yet.`}
             onRetry={refetch}
             className="mx-4 mb-4 w-[calc(100%-2rem)]"
           />

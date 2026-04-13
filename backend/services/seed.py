@@ -28,7 +28,7 @@ from ..models.life_data import (
     WeatherDataDemo as WeatherData,
 )
 
-DEMO_SOURCE_IDS = ("garmin", "truelayer", "spotify", "youtube", "weather", "owntracks")
+DEMO_SOURCE_IDS = ("garmin", "revolut", "natwest", "spotify", "youtube", "weather", "owntracks")
 DEMO_PLACES = [
     ("home", "Home", "home", "neutral", 51.5074, -0.1278, "Base, recovery, late evenings."),
     ("work", "Studio Office", "work", "draining", 51.5156, -0.0919, "Deep work and deadline pressure."),
@@ -624,17 +624,18 @@ def seed_demo_data(
                 connection_hint="Add GARMIN_EMAIL and GARMIN_PASSWORD on the backend to enable sync.",
             )
         )
-    if not db.get(DataSourceConnection, "truelayer"):
-        db.add(
-            DataSourceConnection(
-                source_id="truelayer",
-                display_name="TrueLayer (Bank)",
-                category="Finance - Transactions, Spending Categories",
-                connected=False,
-                available=False,
-                connection_hint="Complete the TrueLayer OAuth setup on the backend to enable bank sync.",
+    for source_id, display_name in (("revolut", "Revolut"), ("natwest", "NatWest")):
+        if not db.get(DataSourceConnection, source_id):
+            db.add(
+                DataSourceConnection(
+                    source_id=source_id,
+                    display_name=display_name,
+                    category="Finance - Export folder",
+                    connected=False,
+                    available=False,
+                    connection_hint="Save finance exports into the TherapistOS Google Drive folder.",
+                )
             )
-        )
 
     garmin_rows = db.scalar(select(func.count()).select_from(HealthData)) or 0
     _upsert_demo_sync_attempt(
@@ -646,15 +647,16 @@ def seed_demo_data(
         trigger=attempt_trigger,
     )
 
-    truelayer_rows = db.scalar(select(func.count()).select_from(FinanceData)) or 0
-    _upsert_demo_sync_attempt(
-        db,
-        source_id="truelayer",
-        rows_synced=truelayer_rows,
-        attempted_at=attempted_at if "truelayer" in attempt_sources else None,
-        detail=f"Demo finance dataset refreshed through {end.isoformat()}.",
-        trigger=attempt_trigger,
-    )
+    finance_rows = db.scalar(select(func.count()).select_from(FinanceData)) or 0
+    for source_id in ("revolut", "natwest"):
+        _upsert_demo_sync_attempt(
+            db,
+            source_id=source_id,
+            rows_synced=finance_rows,
+            attempted_at=attempted_at if source_id in attempt_sources else None,
+            detail=f"Demo finance dataset refreshed through {end.isoformat()}.",
+            trigger=attempt_trigger,
+        )
 
     spotify_rows = db.scalar(select(func.count()).select_from(MusicData)) or 0
     _upsert_demo_sync_attempt(

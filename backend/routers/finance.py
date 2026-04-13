@@ -8,13 +8,9 @@ from ..database import get_db
 from ..middleware.auth import verify_api_key
 from ..models.life_data import FinanceDataDemo, FinanceDataReal
 from ..services.data_mode import dataset_model
-from ..services.data_sources import DataSourceService
-from ..services.ingestion.truelayer import TrueLayerIngestionService
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/finance", tags=["finance"], dependencies=[Depends(verify_api_key)])
-service = TrueLayerIngestionService()
-data_source_service = DataSourceService()
 
 
 def _serialize_day(day: str, categories: dict[str, int], bank_breakdown: dict[str, dict[str, int]]) -> dict:
@@ -83,13 +79,4 @@ def get_finance_today(mode: str | None = None, db: Session = Depends(get_db)) ->
 
 @router.post("/sync")
 async def sync_finance(db: Session = Depends(get_db)) -> dict:
-    try:
-        records = await service.sync_last_30_days(db)
-    except RuntimeError as exc:
-        data_source_service.mark_sync_result("truelayer", success=False, db=db, error=str(exc))
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    data_source_service.mark_sync_result("truelayer", success=True, db=db)
-    return {
-        "detail": "Finance synced",
-        "transactionsSynced": len(records),
-    }
+    raise HTTPException(status_code=400, detail="Finance sync now uses Revolut and NatWest file imports.")

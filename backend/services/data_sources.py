@@ -44,7 +44,6 @@ from ..models.life_data import (
 )
 from .ingestion.garmin import GarminIngestionService
 from .ingestion.spotify import SpotifyIngestionService
-from .ingestion.truelayer import TrueLayerIngestionService
 from .data_mode import dataset_model, normalize_data_mode
 from .whisper_service import WhisperService
 
@@ -73,29 +72,19 @@ DEFAULT_SOURCES = {
             ],
         },
     },
-    "truelayer": {
-        "name": "TrueLayer",
-        "category": "Automated - Finance",
+    "revolut": {
+        "name": "Revolut",
+        "category": "Semi-automated - Finance export folder",
+        "icon": "💷",
+        "hint": "Save Revolut exports into the TherapistOS Google Drive folder so Therapist OS can import finance data periodically.",
+        "folder_path": f"{THERAPIST_OS_DRIVE_FOLDER}/Finance/Revolut",
+    },
+    "natwest": {
+        "name": "NatWest",
+        "category": "Semi-automated - Finance export folder",
         "icon": "🏦",
-        "hint": "Add your TrueLayer app credentials, then complete the bank sign-in flow to enable finance sync.",
-        "setup": {
-            "mode": "oauth-credentials",
-            "title": "Connect TrueLayer",
-            "description": "Save your TrueLayer app credentials, then continue to the secure bank sign-in flow to grant account and transaction access.",
-            "actionLabel": "Save TrueLayer app",
-            "authActionLabel": "Continue with TrueLayer",
-            "instructions": [
-                "Create or open your TrueLayer app dashboard and copy the Client ID and Client Secret here.",
-                "Add the callback URL shown below to your TrueLayer app exactly as written.",
-                "During sign-in, grant account, balance, card, transaction, and offline access so Therapist OS can refresh data later without asking every time.",
-            ],
-            "fields": [
-                {"key": "client_id", "label": "Client ID", "type": "text", "placeholder": "TrueLayer client id", "required": True},
-                {"key": "client_secret", "label": "Client secret", "type": "password", "placeholder": "TrueLayer client secret", "required": True},
-                {"key": "refresh_token", "label": "Refresh token", "type": "password", "placeholder": "Filled automatically after sign-in", "required": False, "helpText": "Leave blank if you want Therapist OS to fetch this during the sign-in flow."},
-                {"key": "access_token", "label": "Access token (optional)", "type": "password", "placeholder": "Optional access token", "required": False},
-            ],
-        },
+        "hint": "Save NatWest exports into the TherapistOS Google Drive folder so Therapist OS can import finance data periodically.",
+        "folder_path": f"{THERAPIST_OS_DRIVE_FOLDER}/Finance/NatWest",
     },
     "spotify": {
         "name": "Spotify",
@@ -244,8 +233,9 @@ DEFAULT_SOURCES = {
 VISIBLE_SOURCE_IDS = (
     "owntracks",
     "spotify",
-    "truelayer",
     "garmin",
+    "revolut",
+    "natwest",
     "instagram",
     "snapchat",
     "youtube",
@@ -256,7 +246,6 @@ VISIBLE_SOURCE_IDS = (
 
 SENSITIVE_FIELD_KEYS: dict[str, set[str]] = {
     "garmin": {"password"},
-    "truelayer": {"client_secret", "refresh_token", "access_token", "pkce_verifier", "oauth_state"},
     "spotify": {"client_secret", "refresh_token", "access_token", "oauth_state"},
     "google_drive": {"client_secret", "refresh_token", "access_token", "oauth_state"},
     "google_maps": {"api_key"},
@@ -279,8 +268,8 @@ class DataSourceService:
                 f"Daily in the background at {settings.GARMIN_SYNC_HOUR:02d}:{settings.GARMIN_SYNC_MINUTE:02d}, "
                 f"with at least {settings.GARMIN_MIN_SYNC_INTERVAL_MINUTES // 60:g} hours between attempts"
             )
-        if source_id == "truelayer":
-            return "Manual sync for now after bank connection"
+        if source_id in {"revolut", "natwest"}:
+            return "Periodic import from Google Drive finance export folder"
         if source_id == "owntracks":
             return "Continuous live updates when your phone sends pings"
         if source_id == "google_drive":
@@ -297,7 +286,7 @@ class DataSourceService:
 
     @staticmethod
     def _manual_sync_allowed(source_id: str) -> bool:
-        return source_id not in {"garmin", "owntracks", "google_maps", "instagram", "snapchat", "youtube", "chrome"}
+        return source_id not in {"garmin", "owntracks", "google_maps", "revolut", "natwest", "instagram", "snapchat", "youtube", "chrome"}
 
     def _config(self, record: DataSourceConnection | None) -> dict[str, str]:
         if not record:
@@ -332,7 +321,6 @@ class DataSourceService:
 
     def _availability(self, db: Session) -> dict[str, bool]:
         garmin = self._record("garmin", db)
-        truelayer = self._record("truelayer", db)
         spotify = self._record("spotify", db)
         owntracks = self._record("owntracks", db)
         google_drive = self._record("google_drive", db)
@@ -341,12 +329,13 @@ class DataSourceService:
 
         return {
             "garmin": bool((self._config(garmin).get("folder_path") or DEFAULT_SOURCES["garmin"].get("folder_path"))),
-            "truelayer": TrueLayerIngestionService(self._config(truelayer)).is_configured,
             "spotify": SpotifyIngestionService(self._config(spotify)).is_configured,
             "google_drive": bool(self._config(google_drive).get("folder_path") and self._config(google_drive).get("client_id") and self._config(google_drive).get("client_secret") and self._config(google_drive).get("refresh_token")),
             "google_maps": bool(self._config(google_maps).get("api_key") or settings.GOOGLE_MAPS_API_KEY),
             "youtube": bool(DEFAULT_SOURCES["youtube"].get("folder_path")),
             "chrome": bool(DEFAULT_SOURCES["chrome"].get("folder_path")),
+            "revolut": bool(DEFAULT_SOURCES["revolut"].get("folder_path")),
+            "natwest": bool(DEFAULT_SOURCES["natwest"].get("folder_path")),
             "instagram": bool(DEFAULT_SOURCES["instagram"].get("folder_path")),
             "snapchat": bool(DEFAULT_SOURCES["snapchat"].get("folder_path")),
             "owntracks": bool(self._config(owntracks).get("username") and self._config(owntracks).get("password")),
@@ -359,16 +348,16 @@ class DataSourceService:
             return False
         if source_id == "owntracks":
             return last_sync_status == "success"
-        if source_id in {"garmin", "instagram", "snapchat", "youtube", "chrome"}:
+        if source_id in {"garmin", "revolut", "natwest", "instagram", "snapchat", "youtube", "chrome"}:
             return available
-        if source_id in {"spotify", "truelayer", "google_drive"}:
+        if source_id in {"spotify", "google_drive"}:
             return bool(config.get("refresh_token"))
         return True
 
     def _connection_state(self, source_id: str, config: dict[str, str], available: bool, connected: bool) -> str:
         if connected:
             return "connected"
-        if source_id in {"spotify", "truelayer", "google_drive"} and self._can_authorize(source_id, config):
+        if source_id in {"spotify", "google_drive"} and self._can_authorize(source_id, config):
             return "authorization-required"
         if available:
             return "ready"
@@ -381,8 +370,6 @@ class DataSourceService:
             return "Webhook login saved. Open OwnTracks on your phone, use HTTP mode with Basic auth, then send a manual location publish."
         if source_id == "spotify" and self._can_authorize(source_id, config):
             return "App credentials saved. Continue with Spotify sign-in to finish connecting your account."
-        if source_id == "truelayer" and self._can_authorize(source_id, config):
-            return "App credentials saved. Continue with TrueLayer to grant bank access and store a refresh token."
         if source_id == "google_drive" and self._can_authorize(source_id, config):
             return "OAuth setup saved. Continue with Google to grant Drive read-only access and finish the connection."
         return DEFAULT_SOURCES[source_id]["hint"]
@@ -498,7 +485,7 @@ class DataSourceService:
     def _source_dataset_specs(source_id: str):
         if source_id == "garmin":
             return [(HealthDataReal, HealthDataDemo, "date", "updated_at")]
-        if source_id == "truelayer":
+        if source_id in {"revolut", "natwest"}:
             return [(FinanceDataReal, FinanceDataDemo, "date", "created_at")]
         if source_id == "spotify":
             return [(SpotifyPlayEventReal, SpotifyPlayEventDemo, "played_date", "played_at")]
@@ -822,8 +809,6 @@ class DataSourceService:
         config = self._config(record)
         if source_id == "garmin":
             return GarminIngestionService(config).sync_last_7_days
-        if source_id == "truelayer":
-            return TrueLayerIngestionService(config).sync_last_30_days
         if source_id == "spotify":
             return SpotifyIngestionService(config).sync_recent_listening
         if source_id == "weather":
@@ -917,7 +902,7 @@ class DataSourceService:
         self._store_config(source_id, record, next_config)
         record.available = self._availability(db).get(source_id, False)
         record.connected = self._is_connected(source_id, next_config, record.available, record.last_sync_status)
-        if source_id in {"owntracks", "garmin", "instagram", "snapchat", "youtube", "chrome"}:
+        if source_id in {"owntracks", "garmin", "revolut", "natwest", "instagram", "snapchat", "youtube", "chrome"}:
             record.last_sync_status = None
         record.last_error = None
         record.connection_hint = self._connection_hint(source_id, next_config, record.available, record.connected)
@@ -939,10 +924,6 @@ class DataSourceService:
         next_config = {**config, "oauth_state": state}
         verifier = None
         challenge = None
-        if source_id == "truelayer":
-            verifier = self._pkce_verifier_from_state(state)
-            challenge = self._pkce_challenge_from_verifier(verifier)
-            next_config["pkce_verifier"] = verifier
         self._store_config(source_id, record, next_config)
         db.commit()
 
@@ -974,20 +955,6 @@ class DataSourceService:
             )
             return f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
 
-        if source_id == "truelayer":
-            query = urlencode(
-                {
-                    "response_type": "code",
-                    "client_id": config["client_id"],
-                    "redirect_uri": self._callback_url(source_id),
-                    "scope": "info accounts balance cards transactions offline_access",
-                    "state": state,
-                    "code_challenge": challenge,
-                    "code_challenge_method": "S256",
-                }
-            )
-            return f"https://auth.truelayer.com/?{query}"
-
         raise RuntimeError("Authorization flow is not available for this source")
 
     async def complete_authorization(self, source_id: str, code: str | None, state: str | None, error: str | None, db: Session) -> dict:
@@ -1006,7 +973,6 @@ class DataSourceService:
         token_payload = await self._exchange_code(source_id, code, config)
         next_config = {**config}
         next_config.pop("oauth_state", None)
-        next_config.pop("pkce_verifier", None)
         if token_payload.get("refresh_token"):
             next_config["refresh_token"] = str(token_payload["refresh_token"])
         if token_payload.get("access_token"):
@@ -1061,28 +1027,6 @@ class DataSourceService:
                 payload = response.json()
             return {"access_token": payload.get("access_token", ""), "refresh_token": payload.get("refresh_token", "")}
 
-        if source_id == "truelayer":
-            verifier = config.get("pkce_verifier", self._pkce_verifier_from_state(config.get("oauth_state", "")))
-            async with httpx.AsyncClient(timeout=20) as client:
-                response = await client.post(
-                    TrueLayerIngestionService.AUTH_URL,
-                    data={
-                        "grant_type": "authorization_code",
-                        "client_id": config["client_id"],
-                        "client_secret": config["client_secret"],
-                        "redirect_uri": self._callback_url(source_id),
-                        "code": code,
-                        "code_verifier": verifier,
-                    },
-                )
-                try:
-                    response.raise_for_status()
-                except httpx.HTTPStatusError as exc:
-                    detail = self._oauth_error_detail("TrueLayer", response)
-                    raise RuntimeError(detail) from exc
-                payload = response.json()
-            return {"access_token": payload.get("access_token", ""), "refresh_token": payload.get("refresh_token", "")}
-
         raise RuntimeError("Authorization exchange is not available for this source")
 
     @staticmethod
@@ -1096,7 +1040,7 @@ class DataSourceService:
         return urlsafe_b64encode(digest).decode("utf-8").rstrip("=")
 
     def _can_authorize(self, source_id: str, config: dict[str, str]) -> bool:
-        if source_id in {"spotify", "truelayer", "google_drive"}:
+        if source_id in {"spotify", "google_drive"}:
             return bool(config.get("client_id") and config.get("client_secret"))
         return False
 
@@ -1113,8 +1057,6 @@ class DataSourceService:
             return f"{spotify_base}/callback/spotify"
         if source_id == "google_drive":
             return f"{frontend_base}/callback/google-drive"
-        if source_id == "truelayer":
-            return f"{frontend_base}/callback/truelayer"
         return None
 
     @staticmethod

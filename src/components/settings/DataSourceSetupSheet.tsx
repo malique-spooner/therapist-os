@@ -90,7 +90,7 @@ export function DataSourceSetupSheet({
   const statusLabel = useMemo(() => {
     const currentSource = source;
     if (!currentSource) return 'Setup required';
-    if (['garmin', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(currentSource.id) && currentSource.available) return 'Import folder set';
+    if (['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(currentSource.id) && currentSource.available) return 'Import folder set';
     if (currentSource.id === 'owntracks' && currentSource.available && !currentSource.connected) return 'Waiting for phone';
     if (currentSource.syncBlocked) return 'Cooldown';
     if (currentSource.lastSyncStatus === 'failed') return 'Sync failed';
@@ -124,6 +124,12 @@ export function DataSourceSetupSheet({
           'Save the folder here.',
           'Therapist OS will use this folder for semi-automated health imports.',
         ];
+      case 'revolut':
+      case 'natwest':
+        return [
+          'Put finance export files in the TherapistOS Google Drive folder.',
+          'Therapist OS will use this folder for semi-automated finance imports.',
+        ];
       case 'instagram':
       case 'snapchat':
       case 'youtube':
@@ -131,12 +137,6 @@ export function DataSourceSetupSheet({
         return [
           'Put export files in the TherapistOS Google Drive folder.',
           'Therapist OS will use this folder for semi-automated imports.',
-        ];
-      case 'truelayer':
-        return [
-          'Create a TrueLayer app and paste the Client ID and Client Secret here.',
-          'Add the callback URL exactly as shown below in the TrueLayer dashboard.',
-          'Save the app, then continue with TrueLayer and grant account, balance, card, transaction, and offline access.',
         ];
       default:
         return [];

@@ -119,7 +119,7 @@ def bootstrap_life_data(db: Session) -> None:
     _copy_conversations_if_empty(db, is_demo=True)
 
     _copy_if_empty(db, LegacyHealthData, HealthDataReal, is_demo=False, allow_real=_source_synced(db, "garmin"))
-    _copy_if_empty(db, LegacyFinanceData, FinanceDataReal, is_demo=False, allow_real=_source_synced(db, "truelayer"))
+    _copy_if_empty(db, LegacyFinanceData, FinanceDataReal, is_demo=False, allow_real=_source_synced(db, "revolut") or _source_synced(db, "natwest"))
     _copy_if_empty(db, LegacyMusicData, MusicDataReal, is_demo=False, allow_real=_source_synced(db, "spotify"))
     _copy_if_empty(db, LegacyWeatherData, WeatherDataReal, is_demo=False, allow_real=_source_synced(db, "weather"))
     _copy_if_empty(db, LegacyLocationData, LocationDataReal, is_demo=False, allow_real=_source_synced(db, "owntracks"))

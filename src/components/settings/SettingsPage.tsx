@@ -50,21 +50,6 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     manualSyncAllowed: true,
   },
   {
-    id: 'truelayer',
-    name: 'TrueLayer',
-    category: 'Automated - Finance',
-    icon: '🏦',
-    connected: false,
-    available: false,
-    lastSync: null,
-    lastSyncStatus: null,
-    connectionHint: 'Save your TrueLayer app credentials, then finish bank sign-in to enable finance sync.',
-    lastError: null,
-    syncBlocked: false,
-    syncGuardMessage: null,
-    manualSyncAllowed: true,
-  },
-  {
     id: 'garmin',
     name: 'Garmin Connect',
     category: 'Semi-automated - Health export folder',
@@ -74,6 +59,36 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     lastSync: null,
     lastSyncStatus: null,
     connectionHint: 'Save Garmin exports into Google Drive so Therapist OS can import health data periodically.',
+    lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: false,
+  },
+  {
+    id: 'revolut',
+    name: 'Revolut',
+    category: 'Semi-automated - Finance export folder',
+    icon: '💷',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Save Revolut exports into Google Drive so Therapist OS can import finance data periodically.',
+    lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: false,
+  },
+  {
+    id: 'natwest',
+    name: 'NatWest',
+    category: 'Semi-automated - Finance export folder',
+    icon: '🏦',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Save NatWest exports into Google Drive so Therapist OS can import finance data periodically.',
     lastError: null,
     syncBlocked: false,
     syncGuardMessage: null,
@@ -189,8 +204,8 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
 const DATA_SOURCES_FALLBACK_MESSAGE = 'Live connection status unavailable. Showing saved connections. Tap to retry.';
 const VISIBLE_DATA_SOURCE_IDS = new Set(DEFAULT_DATA_SOURCES.map((source) => source.id));
 const DATA_SOURCE_GROUPS = [
-  { title: 'Live Connections', ids: ['owntracks', 'spotify', 'truelayer', 'weather', 'google_maps'] },
-  { title: 'File Imports', ids: ['garmin', 'instagram', 'snapchat', 'youtube', 'chrome'] },
+  { title: 'Live Connections', ids: ['owntracks', 'spotify', 'weather', 'google_maps'] },
+  { title: 'File Imports', ids: ['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'] },
   { title: 'Manual', ids: ['habits'] },
 ];
 
@@ -228,7 +243,7 @@ function getSourceActionLabel(source: DataSourcePayload) {
 
 function getSourceStatusLabel(source: DataSourcePayload) {
   if (source.id === 'habits') return 'Built in';
-  if (['garmin', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(source.id) && source.available) return 'Import folder set';
+  if (['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(source.id) && source.available) return 'Import folder set';
   if (source.id === 'owntracks' && source.available && !source.connected) return 'Waiting for phone';
   if (source.syncBlocked) return 'Cooldown';
   if (source.lastSyncStatus === 'failed') return 'Sync failed';
