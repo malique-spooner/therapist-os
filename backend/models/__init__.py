@@ -2,7 +2,7 @@ from .auth import AdminUser, AuthSession
 from .checkins import DailyCheckIn
 from .conversations import AIConversation, AIMessage
 from .assistant_features import AppOpenPromptState, LocationCompanionLog
-from .data_sources import DataSourceConnection, DataSourceSyncAttempt, RawDataImport
+from .data_sources import DataSourceConnection, DataSourceSyncAttempt, RawDataImport, RawImportRow
 from .finance import FinanceData
 from .habits import Habit, HabitLog
 from .health import HealthData
@@ -72,6 +72,7 @@ __all__ = [
     "DataSourceConnection",
     "DataSourceSyncAttempt",
     "RawDataImport",
+    "RawImportRow",
     "FinanceData",
     "FinanceDataDemo",
     "FinanceDataReal",
