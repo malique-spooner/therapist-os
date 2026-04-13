@@ -412,7 +412,7 @@ export interface DateQuery {
   endDate?: string;
 }
 
-type DataMode = 'demo-only' | 'real-only';
+type DataMode = 'real-only';
 
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? '';
 
@@ -429,16 +429,7 @@ function getApiBase() {
 }
 
 function getDataMode(): DataMode {
-  if (typeof window === 'undefined') return 'demo-only';
-  try {
-    const raw = window.localStorage.getItem('therapist-os-settings');
-    if (!raw) return 'demo-only';
-    const parsed = JSON.parse(raw);
-    const mode = parsed?.state?.dataMode ?? parsed?.dataMode;
-    return mode === 'real-only' ? 'real-only' : 'demo-only';
-  } catch {
-    return 'demo-only';
-  }
+  return 'real-only';
 }
 
 function withDataMode(path: string) {
@@ -450,17 +441,25 @@ function withDataMode(path: string) {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const apiBase = getApiBase();
   const headers = new Headers(init?.headers);
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), 10000);
   if (API_KEY) headers.set('X-API-Key', API_KEY);
   if (!(init?.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(`${apiBase}${path}`, {
-    ...init,
-    headers,
-    cache: 'no-store',
-    credentials: 'include',
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase}${path}`, {
+      ...init,
+      headers,
+      cache: 'no-store',
+      credentials: 'include',
+      signal: controller.signal,
+    });
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const contentType = response.headers.get('content-type') ?? '';

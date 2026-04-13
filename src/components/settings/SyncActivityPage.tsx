@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { TopBar } from '@/components/navigation/TopBar';
 import { api, type DataSourceActivityItemPayload, type DataSourceActivityPayload } from '@/lib/api';
 
-type ActivityMode = 'demo-only' | 'real-only';
+type ActivityMode = 'real-only';
 
 interface SyncActivityPageProps {
   initialMode: ActivityMode;
@@ -36,18 +36,12 @@ function absoluteLabel(timestamp: string | null | undefined) {
   }).format(date);
 }
 
-function modeCopy(mode: ActivityMode) {
-  return mode === 'demo-only'
-    ? {
-        title: 'Demo database',
-        description: 'This reads the demo tables only. It is a sandbox with generated records and does not borrow from your real history.',
-        accent: 'var(--color-accent)',
-      }
-    : {
-        title: 'Real database',
-        description: 'This reads the real tables only. Sparse sections mean that source has not written real rows yet, not that demo rows are filling in.',
-        accent: 'var(--color-success)',
-      };
+function modeCopy() {
+  return {
+    title: 'Real data',
+    description: 'Sparse sections mean that source has not written rows yet.',
+    accent: 'var(--color-success)',
+  };
 }
 
 function SourceActivityCard({ item }: { item: DataSourceActivityItemPayload }) {
@@ -157,7 +151,7 @@ function SourceActivityCard({ item }: { item: DataSourceActivityItemPayload }) {
 }
 
 export function SyncActivityPage({ initialMode, onBack }: SyncActivityPageProps) {
-  const [mode, setMode] = useState<ActivityMode>(initialMode);
+  const [mode] = useState<ActivityMode>(initialMode);
   const [payload, setPayload] = useState<DataSourceActivityPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -179,7 +173,7 @@ export function SyncActivityPage({ initialMode, onBack }: SyncActivityPageProps)
   }, [mode]);
 
   const items = useMemo(() => payload?.items ?? [], [payload]);
-  const copy = useMemo(() => modeCopy(mode), [mode]);
+  const copy = useMemo(() => modeCopy(), []);
   const totalRows = useMemo(() => items.reduce((sum, item) => sum + item.recordsAvailable, 0), [items]);
   const activeSources = useMemo(() => items.filter((item) => item.recordsAvailable > 0).length, [items]);
   const blockedSources = useMemo(() => items.filter((item) => item.syncBlocked).length, [items]);
@@ -211,25 +205,6 @@ export function SyncActivityPage({ initialMode, onBack }: SyncActivityPageProps)
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
             {copy.description}
           </p>
-          <div className="mt-4 inline-flex rounded-2xl p-1" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            {([
-              ['demo-only', 'Demo database'],
-              ['real-only', 'Real database'],
-            ] as const).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setMode(value)}
-                className="rounded-xl px-3 py-2 text-xs font-semibold"
-                style={{
-                  backgroundColor: mode === value ? 'var(--color-primary)' : 'transparent',
-                  color: mode === value ? '#fff' : 'var(--color-text-muted)',
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

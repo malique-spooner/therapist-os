@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Brain, ChevronRight, Cpu, Radar, Sparkles } from 'lucide-react';
 import { TopBar } from '@/components/navigation/TopBar';
-import { brainLayers as fallbackLayers, brainOverview as fallbackOverview, brainVersions as fallbackVersions } from '@/lib/brain';
+import { brainLayers as fallbackLayers } from '@/lib/brain';
 import { api } from '@/lib/api';
 import { useApiQuery } from '@/hooks/useApiQuery';
 import { RetryNotice } from '@/components/ui/retry-notice';
@@ -28,10 +28,9 @@ function SectionTitle({ eyebrow, title, subtitle }: { eyebrow: string; title: st
 export function BrainPage({ onBack }: BrainPageProps) {
   const dataMode = useSettingsStore((state) => state.dataMode);
   const { data, isLoading, error, refetch } = useApiQuery(() => api.getBrain(), [dataMode]);
-  const useFallback = dataMode === 'demo-only';
-  const brainOverview = useFallback ? fallbackOverview : data?.overview;
-  const brainLayers = useMemo(() => useFallback ? fallbackLayers : (data?.layers ?? []), [data?.layers, useFallback]);
-  const brainVersions = useMemo(() => useFallback ? fallbackVersions : (data?.versions ?? []), [data?.versions, useFallback]);
+  const brainOverview = data?.overview;
+  const brainLayers = useMemo(() => data?.layers ?? [], [data?.layers]);
+  const brainVersions = useMemo(() => data?.versions ?? [], [data?.versions]);
   const [selectedLayerId, setSelectedLayerId] = useState<LayerId>(fallbackLayers[0].id);
   const selectedLayer = useMemo(
     () => brainLayers.find((layer) => layer.id === selectedLayerId) ?? brainLayers[0],
@@ -70,7 +69,7 @@ export function BrainPage({ onBack }: BrainPageProps) {
                 <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'rgba(27,67,50,0.75)' }}>Current brain</p>
                 <h1 className="text-2xl font-semibold mt-2" style={{ color: 'var(--color-dark)' }}>{brainOverview?.version ?? 'No live brain data yet'}</h1>
                 <p className="text-sm mt-2 max-w-[34ch] leading-relaxed" style={{ color: 'rgba(27,67,50,0.82)' }}>
-                  {isLoading ? 'Refreshing the current brain state...' : useFallback ? 'Fresh interpretation, private local inference with Qwen 3.5 35B through Ollama, and transparent layer-by-layer thinking.' : 'Real-only mode is showing backend brain state only.'}
+                  {isLoading ? 'Refreshing the current brain state...' : 'Showing backend brain state from real data only.'}
                 </p>
               </div>
               <div className="w-14 h-14 rounded-[20px] flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(255,255,255,0.72)' }}>
@@ -126,7 +125,7 @@ export function BrainPage({ onBack }: BrainPageProps) {
         {!brainLayers.length && (
           <div className="px-4 pt-4">
             <RetryNotice
-              message="Real-only mode found no backend brain payload yet."
+              message="No backend brain payload yet."
               onRetry={refetch}
               className="w-full rounded-[24px] px-4 py-3 text-sm"
             />

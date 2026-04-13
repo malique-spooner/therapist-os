@@ -50,9 +50,6 @@ def _infer_frameworks(content: str) -> list[str]:
 
 
 def _conversation_models(mode: str | None = None):
-    normalized_mode = normalize_data_mode(mode)
-    if normalized_mode == "demo-only":
-        return AIConversationDemo, AIMessageDemo
     return AIConversationReal, AIMessageReal
 
 

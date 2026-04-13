@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     USER_TIMEZONE: str = Field(default="Europe/London")
     USER_LATITUDE: float = Field(default=51.5074)
     USER_LONGITUDE: float = Field(default=-0.1278)
-    SEED_DEMO_DATA: bool = Field(default=True)
+    SEED_DEMO_DATA: bool = Field(default=False)
     AUTO_RUN_MIGRATIONS: bool = Field(default=False)
     DATA_SOURCE_ENCRYPTION_KEY: str = ""
     OLLAMA_BASE_URL: str = Field(default="http://host.docker.internal:11434")

@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware';
 export type Theme = 'light' | 'dark' | 'system';
 export type AIProviderId = 'local-qwen';
 export type TherapistTTSProvider = 'kokoro' | 'piper';
-export type DataMode = 'real-only' | 'demo-only';
+export type DataMode = 'real-only';
 
 interface SettingsState {
   theme: Theme;
@@ -51,7 +51,7 @@ export const useSettingsStore = create<SettingsState>()(
       localModel: 'qwen2.5:3b',
       ttsProvider: 'kokoro',
       ttsVoice: 'af_heart',
-      dataMode: 'demo-only',
+      dataMode: 'real-only',
       budgetEnabled: true,
       budgetLimit: 1000, // £10.00 in pence
       budgetSpent: 240,  // £2.40 pre-populated for demo
@@ -68,7 +68,7 @@ export const useSettingsStore = create<SettingsState>()(
         ttsVoice: ttsProvider === 'kokoro' ? 'af_heart' : 'en_US-lessac-medium',
       }),
       setTtsVoice: (ttsVoice) => set({ ttsVoice }),
-      setDataMode: (dataMode) => set({ dataMode: dataMode === 'real-only' ? 'real-only' : 'demo-only' }),
+      setDataMode: () => set({ dataMode: 'real-only' }),
       setBudgetEnabled: (budgetEnabled) => set({ budgetEnabled }),
       setBudgetLimit: (budgetLimit) => set({ budgetLimit }),
       setBudgetSpent: (budgetSpent) => set({ budgetSpent }),
@@ -92,7 +92,7 @@ export const useSettingsStore = create<SettingsState>()(
         const next = { ...current, ...(persisted as Partial<SettingsState>) };
         return {
           ...next,
-          dataMode: next.dataMode === 'real-only' ? 'real-only' : 'demo-only',
+          dataMode: 'real-only',
           localModel: next.localModel || 'qwen2.5:3b',
           ttsProvider: next.ttsProvider === 'piper' ? 'piper' : 'kokoro',
           ttsVoice: next.ttsVoice || 'af_heart',

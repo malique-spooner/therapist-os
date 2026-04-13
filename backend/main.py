@@ -12,8 +12,6 @@ from .database import SessionLocal, engine
 from .middleware.request_context import RequestContextMiddleware
 from .routers import ai, auth, brain, checkins, consumption, dashboard, data_sources, finance, habits, health, location, open_prompts, profile, relationships, weather
 from .services.auth import ensure_admin_user
-from .services.life_data_bootstrap import bootstrap_life_data
-from .services.seed import seed_demo_data
 from .services.ai.providers import REAL_PROVIDERS
 from .validate_env import validate_settings
 
@@ -27,9 +25,7 @@ async def lifespan(app: FastAPI):
     for warning in validation.warnings:
         logger.warning("environment_warning", extra={"event": "environment_warning", "extra_data": {"warning": warning}})
     with SessionLocal() as db:
-        bootstrap_life_data(db)
         ensure_admin_user(db)
-        seed_demo_data(db)
     if settings.OLLAMA_PREWARM_ON_STARTUP:
         provider = REAL_PROVIDERS.get("local-qwen")
         if provider and getattr(provider, "is_available", False) and hasattr(provider, "prewarm"):

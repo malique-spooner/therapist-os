@@ -8,8 +8,9 @@ from typing import Callable
 from urllib.parse import urlencode
 
 import httpx
+from cryptography.fernet import InvalidToken
 
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -48,32 +49,33 @@ from .data_mode import dataset_model, normalize_data_mode
 from .whisper_service import WhisperService
 
 
+THERAPIST_OS_DRIVE_FOLDER = "https://drive.google.com/drive/folders/1W-aD74h2TlVovpS5oWi8IUR-TC-0JHIAwDsIiIX9Ik4H5H3qovf8_0Qzms_MFXI_QVpsmm6i"
+
+
 DEFAULT_SOURCES = {
     "garmin": {
         "name": "Garmin Connect",
-        "category": "Body - Steps, Sleep, HRV, Workouts",
+        "category": "Semi-automated - Health export folder",
         "icon": "⌚",
-        "hint": "Enter your Garmin Connect email and password to enable health sync through the current Garmin library integration.",
+        "hint": "Save Garmin exports into the TherapistOS Google Drive folder so Therapist OS can import health data periodically.",
+        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
         "setup": {
-            "mode": "credentials",
-            "title": "Connect Garmin Connect",
-            "description": "Save your Garmin Connect login so Therapist OS can run a daily automatic health sync for steps, sleep, HRV, and workouts.",
-            "actionLabel": "Save Garmin login",
+            "mode": "folder",
+            "title": "Connect Garmin exports",
+            "description": "Point Garmin Connect exports at the TherapistOS Drive folder.",
+            "actionLabel": "Save Garmin folder",
             "instructions": [
-                "Use the same email and password you use to sign in to Garmin Connect.",
-                "These credentials are stored encrypted on the backend and only used for the background Garmin sync job.",
-                "Therapist OS syncs Garmin automatically once per day and keeps a backoff in place if Garmin rate-limits the login.",
-                "If you use multi-factor auth or Garmin changes the login flow, you may need to reconnect later.",
+                "Put Garmin export files in the TherapistOS Google Drive folder.",
+                "Therapist OS will use this folder for semi-automated health imports.",
             ],
             "fields": [
-                {"key": "email", "label": "Garmin email", "type": "email", "placeholder": "you@example.com", "required": True},
-                {"key": "password", "label": "Garmin password", "type": "password", "placeholder": "Password", "required": True},
+                {"key": "folder_path", "label": "Garmin export folder", "type": "text", "placeholder": THERAPIST_OS_DRIVE_FOLDER, "required": True},
             ],
         },
     },
     "truelayer": {
-        "name": "TrueLayer (Bank)",
-        "category": "Finance - Transactions, Spending Categories",
+        "name": "TrueLayer",
+        "category": "Automated - Finance",
         "icon": "🏦",
         "hint": "Add your TrueLayer app credentials, then complete the bank sign-in flow to enable finance sync.",
         "setup": {
@@ -97,7 +99,7 @@ DEFAULT_SOURCES = {
     },
     "spotify": {
         "name": "Spotify",
-        "category": "Consumption - Music, Listening Patterns",
+        "category": "Automated - Media",
         "icon": "🎵",
         "hint": "Add your Spotify app credentials, then complete Spotify sign-in to enable recent listening sync.",
         "setup": {
@@ -119,11 +121,11 @@ DEFAULT_SOURCES = {
         },
     },
     "google_drive": {
-        "name": "Google Drive",
-        "category": "Imports - Google Takeout archives, history exports",
+        "name": "Google Drive Imports",
+        "category": "Semi-automated - Export folders",
         "icon": "🗂️",
         "hint": "Set the Takeout folder path and save your Google OAuth credentials so Therapist OS can read export archives.",
-        "folder_path": "Therapist OS / Google Takeout",
+        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
         "setup": {
             "mode": "oauth-credentials",
             "title": "Connect Google Drive",
@@ -136,7 +138,7 @@ DEFAULT_SOURCES = {
                 "Therapist OS requests read-only Drive access so it can download new Google Takeout archives from your chosen folder.",
             ],
             "fields": [
-                {"key": "folder_path", "label": "Takeout folder", "type": "text", "placeholder": "Therapist OS / Google Takeout", "required": True},
+                {"key": "folder_path", "label": "TherapistOS folder", "type": "text", "placeholder": THERAPIST_OS_DRIVE_FOLDER, "required": True},
                 {"key": "client_id", "label": "Google client ID", "type": "text", "placeholder": "OAuth client id", "required": True},
                 {"key": "client_secret", "label": "Google client secret", "type": "password", "placeholder": "OAuth client secret", "required": True},
                 {"key": "refresh_token", "label": "Refresh token", "type": "password", "placeholder": "Filled automatically after sign-in", "required": False},
@@ -145,7 +147,7 @@ DEFAULT_SOURCES = {
     },
     "google_maps": {
         "name": "Google Maps",
-        "category": "Maps - Interactive map canvas and cinematic 3D recaps",
+        "category": "Backend settings - Maps",
         "icon": "🗺️",
         "hint": "Save a Google Maps browser API key so Therapist OS can render map views and later power 3D recap scenes.",
         "setup": {
@@ -165,13 +167,35 @@ DEFAULT_SOURCES = {
     },
     "youtube": {
         "name": "YouTube",
-        "category": "Consumption - Watch History",
+        "category": "Semi-automated - Media export folder",
         "icon": "▶️",
-        "hint": "YouTube is still a manual logging path in Phase 2.",
+        "hint": "Save YouTube exports into Google Drive so Therapist OS can import watch history periodically.",
+        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
+    },
+    "chrome": {
+        "name": "Chrome",
+        "category": "Semi-automated - Browser export folder",
+        "icon": "🌐",
+        "hint": "Save Chrome history exports into Google Drive so Therapist OS can import browser patterns periodically.",
+        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
+    },
+    "instagram": {
+        "name": "Instagram",
+        "category": "Semi-automated - People export folder",
+        "icon": "📸",
+        "hint": "Save Instagram exports into Google Drive so Therapist OS can import people and interaction signals periodically.",
+        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
+    },
+    "snapchat": {
+        "name": "Snapchat",
+        "category": "Semi-automated - People export folder",
+        "icon": "👻",
+        "hint": "Save Snapchat exports into Google Drive so Therapist OS can import people and interaction signals periodically.",
+        "folder_path": THERAPIST_OS_DRIVE_FOLDER,
     },
     "owntracks": {
         "name": "OwnTracks",
-        "category": "Location - Continuous GPS Logging",
+        "category": "Automated - Location",
         "icon": "📍",
         "hint": "Save a webhook username and password, then set OwnTracks to HTTP mode with Basic auth using the public webhook URL.",
         "setup": {
@@ -191,27 +215,15 @@ DEFAULT_SOURCES = {
             ],
         },
     },
-    "google_calendar": {
-        "name": "Google Calendar",
-        "category": "Commitments - Events, Time Allocation",
-        "icon": "📅",
-        "hint": "Calendar integration is not wired yet in this repo.",
-    },
-    "google_photos": {
-        "name": "Google Photos",
-        "category": "Visual - Photo Metadata, Locations",
-        "icon": "📷",
-        "hint": "Photos integration is not wired yet in this repo.",
-    },
     "voice_journal": {
-        "name": "Voice Journal",
-        "category": "Mood - Transcription, Sentiment Analysis",
+        "name": "Voice & Audio",
+        "category": "Backend settings - Dictation and text to speech",
         "icon": "🎙️",
         "hint": "Voice journaling depends on the Whisper flow, which is still pending.",
     },
     "weather": {
         "name": "OpenWeather",
-        "category": "Environment - Weather and daylight context",
+        "category": "Backend settings - Weather",
         "icon": "☀️",
         "hint": "Add your OpenWeather API key to enable weather context.",
         "setup": {
@@ -262,11 +274,11 @@ class DataSourceService:
         if source_id == "google_drive":
             return "Manual refresh when you import new archives"
         if source_id == "youtube":
-            return "Manual import only in Phase 2"
-        if source_id == "google_calendar":
-            return "Not scheduled yet"
-        if source_id == "google_photos":
-            return "Not scheduled yet"
+            return "Periodic import from Google Drive export folder"
+        if source_id == "chrome":
+            return "Periodic import from Google Drive export folder"
+        if source_id in {"instagram", "snapchat"}:
+            return "Periodic import from Google Drive people export folder"
         if source_id == "voice_journal":
             return "On demand when you record or transcribe"
         return None
@@ -287,7 +299,11 @@ class DataSourceService:
     def _secret_config(self, record: DataSourceConnection | None) -> dict[str, str]:
         if not record or not record.encrypted_config_json:
             return {}
-        decrypted = secret_box.decrypt(record.encrypted_config_json)
+        try:
+            decrypted = secret_box.decrypt(record.encrypted_config_json)
+        except InvalidToken:
+            record.encrypted_config_json = None
+            return {}
         import json
 
         payload = json.loads(decrypted)
@@ -312,15 +328,16 @@ class DataSourceService:
         weather = self._record("weather", db)
 
         return {
-            "garmin": GarminIngestionService(self._config(garmin)).is_configured,
+            "garmin": bool((self._config(garmin).get("folder_path") or DEFAULT_SOURCES["garmin"].get("folder_path"))),
             "truelayer": TrueLayerIngestionService(self._config(truelayer)).is_configured,
             "spotify": SpotifyIngestionService(self._config(spotify)).is_configured,
             "google_drive": bool(self._config(google_drive).get("folder_path") and self._config(google_drive).get("client_id") and self._config(google_drive).get("client_secret") and self._config(google_drive).get("refresh_token")),
             "google_maps": bool(self._config(google_maps).get("api_key") or settings.GOOGLE_MAPS_API_KEY),
-            "youtube": False,
+            "youtube": bool(DEFAULT_SOURCES["youtube"].get("folder_path")),
+            "chrome": bool(DEFAULT_SOURCES["chrome"].get("folder_path")),
+            "instagram": bool(DEFAULT_SOURCES["instagram"].get("folder_path")),
+            "snapchat": bool(DEFAULT_SOURCES["snapchat"].get("folder_path")),
             "owntracks": bool(self._config(owntracks).get("username") and self._config(owntracks).get("password")),
-            "google_calendar": False,
-            "google_photos": False,
             "voice_journal": self._whisper.is_available,
             "weather": bool(self._config(weather).get("api_key")),
         }
@@ -367,7 +384,13 @@ class DataSourceService:
                 connection_hint=default["hint"],
             )
             db.add(record)
-            db.flush()
+            try:
+                db.flush()
+            except IntegrityError:
+                db.rollback()
+                record = db.get(DataSourceConnection, source_id)
+                if record is None:
+                    raise
         return record
 
     @staticmethod
@@ -551,26 +574,6 @@ class DataSourceService:
                     )
                 )
                 changed = True
-
-            has_demo_attempt = db.query(DataSourceSyncAttempt).filter(
-                DataSourceSyncAttempt.source_id == source_id,
-                DataSourceSyncAttempt.data_mode == "demo-only",
-            ).first()
-            if not has_demo_attempt:
-                count, last_collected_at, latest_data_date = self._dataset_activity(source_id, "demo-only", db)
-                if count > 0 and last_collected_at:
-                    db.add(
-                        DataSourceSyncAttempt(
-                            source_id=source_id,
-                            status="demo-refresh",
-                            trigger="seed",
-                            data_mode="demo-only",
-                            rows_synced=count,
-                            detail=f"Backfilled from demo dataset through {latest_data_date}.",
-                            attempted_at=last_collected_at,
-                        )
-                    )
-                    changed = True
 
         if changed:
             db.flush()

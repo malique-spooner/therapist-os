@@ -56,7 +56,7 @@ function toneChip(tone: PlaceTone) {
   return { label: 'Mixed', color: 'rgba(255,255,255,0.12)', text: 'rgba(255,255,255,0.82)' };
 }
 
-function fallbackExperience(mode: 'demo-only' | 'real-only'): LocationIntelligencePayload {
+function fallbackExperience(mode: 'real-only'): LocationIntelligencePayload {
   return {
     mode,
     hasRealMapData: false,
@@ -200,7 +200,7 @@ export function LocationPage({ onBack, onSettings, onTalkAboutThis }: LocationPa
       })[0] ?? null;
   }, [experience.places, selectedPlace]);
   const activeScene = experience.recapScenes[activeSceneIndex] ?? null;
-  const showEmptyRealState = dataMode === 'real-only' && !isLoading && !experience.hasRealMapData;
+  const showEmptyRealState = !isLoading && !experience.hasRealMapData;
 
   useEffect(() => {
     if (!selectedVisitId && experience.visits[0]) {
@@ -232,9 +232,7 @@ export function LocationPage({ onBack, onSettings, onTalkAboutThis }: LocationPa
         contextLabel: companionDraft.contextLabel || null,
         note: companionDraft.note || null,
       });
-      if (dataMode === 'real-only') {
-        setCompanionLog(next);
-      }
+      setCompanionLog(next);
       await refetchCompanionLog();
       await refetch();
     } finally {

@@ -10,9 +10,19 @@ interface CheckInState {
   hydrated: boolean;
   hydrateFromApi: () => Promise<void>;
   applyDataMode: (mode: DataMode) => Promise<void>;
-  completeCheckIn: (checkIn: Omit<DailyCheckIn, 'date' | 'timestamp'>) => void;
+  completeCheckIn: (checkIn: Omit<DailyCheckIn, 'date' | 'timestamp'>, period?: CheckInPeriod) => void;
   skipToday: () => void;
-  hasCheckedInToday: () => boolean;
+  hasCompletedCurrentCheckIn: () => boolean;
+}
+
+export type CheckInPeriod = 'morning' | 'evening';
+
+export function getCurrentCheckInPeriod(): CheckInPeriod {
+  return new Date().getHours() < 12 ? 'morning' : 'evening';
+}
+
+function getCompletionKey(period: CheckInPeriod) {
+  return `therapist-os-checkin-${APP_TODAY}-${period}`;
 }
 
 export const useCheckInStore = create<CheckInState>()((set, get) => ({
@@ -37,13 +47,16 @@ export const useCheckInStore = create<CheckInState>()((set, get) => ({
       set({ history: [], todayCheckIn: null, hydrated: true });
     }
   },
-  completeCheckIn: (checkIn) => {
+  completeCheckIn: (checkIn, period = getCurrentCheckInPeriod()) => {
     void api.saveCheckin(checkIn).catch(() => {});
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(getCompletionKey(period), '1');
+    }
 
     set((state) => {
       const nextEntry: DailyCheckIn = {
         date: APP_TODAY,
-        timestamp: new Date(`${APP_TODAY}T08:00:00`).getTime(),
+        timestamp: new Date(`${APP_TODAY}T${period === 'morning' ? '08' : '20'}:00:00`).getTime(),
         ...checkIn,
       };
       const historyWithoutToday = state.history.filter((entry) => !isSameDay(entry.date, APP_TODAY));
@@ -57,7 +70,8 @@ export const useCheckInStore = create<CheckInState>()((set, get) => ({
     set((state) => ({
       todayCheckIn: state.todayCheckIn,
     })),
-  hasCheckedInToday: () => {
-    return Boolean(get().todayCheckIn);
+  hasCompletedCurrentCheckIn: () => {
+    if (typeof window === 'undefined') return Boolean(get().todayCheckIn);
+    return window.localStorage.getItem(getCompletionKey(getCurrentCheckInPeriod())) === '1';
   },
 }));

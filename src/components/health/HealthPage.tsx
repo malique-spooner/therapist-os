@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { TopBar } from '@/components/navigation/TopBar';
 import { HealthSummary } from './HealthSummary';
 import { HealthCharts } from './HealthCharts';
-import { InsightCard } from '@/components/dashboard/InsightCard';
 import type { Period } from '@/lib/mockDataUtils';
 import { api } from '@/lib/api';
 import { useApiQuery } from '@/hooks/useApiQuery';
@@ -13,46 +12,13 @@ import { DateRangeControl, type DateRangeValue } from '@/components/ui/date-rang
 import { APP_TODAY, addDays, clampIsoDate, differenceInDays } from '@/lib/date';
 import { useSettingsStore } from '@/store/settings';
 
-const insights = [
-  {
-    id: 'health-1',
-    category: 'Physical Health',
-    categoryIcon: '⌚',
-    lens: 'CBT' as const,
-    narrative: 'Your HRV peaks on days after you sleep before midnight, averaging around 12ms higher than late-night equivalents in this profile.',
-    action: 'Use bedtime as the recovery lever, not just total sleep time.',
-    domainId: 'physical',
-    viewLabel: 'View Physical Health',
-  },
-  {
-    id: 'health-2',
-    category: 'Physical Health',
-    categoryIcon: '🏃',
-    lens: 'Behaviourism' as const,
-    narrative: 'You move meaningfully more on days that include a morning workout, even after accounting for the workout itself. The first active choice shapes the rest of the day.',
-    action: 'Keep one simple morning movement cue visible.',
-    domainId: 'physical',
-    viewLabel: 'View Physical Health',
-  },
-  {
-    id: 'health-3',
-    category: 'Physical Health',
-    categoryIcon: '❤️',
-    lens: 'SDT' as const,
-    narrative: 'Recovery improves most when movement, sleep timing, and autonomy line up together. This page is strongest when it is treated as a reflection, not a scoreboard.',
-    action: 'Notice the combination days, not just the isolated metrics.',
-    domainId: 'physical',
-    viewLabel: 'View Physical Health',
-  },
-];
-
 interface HealthPageProps {
   onBack: () => void;
   onSettings: () => void;
-  onTalkAboutThis: (context: string) => void;
+  onTalkAboutThis?: (context: string) => void;
 }
 
-export function HealthPage({ onBack, onSettings, onTalkAboutThis }: HealthPageProps) {
+export function HealthPage({ onBack, onSettings }: HealthPageProps) {
   const dataMode = useSettingsStore((state) => state.dataMode);
   const { data, isLoading, error, refetch } = useApiQuery(() => api.getHealth('3-months'), [dataMode]);
   const allDays = useMemo(() => data ?? [], [data]);
@@ -78,7 +44,7 @@ export function HealthPage({ onBack, onSettings, onTalkAboutThis }: HealthPagePr
   );
   const spanDays = differenceInDays(range.startDate, range.endDate) + 1;
   const derivedPeriod: Period = spanDays <= 1 ? 'today' : spanDays <= 7 ? 'this-week' : spanDays <= 31 ? 'this-month' : '3-months';
-  const showEmptyRealState = dataMode === 'real-only' && !isLoading && !days.length;
+  const showEmptyRealState = !isLoading && !days.length;
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
@@ -96,7 +62,7 @@ export function HealthPage({ onBack, onSettings, onTalkAboutThis }: HealthPagePr
         />
         {showEmptyRealState && (
           <RetryNotice
-            message="Not enough rows in the Real database yet. Sync Garmin or switch to the Demo sandbox."
+            message="Not enough health rows yet. Connect Garmin and sync data."
             onRetry={refetch}
             className="mx-4 mb-4 w-[calc(100%-2rem)]"
           />
@@ -114,9 +80,6 @@ export function HealthPage({ onBack, onSettings, onTalkAboutThis }: HealthPagePr
               <HealthCharts period={derivedPeriod} days={days} />
             )}
             <div className="px-4 space-y-3">
-              {(dataMode === 'demo-only' ? insights : []).map((insight, index) => (
-                <InsightCard key={insight.id} insight={insight} index={index} onTalkAboutThis={onTalkAboutThis} />
-              ))}
             </div>
           </>
         )}

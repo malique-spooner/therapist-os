@@ -7,9 +7,7 @@ DataMode = str
 
 
 def normalize_data_mode(mode: str | None) -> DataMode:
-    if mode == "real-only":
-        return "real-only"
-    return "demo-only"
+    return "real-only"
 
 
 def demo_filter(mode: str | None, column) -> ColumnElement[bool]:
@@ -18,4 +16,4 @@ def demo_filter(mode: str | None, column) -> ColumnElement[bool]:
 
 
 def dataset_model(mode: str | None, real_model, demo_model):
-    return demo_model if normalize_data_mode(mode) == "demo-only" else real_model
+    return real_model

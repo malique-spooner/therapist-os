@@ -7,7 +7,6 @@ import { TopBar } from '@/components/navigation/TopBar';
 import { HeroCard } from './HeroCard';
 import { DataRing } from './DataRing';
 import { InsightCard } from './InsightCard';
-import { TodaySnapshot } from './TodaySnapshot';
 import { type Period } from '@/lib/mockDataUtils';
 import { api } from '@/lib/api';
 import { useApiQuery } from '@/hooks/useApiQuery';
@@ -31,14 +30,14 @@ interface DashboardPageProps {
   onOpenDomain?: (page: 'health' | 'relationships' | 'finance' | 'consumption' | 'location') => void;
 }
 
-export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist, onOpenDomain }: DashboardPageProps) {
+export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist }: DashboardPageProps) {
   const [period, setPeriod] = useState<Period>('today');
   const dataMode = useSettingsStore((state) => state.dataMode);
   const { data, isLoading, error, refetch } = useApiQuery(() => api.getDashboard(period), [period, dataMode]);
   const rings = data?.rings ?? [];
   const heroInsight = data?.heroInsight;
   const allCards = data?.insights ?? [];
-  const canRenderDashboard = dataMode === 'demo-only' || data?.status === 'ready';
+  const canRenderDashboard = data?.status === 'ready';
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
@@ -65,8 +64,6 @@ export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist, 
           <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>{data?.greeting ?? 'Good morning'}</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{data?.dateLabel ?? new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
         </div>
-
-        {onOpenDomain && dataMode === 'demo-only' && <TodaySnapshot onSelect={onOpenDomain} />}
 
         {/* Period filter */}
         <div className="px-4 pb-4">
@@ -95,8 +92,8 @@ export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist, 
             <RetryNotice onRetry={refetch} className="mx-4 w-[calc(100%-2rem)] p-5" />
           )}
           {!isLoading && !error && heroInsight && canRenderDashboard && <HeroCard insight={heroInsight} onTalkAboutThis={onNavigateToTherapist} />}
-          {!isLoading && !error && dataMode === 'real-only' && !canRenderDashboard && (
-            <RetryNotice message="Not enough rows in the Real database yet to generate dashboard insights. Keep syncing sources or switch to the Demo sandbox." onRetry={refetch} className="mx-4 w-[calc(100%-2rem)] p-5" />
+          {!isLoading && !error && !canRenderDashboard && (
+            <RetryNotice message="Not enough real rows yet to generate dashboard insights. Connect sources and sync data." onRetry={refetch} className="mx-4 w-[calc(100%-2rem)] p-5" />
           )}
         </div>
 

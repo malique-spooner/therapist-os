@@ -20,30 +20,15 @@ interface SettingsPageProps {
 
 const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
   {
-    id: 'garmin',
-    name: 'Garmin Connect',
-    category: 'Body - Steps, Sleep, HRV, Workouts',
-    icon: '⌚',
+    id: 'owntracks',
+    name: 'OwnTracks',
+    category: 'Automated - Location',
+    icon: '📍',
     connected: false,
     available: false,
     lastSync: null,
     lastSyncStatus: null,
-    connectionHint: 'Save your Garmin Connect login so Therapist OS can run the daily background health sync.',
-    lastError: null,
-    syncBlocked: false,
-    syncGuardMessage: null,
-    manualSyncAllowed: false,
-  },
-  {
-    id: 'truelayer',
-    name: 'TrueLayer',
-    category: 'Money - transactions and spending patterns',
-    icon: '🏦',
-    connected: false,
-    available: false,
-    lastSync: null,
-    lastSyncStatus: null,
-    connectionHint: 'Save your TrueLayer app credentials, then finish bank sign-in to enable finance sync.',
+    connectionHint: 'Save a webhook username and password, then set OwnTracks to HTTP mode with Basic auth using the public webhook URL.',
     lastError: null,
     syncBlocked: false,
     syncGuardMessage: null,
@@ -52,7 +37,7 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
   {
     id: 'spotify',
     name: 'Spotify',
-    category: 'Consumption - listening patterns and audio features',
+    category: 'Automated - Media',
     icon: '🎵',
     connected: false,
     available: false,
@@ -65,9 +50,39 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     manualSyncAllowed: true,
   },
   {
+    id: 'truelayer',
+    name: 'TrueLayer',
+    category: 'Automated - Finance',
+    icon: '🏦',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Save your TrueLayer app credentials, then finish bank sign-in to enable finance sync.',
+    lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
+  },
+  {
+    id: 'garmin',
+    name: 'Garmin Connect',
+    category: 'Semi-automated - Health export folder',
+    icon: '⌚',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Save Garmin exports into Google Drive so Therapist OS can import health data periodically.',
+    lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: false,
+  },
+  {
     id: 'google_drive',
-    name: 'Google Drive',
-    category: 'Imports - Google Takeout archives and history exports',
+    name: 'Google Drive Imports',
+    category: 'Semi-automated - Export folders',
     icon: '🗂️',
     connected: false,
     available: false,
@@ -81,9 +96,84 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     manualSyncAllowed: true,
   },
   {
+    id: 'instagram',
+    name: 'Instagram',
+    category: 'Semi-automated - People export folder',
+    icon: '📸',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Save Instagram exports into Google Drive so Therapist OS can import people signals periodically.',
+    lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
+  },
+  {
+    id: 'snapchat',
+    name: 'Snapchat',
+    category: 'Semi-automated - People export folder',
+    icon: '👻',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Save Snapchat exports into Google Drive so Therapist OS can import people signals periodically.',
+    lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
+  },
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    category: 'Semi-automated - Media export folder',
+    icon: '▶️',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Save YouTube exports into Google Drive so Therapist OS can import watch history periodically.',
+    lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
+  },
+  {
+    id: 'chrome',
+    name: 'Chrome',
+    category: 'Semi-automated - Browser export folder',
+    icon: '🌐',
+    connected: false,
+    available: false,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Save Chrome exports into Google Drive so Therapist OS can import browser history periodically.',
+    lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: true,
+  },
+  {
+    id: 'habits',
+    name: 'Habits',
+    category: 'Manual - App entries',
+    icon: '✅',
+    connected: true,
+    available: true,
+    lastSync: null,
+    lastSyncStatus: null,
+    connectionHint: 'Captured directly in the app.',
+    lastError: null,
+    syncBlocked: false,
+    syncGuardMessage: null,
+    manualSyncAllowed: false,
+  },
+  {
     id: 'google_maps',
     name: 'Google Maps',
-    category: 'Maps - interactive map canvas and cinematic 3D recaps',
+    category: 'Backend settings - Maps',
     icon: '🗺️',
     connected: false,
     available: false,
@@ -96,24 +186,9 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     manualSyncAllowed: false,
   },
   {
-    id: 'owntracks',
-    name: 'OwnTracks',
-    category: 'Location - live phone pings and daily movement summaries',
-    icon: '📍',
-    connected: false,
-    available: false,
-    lastSync: null,
-    lastSyncStatus: null,
-    connectionHint: 'Save a webhook username and password, then set OwnTracks to HTTP mode with Basic auth using the public webhook URL.',
-    lastError: null,
-    syncBlocked: false,
-    syncGuardMessage: null,
-    manualSyncAllowed: true,
-  },
-  {
     id: 'weather',
     name: 'OpenWeather',
-    category: 'Environment - weather and daylight context',
+    category: 'Backend settings - Weather',
     icon: '☀️',
     connected: false,
     available: false,
@@ -126,54 +201,9 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     manualSyncAllowed: true,
   },
   {
-    id: 'youtube',
-    name: 'YouTube',
-    category: 'Consumption - watch history and archive imports',
-    icon: '▶️',
-    connected: false,
-    available: false,
-    lastSync: null,
-    lastSyncStatus: null,
-    connectionHint: 'YouTube is still a manual import path in Phase 2.',
-    lastError: null,
-    syncBlocked: false,
-    syncGuardMessage: null,
-    manualSyncAllowed: true,
-  },
-  {
-    id: 'google_calendar',
-    name: 'Google Calendar',
-    category: 'Commitments - events and time allocation',
-    icon: '📅',
-    connected: false,
-    available: false,
-    lastSync: null,
-    lastSyncStatus: null,
-    connectionHint: 'Calendar integration is planned but not wired yet in this repo.',
-    lastError: null,
-    syncBlocked: false,
-    syncGuardMessage: null,
-    manualSyncAllowed: true,
-  },
-  {
-    id: 'google_photos',
-    name: 'Google Photos',
-    category: 'Visual - photo metadata and locations',
-    icon: '📷',
-    connected: false,
-    available: false,
-    lastSync: null,
-    lastSyncStatus: null,
-    connectionHint: 'Photos integration is planned but not wired yet in this repo.',
-    lastError: null,
-    syncBlocked: false,
-    syncGuardMessage: null,
-    manualSyncAllowed: true,
-  },
-  {
     id: 'voice_journal',
-    name: 'Voice Journal',
-    category: 'Mood - transcription and reflection inputs',
+    name: 'Voice & Audio',
+    category: 'Backend settings - Dictation and text to speech',
     icon: '🎙️',
     connected: false,
     available: false,
@@ -188,6 +218,12 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
 ];
 
 const DATA_SOURCES_FALLBACK_MESSAGE = 'Live connection status unavailable. Showing saved connections. Tap to retry.';
+const DATA_SOURCE_GROUPS = [
+  { title: 'Automated', ids: ['owntracks', 'spotify', 'truelayer'] },
+  { title: 'Semi-Automated', ids: ['garmin', 'google_drive', 'instagram', 'snapchat', 'youtube', 'chrome'] },
+  { title: 'Manual', ids: ['habits'] },
+  { title: 'Backend Settings', ids: ['weather', 'google_maps', 'voice_journal'] },
+];
 
 function SectionHeader({ title }: { title: string }) {
   return (
@@ -222,6 +258,7 @@ function getSourceActionLabel(source: DataSourcePayload) {
 }
 
 function getSourceStatusLabel(source: DataSourcePayload) {
+  if (source.id === 'habits') return 'Built in';
   if (source.syncBlocked) return 'Cooldown';
   if (source.lastSyncStatus === 'failed') return 'Sync failed';
   if (source.lastSyncStatus === 'automatic-only') return 'Auto only';
@@ -232,6 +269,10 @@ function getSourceStatusLabel(source: DataSourcePayload) {
   return 'Setup';
 }
 
+function canOpenSource(source: DataSourcePayload) {
+  return source.id !== 'habits';
+}
+
 
 export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceRequestHandled, onLogout }: SettingsPageProps) {
   const {
@@ -240,7 +281,6 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
     textSize,
     setTextSize,
     dataMode,
-    setDataMode,
     localModel,
     setLocalModel,
     ttsProvider,
@@ -548,66 +588,63 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
             <div>
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Sync Activity Log</p>
               <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                Review Demo database vs Real database history, row counts, and recent collection attempts across all connections.
+                Review real data history, row counts, and recent collection attempts across all connections.
               </p>
             </div>
             <span className="text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>Open</span>
           </button>
         </div>
-        <div className="mx-4 rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
-          {dataSources.map((source, i) => (
-            <div key={source.name} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: i < dataSources.length - 1 ? '1px solid var(--color-border)' : 'none', backgroundColor: 'var(--color-surface-2)' }}>
-              <span className="text-xl w-8 text-center flex-shrink-0">{source.icon}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{source.name}</p>
-                <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{source.category}</p>
-                {source.intendedSync && (
-                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Intended sync: {source.intendedSync}</p>
-                )}
-                {source.connected && source.lastSync && (
-                  <p className="text-xs" style={{ color: 'var(--color-accent)' }}>Synced {source.lastSync}</p>
-                )}
-                {!source.connected && source.connectionHint && (
-                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{source.connectionHint}</p>
-                )}
-                {source.folderPath && (
-                  <p className="text-xs" style={{ color: 'var(--color-accent)' }}>Folder: {source.folderPath}</p>
-                )}
-                {source.syncGuardMessage && (
-                  <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{source.syncGuardMessage}</p>
-                )}
-                {!source.syncGuardMessage && source.lastError && (
-                  <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{source.lastError}</p>
-                )}
+        {DATA_SOURCE_GROUPS.map((group) => {
+          const groupSources = group.ids
+            .map((id) => dataSources.find((source) => source.id === id))
+            .filter((source): source is DataSourcePayload => Boolean(source));
+          if (!groupSources.length) return null;
+          return (
+            <div key={group.title} className="mx-4 mb-3 rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+              <div className="px-4 py-2" style={{ backgroundColor: 'var(--color-surface)' }}>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-text-muted)' }}>{group.title}</p>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span
-                  className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
-                  style={{
-                    backgroundColor: source.connected ? 'rgba(82, 183, 136, 0.14)' : 'var(--color-surface)',
-                    color: source.connected ? 'var(--color-success)' : 'var(--color-text-muted)',
-                    border: '1px solid var(--color-border)',
-                  }}
-                >
-                  {getSourceStatusLabel(source)}
-                </span>
-                <button
-                  className="text-xs font-medium px-2.5 py-1 rounded-lg"
-                  style={{ backgroundColor: source.connected ? 'var(--color-border)' : 'var(--color-primary)', color: source.connected ? 'var(--color-text-muted)' : '#fff' }}
-                  onClick={() => { void openSetup(source); }}
-                  disabled={activeActionId === source.id}
-                  aria-label={
-                    activeActionId === source.id
-                      ? `Working on ${source.name}`
-                      : `${getSourceActionLabel(source)} ${source.name}`
-                  }
-                >
-                  {activeActionId === source.id ? 'Working...' : getSourceActionLabel(source)}
-                </button>
-              </div>
+              {groupSources.map((source, i) => (
+                <div key={source.id} className="flex items-center gap-3 px-4 py-3" style={{ borderTop: i > 0 ? '1px solid var(--color-border)' : 'none', backgroundColor: 'var(--color-surface-2)' }}>
+                  <span className="text-xl w-8 text-center flex-shrink-0">{source.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{source.name}</p>
+                    <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{source.category}</p>
+                    {source.intendedSync && <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Intended sync: {source.intendedSync}</p>}
+                    {source.connected && source.lastSync && <p className="text-xs" style={{ color: 'var(--color-accent)' }}>Synced {source.lastSync}</p>}
+                    {!source.connected && source.connectionHint && <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{source.connectionHint}</p>}
+                    {source.folderPath && <p className="text-xs" style={{ color: 'var(--color-accent)' }}>Folder: {source.folderPath}</p>}
+                    {source.syncGuardMessage && <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{source.syncGuardMessage}</p>}
+                    {!source.syncGuardMessage && source.lastError && <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{source.lastError}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span
+                      className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                      style={{
+                        backgroundColor: source.connected ? 'rgba(82, 183, 136, 0.14)' : 'var(--color-surface)',
+                        color: source.connected ? 'var(--color-success)' : 'var(--color-text-muted)',
+                        border: '1px solid var(--color-border)',
+                      }}
+                    >
+                      {getSourceStatusLabel(source)}
+                    </span>
+                    {canOpenSource(source) && (
+                      <button
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg"
+                        style={{ backgroundColor: source.connected ? 'var(--color-border)' : 'var(--color-primary)', color: source.connected ? 'var(--color-text-muted)' : '#fff' }}
+                        onClick={() => { void openSetup(source); }}
+                        disabled={activeActionId === source.id}
+                        aria-label={activeActionId === source.id ? `Working on ${source.name}` : `${getSourceActionLabel(source)} ${source.name}`}
+                      >
+                        {activeActionId === source.id ? 'Working...' : getSourceActionLabel(source)}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          );
+        })}
         {dataSourcesError && (
           <div className="px-4 pt-2">
             <RetryNotice
@@ -621,30 +658,6 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
         {/* Appearance */}
         <SectionHeader title="Appearance" />
         <div className="mx-4 rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
-          <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
-            <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>Dataset</p>
-            <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
-              Demo sandbox and Real database are separate stores. Switching here changes which backend tables the app reads; Real never fills gaps with demo rows.
-            </p>
-            <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
-              {([
-                { value: 'demo-only', label: 'Demo sandbox' },
-                { value: 'real-only', label: 'Real database' },
-              ] as const).map((item) => (
-                <button
-                  key={item.value}
-                  onClick={() => setDataMode(item.value)}
-                  className="flex-1 py-2 text-sm font-medium transition-colors"
-                  style={{
-                    backgroundColor: dataMode === item.value ? 'var(--color-primary)' : 'transparent',
-                    color: dataMode === item.value ? '#fff' : 'var(--color-text-muted)',
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
           <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
             <p className="text-sm font-medium mb-3" style={{ color: 'var(--color-text)' }}>Theme</p>
             <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>

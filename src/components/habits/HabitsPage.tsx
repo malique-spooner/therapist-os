@@ -292,7 +292,7 @@ export function HabitsPage({ onSettings }: HabitsPageProps) {
   );
   const completedCount = visibleHabits.filter((habit) => isCompleted(todayValues[habit.id])).length;
   const loggedBadHabitCount = visibleHabits.filter((habit) => numericValue(todayValues[habit.id]) > 0).length;
-  const showEmptyRealState = dataMode === 'real-only' && !isLoading && availableDates.length === 0;
+  const showEmptyRealState = !isLoading && availableDates.length === 0;
   const canGoForwardWeek = selectedWeekStart < currentWeekStart;
   const canGoBackWeek = selectedWeekStart > earliestWeekStart;
 

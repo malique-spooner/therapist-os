@@ -5,7 +5,6 @@ import { TopBar } from '@/components/navigation/TopBar';
 import { ValenceChart } from './ValenceChart';
 import { SpotifyInsightsBoard } from './SpotifyInsightsBoard';
 import { YouTubeSection } from './YouTubeSection';
-import { InsightCard } from '@/components/dashboard/InsightCard';
 import type { Period } from '@/lib/mockDataUtils';
 import { api } from '@/lib/api';
 import { useApiQuery } from '@/hooks/useApiQuery';
@@ -14,46 +13,13 @@ import { DateRangeControl, type DateRangeValue } from '@/components/ui/date-rang
 import { APP_TODAY, addDays, clampIsoDate, differenceInDays } from '@/lib/date';
 import { useSettingsStore } from '@/store/settings';
 
-const insights = [
-  {
-    id: 'consumption-1',
-    category: 'Consumption',
-    categoryIcon: '🎵',
-    lens: 'CBT' as const,
-    narrative: 'Music valence has shifted lower this week relative to baseline, and in this profile that tends to lead mood dips by one to two days.',
-    action: 'Treat lower-valence listening as signal, not just background.',
-    domainId: 'consumption',
-    viewLabel: 'View Consumption',
-  },
-  {
-    id: 'consumption-2',
-    category: 'Consumption',
-    categoryIcon: '✨',
-    lens: 'SDT' as const,
-    narrative: 'Days with new music discoveries line up with higher mood on average. Novelty-seeking looks energising here rather than destabilising.',
-    action: 'Keep a small discovery ritual when motivation feels flat.',
-    domainId: 'consumption',
-    viewLabel: 'View Consumption',
-  },
-  {
-    id: 'consumption-3',
-    category: 'Consumption',
-    categoryIcon: '▶️',
-    lens: 'Behaviourism' as const,
-    narrative: 'Long entertainment-viewing evenings correlate with lower motivation the next day. The immediate reward is real, but the after-effect is visible too.',
-    action: 'Choose one watch-stop cue before passive viewing begins.',
-    domainId: 'consumption',
-    viewLabel: 'View Consumption',
-  },
-];
-
 interface ConsumptionPageProps {
   onBack: () => void;
   onSettings: () => void;
-  onTalkAboutThis: (context: string) => void;
+  onTalkAboutThis?: (context: string) => void;
 }
 
-export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: ConsumptionPageProps) {
+export function ConsumptionPage({ onBack, onSettings }: ConsumptionPageProps) {
   const dataMode = useSettingsStore((state) => state.dataMode);
   const { data, isLoading, error, refetch } = useApiQuery(() => api.getConsumption('3-months'), [dataMode]);
   const allDays = useMemo(() => data ?? [], [data]);
@@ -114,7 +80,7 @@ export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: Consump
   const mediaDays = selectedProvider === 'youtube' ? youtubeDays : selectedProvider === 'spotify' ? spotifyDays : rangedDays;
   const spanDays = differenceInDays(range.startDate, range.endDate) + 1;
   const derivedPeriod: Period = spanDays <= 1 ? 'today' : spanDays <= 7 ? 'this-week' : spanDays <= 31 ? 'this-month' : '3-months';
-  const showEmptyRealState = dataMode === 'real-only' && !isLoading && !mediaDays.length;
+  const showEmptyRealState = !isLoading && !mediaDays.length;
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
@@ -161,10 +127,10 @@ export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: Consump
           <RetryNotice
             message={
               selectedProvider === 'youtube'
-                ? 'YouTube data is not connected yet for this range. Switch providers or the Demo sandbox for now.'
+                ? 'YouTube data is not connected yet for this range.'
                 : selectedProvider === 'spotify'
-                  ? 'Spotify data is not connected yet for this range. Switch providers or the Demo sandbox for now.'
-                  : 'Not enough rows in the Real database yet for this range. Connect Spotify or YouTube, or switch to the Demo sandbox.'
+                  ? 'Spotify data is not connected yet for this range.'
+                  : 'Not enough media rows yet. Connect Spotify or YouTube.'
             }
             onRetry={refetch}
             className="mx-4 mb-4 w-[calc(100%-2rem)]"
@@ -185,9 +151,6 @@ export function ConsumptionPage({ onBack, onSettings, onTalkAboutThis }: Consump
               </>
             )}
             <div className="px-4 space-y-3">
-              {(dataMode === 'demo-only' ? insights : []).map((insight, index) => (
-                <InsightCard key={insight.id} insight={insight} index={index} onTalkAboutThis={onTalkAboutThis} />
-              ))}
             </div>
           </>
         )}

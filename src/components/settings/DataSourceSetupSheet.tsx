@@ -119,9 +119,9 @@ export function DataSourceSetupSheet({
         ];
       case 'garmin':
         return [
-          'Use the same Garmin Connect email and password you use normally.',
-          'Save the login here.',
-          'Therapist OS will sync Garmin automatically once per day in the background.',
+          'Put Garmin export files in the TherapistOS Google Drive folder.',
+          'Save the folder here.',
+          'Therapist OS will use this folder for semi-automated health imports.',
         ];
       case 'truelayer':
         return [

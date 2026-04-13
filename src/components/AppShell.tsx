@@ -12,7 +12,7 @@ import { SettingsPage } from './settings/SettingsPage';
 import { BrainPage } from './brain/BrainPage';
 import { BottomNav } from './navigation/BottomNav';
 import { DailyCheckIn } from './checkin/DailyCheckIn';
-import { useCheckInStore } from '@/store/checkin';
+import { getCurrentCheckInPeriod, useCheckInStore } from '@/store/checkin';
 import { useRelationshipsStore } from '@/store/relationships';
 import { useSettingsStore } from '@/store/settings';
 import { HealthPage } from './health/HealthPage';
@@ -46,6 +46,15 @@ const pageDepth: Record<PageId, number> = {
   location: 1,
 };
 
+function withTimeout<T>(promise: Promise<T>, ms = 5000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error('Request timed out')), ms);
+    }),
+  ]);
+}
+
 export function AppShell() {
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
@@ -56,9 +65,9 @@ export function AppShell() {
   const [openPrompt, setOpenPrompt] = useState<AppOpenPromptPayload | null>(null);
   const [openPromptVisible, setOpenPromptVisible] = useState(false);
   const [settingsSourceId, setSettingsSourceId] = useState<string | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const hasCheckedInToday = useCheckInStore((state) => state.hasCheckedInToday)();
+  const hasCompletedCurrentCheckIn = useCheckInStore((state) => state.hasCompletedCurrentCheckIn)();
+  const currentCheckInPeriod = mounted ? getCurrentCheckInPeriod() : 'morning';
   const checkInHydrated = useCheckInStore((state) => state.hydrated);
   const hydrateCheckIns = useCheckInStore((state) => state.hydrateFromApi);
   const applyCheckInDataMode = useCheckInStore((state) => state.applyDataMode);
@@ -71,19 +80,16 @@ export function AppShell() {
 
   useEffect(() => {
     let active = true;
-    void api.getCurrentUser().then(() => {
+    void withTimeout(api.getCurrentUser()).then(() => {
       if (!active) return;
       setIsAuthenticated(true);
-      setAuthChecked(true);
     }).catch(() => {
-      void api.getAuthStatus().then((status) => {
+      void withTimeout(api.getAuthStatus()).then((status) => {
         if (!active) return;
         setIsAuthenticated(!status.configured);
-        setAuthChecked(true);
       }).catch(() => {
         if (!active) return;
         setIsAuthenticated(false);
-        setAuthChecked(true);
       });
     });
 
@@ -113,7 +119,7 @@ export function AppShell() {
   }, [applyCheckInDataMode, applyRelationshipsDataMode, dataMode, isAuthenticated]);
 
   useEffect(() => {
-    if (!isAuthenticated || !mounted || !checkInHydrated || !hasCheckedInToday) return;
+    if (!isAuthenticated || !mounted || !checkInHydrated || !hasCompletedCurrentCheckIn) return;
 
     let active = true;
     void api.getOpenPrompt().then((prompt) => {
@@ -127,7 +133,7 @@ export function AppShell() {
     });
 
     return () => { active = false; };
-  }, [isAuthenticated, mounted, checkInHydrated, hasCheckedInToday]);
+  }, [isAuthenticated, mounted, checkInHydrated, hasCompletedCurrentCheckIn]);
 
   function navigateTo(page: PageId) {
     setDirection(pageDepth[page] >= pageDepth[currentPage] ? 1 : -1);
@@ -236,14 +242,6 @@ export function AppShell() {
 
   const showBottomNav = true;
 
-  if (!authChecked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-surface)' }}>
-        <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Checking session…</p>
-      </div>
-    );
-  }
-
   if (!isAuthenticated) {
     return <LoginGate onAuthenticated={() => setIsAuthenticated(true)} />;
   }
@@ -310,7 +308,7 @@ export function AppShell() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {openPrompt && openPromptVisible && mounted && checkInHydrated && hasCheckedInToday && (
+        {openPrompt && openPromptVisible && mounted && checkInHydrated && hasCompletedCurrentCheckIn && (
           <motion.div
             className="fixed inset-x-4 bottom-24 z-30 rounded-[28px] p-4"
             style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: '0 20px 50px rgba(0,0,0,0.12)' }}
@@ -359,7 +357,7 @@ export function AppShell() {
         )}
       </AnimatePresence>
 
-      {mounted && checkInHydrated && !hasCheckedInToday && <DailyCheckIn onComplete={() => navigateHome()} />}
+      {mounted && checkInHydrated && !hasCompletedCurrentCheckIn && <DailyCheckIn period={currentCheckInPeriod} onComplete={() => navigateHome()} />}
     </div>
   );
 }

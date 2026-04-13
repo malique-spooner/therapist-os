@@ -5,7 +5,6 @@ import { TopBar } from '@/components/navigation/TopBar';
 import { RelationshipMap } from './RelationshipMap';
 import { InteractionLogger } from './InteractionLogger';
 import { ConnectionStatus } from './ConnectionStatus';
-import { RelationshipInsights } from './RelationshipInsights';
 import { ScienceCard } from './ScienceCard';
 import { AddRelationshipSheet } from './AddRelationshipSheet';
 import { SnapchatImportCard } from './SnapchatImportCard';
@@ -21,7 +20,7 @@ interface RelationshipsPageProps {
   onTalkAboutThis: (context: string) => void;
 }
 
-export function RelationshipsPage({ onBack, onSettings, onTalkAboutThis }: RelationshipsPageProps) {
+export function RelationshipsPage({ onBack, onSettings }: RelationshipsPageProps) {
   const dataMode = useSettingsStore((state) => state.dataMode);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [preselectedPersonId, setPreselectedPersonId] = useState<string | null>(null);
@@ -63,13 +62,10 @@ export function RelationshipsPage({ onBack, onSettings, onTalkAboutThis }: Relat
     return () => { active = false; };
   }, [dataMode]);
   const visibleImports = useMemo(
-    () =>
-      dataMode === 'demo-only'
-        ? imports
-        : imports.filter((row) => row.matchedPersonIds.some((id) => people.some((person) => person.id === id))),
-    [dataMode, imports, people],
+    () => imports.filter((row) => row.matchedPersonIds.some((id) => people.some((person) => person.id === id))),
+    [imports, people],
   );
-  const showEmptyRealState = dataMode === 'real-only' && hydrated && !hasPeople && !hasInteractions;
+  const showEmptyRealState = hydrated && !hasPeople && !hasInteractions;
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: 'var(--color-surface)' }}>
@@ -87,7 +83,7 @@ export function RelationshipsPage({ onBack, onSettings, onTalkAboutThis }: Relat
           <div className="mx-4 mb-4 rounded-[24px] px-4 py-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
             <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Not enough real relationship data yet</p>
             <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-              The Real database is separate from the Demo sandbox. Add real people, log interactions, or import message screenshots to build this view.
+              Add people, log interactions, or import message screenshots to build this view.
             </p>
             <button
               type="button"
@@ -108,17 +104,9 @@ export function RelationshipsPage({ onBack, onSettings, onTalkAboutThis }: Relat
             setImports((current) => [next, ...current]);
           }}
         />
-        {(hasPeople || dataMode === 'demo-only') && <InteractionLogger preselectedPersonId={preselectedPersonId} selectedDate={selectedRange.endDate} />}
+        {hasPeople && <InteractionLogger preselectedPersonId={preselectedPersonId} selectedDate={selectedRange.endDate} />}
         {hasPeople && <ConnectionStatus onSelectPerson={setPreselectedPersonId} />}
-        {dataMode === 'demo-only' && (
-          <>
-            <div className="px-4 pb-2">
-              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>What your connections show</p>
-            </div>
-            <RelationshipInsights onTalkAboutThis={onTalkAboutThis} />
-          </>
-        )}
-        {(dataMode === 'demo-only' || people.length > 0 || interactions.length > 0) && <ScienceCard />}
+        {(people.length > 0 || interactions.length > 0) && <ScienceCard />}
       </div>
       <AddRelationshipSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
     </div>
