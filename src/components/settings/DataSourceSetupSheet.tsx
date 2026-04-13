@@ -37,6 +37,10 @@ function attemptStatusLabel(status: string) {
   }
 }
 
+function shouldShowSourceError(source: DataSourcePayload) {
+  return !(['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(source.id) && source.available);
+}
+
 interface DataSourceSetupSheetProps {
   source: DataSourcePayload | null;
   setup: DataSourceSetupPayload | null;
@@ -394,7 +398,7 @@ export function DataSourceSetupSheet({
               </div>
             )}
 
-            {!source.syncGuardMessage && source.lastError && (
+            {!source.syncGuardMessage && source.lastError && shouldShowSourceError(source) && (
               <div className="rounded-2xl px-4 py-3 text-sm" style={{ backgroundColor: 'rgba(208, 0, 0, 0.08)', color: 'var(--color-warning)' }}>
                 {source.lastError}
               </div>

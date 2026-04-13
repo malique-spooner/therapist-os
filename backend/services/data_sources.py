@@ -636,6 +636,8 @@ class DataSourceService:
             config = self._config(record)
             record.available = availability.get(source_id, False)
             record.connected = self._is_connected(source_id, config, record.available, record.last_sync_status)
+            if source_id in {"garmin", "revolut", "natwest", "instagram", "snapchat", "youtube", "chrome"} and record.connected:
+                record.last_error = None
             record.connection_hint = self._connection_hint(source_id, config, record.available, record.connected)
             payload.append(self.serialize(record, default["icon"]))
         db.commit()

@@ -272,6 +272,10 @@ function getSourceStatusLabel(source: DataSourcePayload) {
   return 'Needs setup';
 }
 
+function shouldShowSourceError(source: DataSourcePayload) {
+  return !(['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(source.id) && source.available);
+}
+
 function canOpenSource(source: DataSourcePayload) {
   return source.id !== 'habits';
 }
@@ -618,7 +622,7 @@ export function SettingsPage({ onBack, onOpenBrain, requestedSourceId, onSourceR
                     {!source.connected && source.connectionHint && <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{source.connectionHint}</p>}
                     {source.folderPath && <p className="text-xs" style={{ color: 'var(--color-accent)' }}>Folder: {source.folderPath}</p>}
                     {source.syncGuardMessage && <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{source.syncGuardMessage}</p>}
-                    {!source.syncGuardMessage && source.lastError && <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{source.lastError}</p>}
+                    {!source.syncGuardMessage && source.lastError && shouldShowSourceError(source) && <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{source.lastError}</p>}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span
