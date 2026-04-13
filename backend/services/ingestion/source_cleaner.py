@@ -251,6 +251,7 @@ class SourceCleanerService:
         if record is None:
             record = model(source_row_hash=source_row_hash, **required)
             db.add(record)
+            db.flush()
         for key, value in required.items():
             setattr(record, key, value)
         return record
