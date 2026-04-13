@@ -15,11 +15,9 @@ from ..schemas.data_sources import (
     RawDataImportSchema,
 )
 from ..services.data_sources import DataSourceService
-from ..services.ingestion.google_drive_importer import GoogleDriveImportService
 
 router = APIRouter(prefix="/data-sources", tags=["data-sources"], dependencies=[Depends(verify_api_key)])
 service = DataSourceService()
-import_service = GoogleDriveImportService()
 
 
 @router.get("", response_model=list[DataSourceSchema])
@@ -34,12 +32,16 @@ def get_data_source_activity(mode: str | None = None, db: Session = Depends(get_
 
 @router.get("/imports/raw", response_model=list[RawDataImportSchema])
 def get_raw_imports(source_id: str | None = None, limit: int = 100, db: Session = Depends(get_db)) -> list[dict]:
-    return import_service.list_imports(db, source_id=source_id, limit=limit)
+    from ..services.ingestion.google_drive_importer import GoogleDriveImportService
+
+    return GoogleDriveImportService().list_imports(db, source_id=source_id, limit=limit)
 
 
 @router.post("/{source_id}/imports/scan", response_model=ImportScanSchema)
-def scan_source_imports(source_id: str, db: Session = Depends(get_db)) -> dict:
-    result = import_service.scan_source(source_id, db)
+async def scan_source_imports(source_id: str, db: Session = Depends(get_db)) -> dict:
+    from ..services.ingestion.google_drive_importer import GoogleDriveImportService
+
+    result = await GoogleDriveImportService(service.get_runtime_config("google_drive", db)).scan_source(source_id, db)
     if result["status"] == "unsupported":
         raise HTTPException(status_code=404, detail="Unknown import source")
     return result

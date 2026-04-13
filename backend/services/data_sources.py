@@ -816,6 +816,10 @@ class DataSourceService:
             from .ingestion.weather import WeatherIngestionService
 
             return WeatherIngestionService(config).sync_today
+        if source_id == "google_drive":
+            from .ingestion.google_drive_importer import GoogleDriveImportService
+
+            return GoogleDriveImportService(config).scan_all
         return None
 
     def get_setup(self, source_id: str, db: Session) -> dict:
