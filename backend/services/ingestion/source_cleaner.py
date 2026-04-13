@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ...models import RawImportRow
@@ -40,6 +41,10 @@ class SourceCleanerService:
         return totals
 
     def clean_source(self, source_id: str, db: Session) -> int:
+        if source_id == "chrome":
+            return self._clean_chrome_fast(db)
+        if source_id in {"instagram", "snapchat"}:
+            return self._clean_social_fast(source_id, db)
         rows = db.scalars(select(RawImportRow).where(RawImportRow.source_id == source_id)).all()
         count = 0
         for staged in rows:
@@ -54,6 +59,81 @@ class SourceCleanerService:
                 count += made
         db.commit()
         return count
+
+    def _clean_chrome_fast(self, db: Session) -> int:
+        result = db.execute(text(
+            """
+            insert into chrome_history_events (
+                source_row_hash, import_file_id, metadata_json, created_at, updated_at,
+                visited_at, url, title, domain
+            )
+            select
+                r.row_hash,
+                r.import_id,
+                r.raw_payload->'row',
+                now(),
+                now(),
+                timestamp '1601-01-01' + (((r.raw_payload->'row'->>'time_usec')::bigint) * interval '1 microsecond'),
+                r.raw_payload->'row'->>'url',
+                r.raw_payload->'row'->>'title',
+                regexp_replace(split_part(r.raw_payload->'row'->>'url', '/', 3), '^www\\.', '')
+            from raw_import_rows r
+            where r.source_id = 'chrome'
+              and r.raw_payload->>'path' = 'Takeout/Chrome/History.json'
+              and r.raw_payload->'row' ? 'time_usec'
+            on conflict (source_row_hash) do update set
+                import_file_id = excluded.import_file_id,
+                metadata_json = excluded.metadata_json,
+                updated_at = now(),
+                visited_at = excluded.visited_at,
+                url = excluded.url,
+                title = excluded.title,
+                domain = excluded.domain
+            """
+        ))
+        db.commit()
+        return int(result.rowcount or 0)
+
+    def _clean_social_fast(self, source_id: str, db: Session) -> int:
+        table = "instagram_interactions" if source_id == "instagram" else "snapchat_interactions"
+        result = db.execute(text(
+            f"""
+            insert into {table} (
+                source_row_hash, import_file_id, metadata_json, created_at, updated_at,
+                occurred_at, interaction_type, actor, text, path
+            )
+            select
+                r.row_hash,
+                r.import_id,
+                coalesce(r.raw_payload->'row', r.raw_payload),
+                now(),
+                now(),
+                null,
+                case
+                    when lower(r.raw_payload->>'path') like '%chat%' then 'chat'
+                    when lower(r.raw_payload->>'path') like '%snap%' then 'snap'
+                    when lower(r.raw_payload->>'path') like '%message%' then 'message'
+                    when lower(r.raw_payload->>'path') like '%like%' then 'like'
+                    when lower(r.raw_payload->>'path') like '%comment%' then 'comment'
+                    else 'event'
+                end,
+                coalesce(r.raw_payload->'row'->>'sender', r.raw_payload->'row'->>'Sender', r.raw_payload->'row'->>'username'),
+                left(coalesce(r.raw_payload->'row'->>'text', r.raw_payload->'row'->>'Text', r.raw_payload->'row'->>'Message', r.raw_payload->'row'->>'title', r.raw_payload->>'path'), 5000),
+                r.raw_payload->>'path'
+            from raw_import_rows r
+            where r.source_id = :source_id
+            on conflict (source_row_hash) do update set
+                import_file_id = excluded.import_file_id,
+                metadata_json = excluded.metadata_json,
+                updated_at = now(),
+                interaction_type = excluded.interaction_type,
+                actor = excluded.actor,
+                text = excluded.text,
+                path = excluded.path
+            """
+        ), {"source_id": source_id})
+        db.commit()
+        return int(result.rowcount or 0)
 
     def clean_spotify(self, db: Session) -> int:
         count = 0
