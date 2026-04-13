@@ -67,7 +67,7 @@ class SourceCleanerService:
                 source_row_hash, import_file_id, metadata_json, created_at, updated_at,
                 visited_at, url, title, domain
             )
-            select
+            select distinct on (r.row_hash)
                 r.row_hash,
                 r.import_id,
                 r.raw_payload->'row',
@@ -81,6 +81,7 @@ class SourceCleanerService:
             where r.source_id = 'chrome'
               and r.raw_payload->>'path' = 'Takeout/Chrome/History.json'
               and r.raw_payload->'row'->>'time_usec' is not null
+            order by r.row_hash, r.id
             on conflict (source_row_hash) do update set
                 import_file_id = excluded.import_file_id,
                 metadata_json = excluded.metadata_json,
@@ -102,7 +103,7 @@ class SourceCleanerService:
                 source_row_hash, import_file_id, metadata_json, created_at, updated_at,
                 occurred_at, interaction_type, actor, text, path
             )
-            select
+            select distinct on (r.row_hash)
                 r.row_hash,
                 r.import_id,
                 coalesce(r.raw_payload->'row', r.raw_payload),
@@ -122,6 +123,7 @@ class SourceCleanerService:
                 r.raw_payload->>'path'
             from raw_import_rows r
             where r.source_id = :source_id
+            order by r.row_hash, r.id
             on conflict (source_row_hash) do update set
                 import_file_id = excluded.import_file_id,
                 metadata_json = excluded.metadata_json,
