@@ -38,11 +38,9 @@ These stay global for now because they represent app/runtime state rather than d
 - `data_source_connections`
 - `habits`
 - `app_open_prompt_states`
-- `ai_messages`
 
 Notes:
 
-- `ai_messages` inherit their effective mode from `ai_conversations`
 - `habits` are treated as the canonical habit definitions shared by both datasets
 - data-source credentials are always real app configuration, not demo content
 

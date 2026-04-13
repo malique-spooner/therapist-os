@@ -14,17 +14,34 @@ from ...models import RawImportRow
 from ...models.life_data import SpotifyPlayEventReal
 from ...models.source_data import (
     ChromeHistoryEvent,
+    ChromeBookmark,
+    ChromeDevice,
+    ChromeExtension,
     GarminBodyMetric,
     GarminDailyWellness,
     GarminFitnessMetric,
     GarminHydrationLog,
     GarminSleepSession,
+    InstagramMedia,
     InstagramInteraction,
+    InstagramMessage,
+    InstagramProfile,
+    InstagramReaction,
     NatWestTransaction,
+    SnapchatChatEvent,
+    SnapchatFriend,
     RevolutTransaction,
+    SnapchatSnapEvent,
+    SnapchatStoryEvent,
     SnapchatInteraction,
+    SpotifyAlbum,
+    SpotifyArtist,
+    SpotifyAudioFeature,
     SpotifyPlayEvent,
     SpotifyTrack,
+    SpotifyTrackArtist,
+    YoutubeChannel,
+    YoutubePlaylist,
     YoutubeSearchEvent,
     YoutubeSubscription,
     YoutubeWatchEvent,
@@ -172,9 +189,9 @@ class SourceCleanerService:
         if source_id == "chrome":
             return self._clean_chrome(path, row, staged, db)
         if source_id == "instagram":
-            return self._clean_social(InstagramInteraction, "instagram", path, row, staged, db)
+            return self._clean_instagram(path, row, staged, db)
         if source_id == "snapchat":
-            return self._clean_social(SnapchatInteraction, "snapchat", path, row, staged, db)
+            return self._clean_snapchat(path, row, staged, db)
         return 0
 
     def _clean_garmin(self, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
@@ -272,7 +289,8 @@ class SourceCleanerService:
         return 1
 
     def _clean_youtube(self, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
-        if "watch-history" in path.lower():
+        lower_path = path.lower()
+        if "watch-history" in lower_path:
             record = self._upsert(db, YoutubeWatchEvent, staged.row_hash)
             record.import_file_id = staged.import_id
             record.watched_at = self._dt(row.get("time") or row.get("Time"))
@@ -283,36 +301,188 @@ class SourceCleanerService:
                 record.channel_name = subtitles[0].get("name")
                 record.channel_url = subtitles[0].get("url")
             record.metadata_json = row
+            channel_id = row.get("channelId") or row.get("channel_id") or record.channel_url or record.channel_name
+            if channel_id:
+                channel = self._upsert(db, YoutubeChannel, self._hash("youtube-channel", channel_id))
+                channel.import_file_id = staged.import_id
+                channel.channel_id = str(channel_id)
+                channel.channel_url = record.channel_url
+                channel.channel_title = record.channel_name
+                channel.subscription_date = record.watched_at
+                channel.payload_json = row
             return 1
-        if "search-history" in path.lower():
+        if "search-history" in lower_path:
             record = self._upsert(db, YoutubeSearchEvent, staged.row_hash)
             record.import_file_id = staged.import_id
             record.searched_at = self._dt(row.get("time") or row.get("Time"))
             record.query = row.get("title") or row.get("query") or row.get("Search Query")
             record.metadata_json = row
             return 1
-        if "subscriptions" in path.lower():
+        if "subscriptions" in lower_path:
             record = self._upsert(db, YoutubeSubscription, staged.row_hash)
             record.import_file_id = staged.import_id
             record.channel_id = row.get("Channel Id") or row.get("channelId")
             record.channel_url = row.get("Channel Url") or row.get("Channel URL")
             record.channel_title = row.get("Channel Title") or row.get("Title")
             record.metadata_json = row
+            channel = self._upsert(db, YoutubeChannel, self._hash("youtube-channel", record.channel_id or record.channel_url or record.channel_title))
+            channel.import_file_id = staged.import_id
+            channel.channel_id = record.channel_id
+            channel.channel_url = record.channel_url
+            channel.channel_title = record.channel_title
+            channel.subscription_date = self._dt(row.get("Subscribed At") or row.get("Subscription Date"))
+            channel.payload_json = row
+            return 1
+        if "playlist" in lower_path:
+            playlist_key = row.get("Playlist Id") or row.get("playlistId") or row.get("Playlist URL") or row.get("Playlist Title")
+            if not playlist_key:
+                return 0
+            playlist = self._upsert(db, YoutubePlaylist, self._hash("youtube-playlist", playlist_key))
+            playlist.import_file_id = staged.import_id
+            playlist.playlist_id = row.get("Playlist Id") or row.get("playlistId")
+            playlist.playlist_url = row.get("Playlist URL") or row.get("playlistUrl")
+            playlist.playlist_title = row.get("Playlist Title") or row.get("Title")
+            playlist.item_count = self._int(row.get("Video Count") or row.get("Item Count") or row.get("videos"))
+            playlist.payload_json = row
             return 1
         return 0
 
     def _clean_chrome(self, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
-        if "Chrome/History.json" not in path:
+        lower_path = path.lower()
+        if "history" in lower_path:
+            if "chrome/history.json" not in lower_path:
+                return 0
+            url = row.get("url") or row.get("URL")
+            record = self._upsert(db, ChromeHistoryEvent, staged.row_hash)
+            record.import_file_id = staged.import_id
+            record.visited_at = self._chrome_time(row.get("time_usec") or row.get("time"))
+            record.url = url
+            record.title = row.get("title") or row.get("Title")
+            record.domain = urlparse(str(url)).netloc.replace("www.", "") if url else None
+            record.metadata_json = row
+            return 1
+        if "bookmark" in lower_path:
+            bookmark = self._upsert(db, ChromeBookmark, staged.row_hash)
+            bookmark.import_file_id = staged.import_id
+            bookmark.url = row.get("url") or row.get("URL")
+            bookmark.title = row.get("title") or row.get("Title")
+            bookmark.folder = row.get("folder") or row.get("Folder") or row.get("path")
+            bookmark.metadata_json = row
+            return 1
+        if "extension" in lower_path:
+            extension_id = row.get("id") or row.get("extension_id") or row.get("name")
+            if not extension_id:
+                return 0
+            extension = self._upsert(db, ChromeExtension, self._hash("chrome-extension", extension_id))
+            extension.import_file_id = staged.import_id
+            extension.extension_id = str(extension_id)
+            extension.name = row.get("name") or row.get("Name")
+            extension.version = row.get("version") or row.get("Version")
+            extension.description = row.get("description") or row.get("Description")
+            extension.payload_json = row
+            return 1
+        if "device" in lower_path:
+            device_id = row.get("id") or row.get("device_id") or row.get("name")
+            if not device_id:
+                return 0
+            device = self._upsert(db, ChromeDevice, self._hash("chrome-device", device_id))
+            device.import_file_id = staged.import_id
+            device.device_id = str(device_id)
+            device.device_name = row.get("name") or row.get("Name")
+            device.device_type = row.get("type") or row.get("Type")
+            device.last_active_at = self._dt(row.get("last_active_at") or row.get("lastActiveAt") or row.get("last_seen"))
+            device.payload_json = row
+            return 1
+        return 0
+
+    def _clean_instagram(self, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
+        text = row.get("text") or row.get("Text") or row.get("Message") or row.get("title") or row.get("cells")
+        if text is None and not path:
             return 0
-        url = row.get("url") or row.get("URL")
-        record = self._upsert(db, ChromeHistoryEvent, staged.row_hash)
-        record.import_file_id = staged.import_id
-        record.visited_at = self._chrome_time(row.get("time_usec") or row.get("time"))
-        record.url = url
-        record.title = row.get("title") or row.get("Title")
-        record.domain = urlparse(str(url)).netloc.replace("www.", "") if url else None
-        record.metadata_json = row
-        return 1
+        lower_path = path.lower()
+        if "profile" in lower_path or row.get("username"):
+            profile = self._upsert(db, InstagramProfile, staged.row_hash)
+            profile.import_file_id = staged.import_id
+            profile.profile_id = row.get("id") or row.get("profileId") or row.get("username")
+            profile.username = row.get("username") or row.get("User")
+            profile.display_name = row.get("name") or row.get("displayName") or row.get("full_name")
+            profile.bio = row.get("bio") or row.get("Bio")
+            profile.profile_url = row.get("url") or row.get("URL")
+            profile.payload_json = row
+        if "message" in lower_path or "chat" in lower_path:
+            message = self._upsert(db, InstagramMessage, self._hash("instagram-message", staged.row_hash))
+            message.import_file_id = staged.import_id
+            message.thread_id = row.get("thread_id") or row.get("threadId") or row.get("conversationId") or row.get("path")
+            message.sent_at = self._dt(row.get("timestamp") or row.get("Timestamp") or row.get("Date") or row.get("time"))
+            message.sender = row.get("sender") or row.get("Sender") or row.get("From") or row.get("User") or row.get("username")
+            message.recipient = row.get("recipient") or row.get("Recipient") or row.get("To")
+            message.text = str(text)[:5000] if text is not None else None
+            message.path = path
+            message.payload_json = row
+        if "media" in lower_path or "post" in lower_path or row.get("media_url") or row.get("caption"):
+            media = self._upsert(db, InstagramMedia, self._hash("instagram-media", staged.row_hash))
+            media.import_file_id = staged.import_id
+            media.media_id = row.get("media_id") or row.get("mediaId") or row.get("id")
+            media.posted_at = self._dt(row.get("timestamp") or row.get("Timestamp") or row.get("Date") or row.get("time"))
+            media.media_type = row.get("media_type") or row.get("mediaType") or row.get("type")
+            media.caption = row.get("caption") or row.get("text") or row.get("Message")
+            media.media_url = row.get("media_url") or row.get("mediaUrl") or row.get("url")
+            media.path = path
+            media.payload_json = row
+        reaction = self._upsert(db, InstagramReaction, self._hash("instagram-reaction", staged.row_hash))
+        reaction.import_file_id = staged.import_id
+        reaction.reacted_at = self._dt(row.get("timestamp") or row.get("Timestamp") or row.get("Date") or row.get("time"))
+        reaction.reaction_type = self._interaction_type("instagram", path)
+        reaction.actor = row.get("sender") or row.get("Sender") or row.get("From") or row.get("User") or row.get("username")
+        reaction.target = row.get("target") or row.get("Target") or row.get("to")
+        reaction.text = str(text)[:5000] if text is not None else None
+        reaction.path = path
+        reaction.payload_json = row
+        return self._clean_social(InstagramInteraction, "instagram", path, row, staged, db)
+
+    def _clean_snapchat(self, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
+        text = row.get("text") or row.get("Text") or row.get("Message") or row.get("title") or row.get("cells")
+        if text is None and not path:
+            return 0
+        lower_path = path.lower()
+        if "friend" in lower_path or row.get("username"):
+            friend = self._upsert(db, SnapchatFriend, staged.row_hash)
+            friend.import_file_id = staged.import_id
+            friend.friend_id = row.get("id") or row.get("friendId") or row.get("username")
+            friend.username = row.get("username") or row.get("User")
+            friend.display_name = row.get("name") or row.get("displayName") or row.get("full_name")
+            friend.friend_status = row.get("status") or row.get("friend_status")
+            friend.payload_json = row
+        if "chat" in lower_path or "message" in lower_path:
+            chat = self._upsert(db, SnapchatChatEvent, self._hash("snapchat-chat", staged.row_hash))
+            chat.import_file_id = staged.import_id
+            chat.chat_id = row.get("chat_id") or row.get("chatId") or row.get("conversationId") or row.get("path")
+            chat.sent_at = self._dt(row.get("timestamp") or row.get("Timestamp") or row.get("Date") or row.get("time"))
+            chat.sender = row.get("sender") or row.get("Sender") or row.get("From") or row.get("User") or row.get("username")
+            chat.recipient = row.get("recipient") or row.get("Recipient") or row.get("To")
+            chat.text = str(text)[:5000] if text is not None else None
+            chat.path = path
+            chat.payload_json = row
+        if "snap" in lower_path:
+            snap = self._upsert(db, SnapchatSnapEvent, self._hash("snapchat-snap", staged.row_hash))
+            snap.import_file_id = staged.import_id
+            snap.snap_id = row.get("snap_id") or row.get("snapId") or row.get("id")
+            snap.sent_at = self._dt(row.get("timestamp") or row.get("Timestamp") or row.get("Date") or row.get("time"))
+            snap.sender = row.get("sender") or row.get("Sender") or row.get("User") or row.get("username")
+            snap.caption = row.get("caption") or row.get("text") or row.get("Message")
+            snap.media_url = row.get("media_url") or row.get("mediaUrl") or row.get("url")
+            snap.path = path
+            snap.payload_json = row
+        if "story" in lower_path:
+            story = self._upsert(db, SnapchatStoryEvent, self._hash("snapchat-story", staged.row_hash))
+            story.import_file_id = staged.import_id
+            story.story_id = row.get("story_id") or row.get("storyId") or row.get("id")
+            story.posted_at = self._dt(row.get("timestamp") or row.get("Timestamp") or row.get("Date") or row.get("time"))
+            story.author = row.get("author") or row.get("sender") or row.get("username")
+            story.title = row.get("title") or row.get("name")
+            story.path = path
+            story.payload_json = row
+        return self._clean_social(SnapchatInteraction, "snapchat", path, row, staged, db)
 
     def _clean_social(self, model: type, source_id: str, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
         text = row.get("text") or row.get("Text") or row.get("Message") or row.get("title") or row.get("cells")

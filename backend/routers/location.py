@@ -20,6 +20,12 @@ from ..models.life_data import (
     LocationPlaceMemoryDemo,
     LocationPlaceMemoryReal,
 )
+from ..models.source_data import (
+    OwnTracksDeviceEvent,
+    OwnTracksLocationPoint,
+    OwnTracksTransitionEvent,
+    OwnTracksWaypoint,
+)
 from ..schemas.location import (
     LocationCompanionUpdateSchema,
     LocationIntelligenceResponseSchema,
@@ -80,6 +86,23 @@ def _serialize_place_memory(row) -> dict:
         "tone": row.tone,
         "note": row.note,
     }
+
+
+def _owntracks_hash(*parts: object) -> str:
+    import hashlib
+
+    return hashlib.sha256(repr(parts).encode("utf-8")).hexdigest()
+
+
+def _upsert_source_row(db: Session, model, source_row_hash: str, **values):
+    row = db.scalar(select(model).where(model.source_row_hash == source_row_hash))
+    if not row:
+        row = model(source_row_hash=source_row_hash, **values)
+        db.add(row)
+        db.flush()
+    for key, value in values.items():
+        setattr(row, key, value)
+    return row
 
 
 @router.get("", dependencies=[Depends(verify_api_key)])
@@ -235,18 +258,56 @@ async def owntracks_webhook(
     if payload_type in {"transition", "waypoint", "region"}:
         event_model = dataset_model("real-only", LocationEventReal, LocationEventDemo)
         waypoint_name = payload.get("wtst") or payload.get("name") or payload.get("desc") or payload.get("regions")
+        waypoint_id = str(payload.get("tid") or payload.get("waypoint") or payload.get("id") or payload.get("region") or waypoint_name or "unknown")
+        recorded_at = datetime.fromtimestamp(int(tst), tz=UTC).replace(tzinfo=None)
         event = event_model(
-            timestamp=datetime.fromtimestamp(int(tst), tz=UTC).replace(tzinfo=None),
+            timestamp=recorded_at,
             event_type=str(payload_type),
             trigger=payload.get("event") or payload.get("trigger") or payload.get("desc"),
             waypoint_name=waypoint_name,
-            waypoint_id=payload.get("tid") or payload.get("waypoint") or payload.get("id") or payload.get("region"),
+            waypoint_id=waypoint_id,
             latitude=float(payload["lat"]) if payload.get("lat") is not None else None,
             longitude=float(payload["lon"]) if payload.get("lon") is not None else None,
             radius=float(payload["rad"]) if payload.get("rad") is not None else None,
             raw_payload=payload,
         )
         db.add(event)
+        _upsert_source_row(
+            db,
+            OwnTracksWaypoint,
+            _owntracks_hash("waypoint", waypoint_id),
+            waypoint_id=waypoint_id,
+            waypoint_name=waypoint_name or waypoint_id,
+            latitude=float(payload["lat"]) if payload.get("lat") is not None else None,
+            longitude=float(payload["lon"]) if payload.get("lon") is not None else None,
+            radius=float(payload["rad"]) if payload.get("rad") is not None else None,
+            category=str(payload_type),
+            payload_json=payload,
+        )
+        _upsert_source_row(
+            db,
+            OwnTracksTransitionEvent,
+            _owntracks_hash("transition", waypoint_id, tst, payload_type),
+            occurred_at=recorded_at,
+            device_id=payload.get("tid") or payload.get("device") or payload.get("topic"),
+            waypoint_id=waypoint_id,
+            waypoint_name=waypoint_name,
+            transition=payload.get("event") or payload.get("trigger") or str(payload_type),
+            latitude=float(payload["lat"]) if payload.get("lat") is not None else None,
+            longitude=float(payload["lon"]) if payload.get("lon") is not None else None,
+            radius=float(payload["rad"]) if payload.get("rad") is not None else None,
+            payload_json=payload,
+        )
+        _upsert_source_row(
+            db,
+            OwnTracksDeviceEvent,
+            _owntracks_hash("device-event", waypoint_id, tst, payload_type),
+            occurred_at=recorded_at,
+            device_id=payload.get("tid") or payload.get("device") or payload.get("topic"),
+            event_type=str(payload_type),
+            detail=payload.get("event") or payload.get("trigger") or payload.get("desc"),
+            payload_json=payload,
+        )
         db.commit()
         db.refresh(event)
         data_source_service.mark_sync_result("owntracks", success=True, db=db, rows_synced=1)
@@ -263,6 +324,19 @@ async def owntracks_webhook(
         battery_level=int(payload["batt"]) if payload.get("batt") is not None else None,
     )
     db.add(point)
+    _upsert_source_row(
+        db,
+        OwnTracksLocationPoint,
+        _owntracks_hash("location", tst, payload.get("tid"), payload.get("lat"), payload.get("lon")),
+        recorded_at=point.timestamp,
+        device_id=payload.get("tid") or payload.get("device") or payload.get("topic"),
+        latitude=point.latitude,
+        longitude=point.longitude,
+        accuracy=point.accuracy,
+        battery_level=point.battery_level,
+        status=payload_type,
+        payload_json=payload,
+    )
     db.commit()
     db.refresh(point)
 

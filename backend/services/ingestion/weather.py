@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...core.logging import get_logger
 from ...models.life_data import WeatherDataReal
+from ...models.source_data import OpenWeatherDaily, OpenWeatherHourly
 
 logger = get_logger(__name__)
 
@@ -43,10 +44,11 @@ class WeatherIngestionService:
 
         async with httpx.AsyncClient(timeout=20) as client:
             if target_date == date.today():
-                response = await client.get(self.BASE_URL, params={**params, "exclude": "minutely,hourly,alerts"})
+                response = await client.get(self.BASE_URL, params={**params, "exclude": "minutely,alerts"})
                 response.raise_for_status()
                 payload = response.json()
                 day_payload = payload["daily"][0]
+                hourly_payload = payload.get("hourly", [])
             else:
                 timestamp = int(datetime.combine(target_date, datetime.min.time()).timestamp())
                 response = await client.get(f"{self.BASE_URL}/timemachine", params={**params, "dt": timestamp})
@@ -63,10 +65,13 @@ class WeatherIngestionService:
                     "weather": [daily[0].get("weather", [{}])[0]],
                     "uvi": max((entry.get("uvi", 0.0) for entry in daily), default=0.0),
                 }
+                hourly_payload = daily
 
         sunrise = datetime.fromtimestamp(day_payload["sunrise"])
         sunset = datetime.fromtimestamp(day_payload["sunset"])
         condition = (day_payload.get("weather") or [{}])[0].get("main", "").lower() or None
+        self._upsert_openweather_daily(target_date, sunrise, sunset, day_payload, condition, db)
+        self._upsert_openweather_hourly(target_date, hourly_payload, db)
         record = db.scalar(select(WeatherDataReal).where(WeatherDataReal.date == target_date))
         if not record:
             record = WeatherDataReal(date=target_date, sunrise_time=sunrise.time(), sunset_time=sunset.time(), daylight_hours=0)
@@ -92,6 +97,64 @@ class WeatherIngestionService:
             },
         )
         return record
+
+    def _upsert_openweather_daily(
+        self,
+        target_date: date,
+        sunrise: datetime,
+        sunset: datetime,
+        day_payload: dict,
+        condition: str | None,
+        db: Session,
+    ) -> None:
+        source_row_hash = self._daily_hash(target_date)
+        record = db.scalar(select(OpenWeatherDaily).where(OpenWeatherDaily.source_row_hash == source_row_hash))
+        if not record:
+            record = OpenWeatherDaily(source_row_hash=source_row_hash, date=target_date)
+            db.add(record)
+            db.flush()
+        record.updated_at = datetime.utcnow()
+        record.date = target_date
+        record.sunrise_time = sunrise
+        record.sunset_time = sunset
+        record.daylight_hours = round((sunset - sunrise).total_seconds() / 3600, 1)
+        record.temperature_high_c = day_payload.get("temp", {}).get("max")
+        record.temperature_low_c = day_payload.get("temp", {}).get("min")
+        record.condition = condition
+        record.uv_index = day_payload.get("uvi")
+        record.payload_json = day_payload
+
+    def _upsert_openweather_hourly(self, target_date: date, hourly_payload: list[dict], db: Session) -> None:
+        for item in hourly_payload:
+            timestamp = item.get("dt") or item.get("time")
+            if timestamp is None:
+                continue
+            observed_at = datetime.fromtimestamp(int(timestamp))
+            source_row_hash = self._hourly_hash(target_date, observed_at)
+            record = db.scalar(select(OpenWeatherHourly).where(OpenWeatherHourly.source_row_hash == source_row_hash))
+            if not record:
+                record = OpenWeatherHourly(source_row_hash=source_row_hash, observed_at=observed_at, date=observed_at.date())
+                db.add(record)
+                db.flush()
+            weather = (item.get("weather") or [{}])[0]
+            record.updated_at = datetime.utcnow()
+            record.observed_at = observed_at
+            record.date = observed_at.date()
+            record.temperature_c = item.get("temp")
+            record.feels_like_c = item.get("feels_like")
+            record.humidity = item.get("humidity")
+            record.condition = weather.get("main") or weather.get("description")
+            record.uv_index = item.get("uvi")
+            record.precipitation_mm = item.get("rain", {}).get("1h") if isinstance(item.get("rain"), dict) else item.get("rain")
+            record.payload_json = item
+
+    @staticmethod
+    def _daily_hash(target_date: date) -> str:
+        return f"openweather-daily:{target_date.isoformat()}"
+
+    @staticmethod
+    def _hourly_hash(target_date: date, observed_at: datetime) -> str:
+        return f"openweather-hourly:{target_date.isoformat()}:{int(observed_at.timestamp())}"
 
     async def sync_recent_days(self, db: Session, days: int = 5) -> list[WeatherDataReal]:
         records: list[WeatherDataReal] = []

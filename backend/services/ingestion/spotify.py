@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import UTC, date, datetime, timedelta
+import hashlib
 from typing import Any
 
 import spotipy
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...core.logging import get_logger
 from ...models.life_data import MusicDataReal, SpotifyPlayEventReal
+from ...models.source_data import SpotifyAlbum, SpotifyArtist, SpotifyAudioFeature, SpotifyTrackArtist
 
 logger = get_logger(__name__)
 
@@ -95,6 +97,7 @@ class SpotifyIngestionService:
             track = item.get("track") or {}
             features = audio_features.get(track.get("id"), {})
             newest_played_at_ms = max(newest_played_at_ms, int(played_at.timestamp() * 1000))
+            self._upsert_track_metadata(track, features, db)
             inserted_events += self._upsert_play_event(played_at, track, item.get("context"), features, db)
             by_date[played_date].append(
                 {
@@ -259,6 +262,76 @@ class SpotifyIngestionService:
             if feature and feature.get("id")
         }
 
+    def _upsert_track_metadata(self, track: dict[str, Any], features: dict[str, Any], db: Session) -> None:
+        track_id = track.get("id")
+        if not track_id:
+            return
+
+        album = track.get("album") or {}
+        album_id = album.get("id")
+        if album_id:
+            album_hash = self._hash("spotify_album", album_id)
+            album_row = db.scalar(select(SpotifyAlbum).where(SpotifyAlbum.source_row_hash == album_hash))
+            if not album_row:
+                album_row = SpotifyAlbum(source_row_hash=album_hash, spotify_album_id=album_id)
+                db.add(album_row)
+                db.flush()
+            album_row.name = album.get("name")
+            album_row.album_type = album.get("album_type")
+            album_row.release_date = album.get("release_date")
+            album_row.total_tracks = album.get("total_tracks")
+            album_row.artist_names = [artist.get("name") for artist in album.get("artists", []) if artist.get("name")]
+            album_row.spotify_url = ((album.get("external_urls") or {}).get("spotify"))
+            album_row.metadata_json = album
+
+        for order, artist in enumerate(track.get("artists", [])):
+            artist_id = artist.get("id")
+            if not artist_id:
+                continue
+            artist_hash = self._hash("spotify_artist", artist_id)
+            artist_row = db.scalar(select(SpotifyArtist).where(SpotifyArtist.source_row_hash == artist_hash))
+            if not artist_row:
+                artist_row = SpotifyArtist(source_row_hash=artist_hash, spotify_artist_id=artist_id)
+                db.add(artist_row)
+                db.flush()
+            artist_row.name = artist.get("name")
+            artist_row.genres = artist.get("genres")
+            artist_row.popularity = artist.get("popularity")
+            artist_row.spotify_url = ((artist.get("external_urls") or {}).get("spotify"))
+            artist_row.metadata_json = artist
+
+            track_artist_hash = self._hash("spotify_track_artist", track_id, artist_id)
+            link_row = db.scalar(select(SpotifyTrackArtist).where(SpotifyTrackArtist.source_row_hash == track_artist_hash))
+            if not link_row:
+                link_row = SpotifyTrackArtist(source_row_hash=track_artist_hash, spotify_track_id=track_id, spotify_artist_id=artist_id)
+                db.add(link_row)
+                db.flush()
+            link_row.artist_name = artist.get("name")
+            link_row.artist_order = order
+            link_row.album_id = album_id
+            link_row.metadata_json = artist
+
+        feature_hash = self._hash("spotify_audio_features", track_id)
+        feature_row = db.scalar(select(SpotifyAudioFeature).where(SpotifyAudioFeature.source_row_hash == feature_hash))
+        if not feature_row:
+            feature_row = SpotifyAudioFeature(source_row_hash=feature_hash, spotify_track_id=track_id)
+            db.add(feature_row)
+            db.flush()
+        feature_row.danceability = features.get("danceability")
+        feature_row.energy = features.get("energy")
+        feature_row.valence = features.get("valence")
+        feature_row.tempo = features.get("tempo")
+        feature_row.acousticness = features.get("acousticness")
+        feature_row.instrumentalness = features.get("instrumentalness")
+        feature_row.liveness = features.get("liveness")
+        feature_row.speechiness = features.get("speechiness")
+        feature_row.loudness = features.get("loudness")
+        feature_row.duration_ms = features.get("duration_ms")
+        feature_row.musical_key = features.get("key")
+        feature_row.mode = features.get("mode")
+        feature_row.time_signature = features.get("time_signature")
+        feature_row.payload_json = features
+
     @staticmethod
     def _collect_artist_ids(items: list[dict[str, Any]]) -> list[str]:
         seen: list[str] = []
@@ -283,6 +356,10 @@ class SpotifyIngestionService:
                 if artist and artist.get("id"):
                     genres[artist["id"]] = artist.get("genres", [])
         return genres
+
+    @staticmethod
+    def _hash(*parts: Any) -> str:
+        return hashlib.sha256(repr(parts).encode("utf-8")).hexdigest()
 
     def _upsert_summary(
         self,
