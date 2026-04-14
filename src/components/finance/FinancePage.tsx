@@ -27,18 +27,17 @@ export function FinancePage({ onBack, onSettings }: FinancePageProps) {
   const latestDate = availableDates[availableDates.length - 1] ?? APP_TODAY;
   const earliestDate = availableDates[0] ?? addDays(latestDate, -89);
   const [range, setRange] = useState<DateRangeValue>(() => ({
-    startDate: latestDate,
+    startDate: clampIsoDate(addDays(latestDate, -6), earliestDate, latestDate),
     endDate: latestDate,
   }));
   const [selectedBank, setSelectedBank] = useState<string>('all');
 
   useEffect(() => {
-    setRange((current) => {
-      const endDate = clampIsoDate(current.endDate, earliestDate, latestDate);
-      const startDate = clampIsoDate(current.startDate, earliestDate, endDate);
-      return { startDate, endDate };
-    });
-  }, [earliestDate, latestDate]);
+    if (!availableDates.length) return;
+    const endDate = clampIsoDate(latestDate, earliestDate, latestDate);
+    const startDate = clampIsoDate(addDays(latestDate, -6), earliestDate, endDate);
+    setRange({ startDate, endDate });
+  }, [availableDates.length, earliestDate, latestDate]);
 
   const days = useMemo(
     () =>

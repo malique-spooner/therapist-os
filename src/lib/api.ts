@@ -91,11 +91,20 @@ export interface MediaProviderBreakdown {
   };
   youtube?: {
     label: string;
-    totalHours: number;
-    educational: number;
-    entertainment: number;
-    music: number;
-    other: number;
+    watchCount: number;
+    searchCount: number;
+    subscriptionCount: number;
+    topChannels: Array<{ name: string; count: number }>;
+    topSearches: Array<{ query: string; count: number }>;
+    topVideos: Array<{ title: string; channel: string; count: number }>;
+  };
+  chrome?: {
+    label: string;
+    visitCount: number;
+    uniqueDomains: number;
+    topDomains: Array<{ domain: string; count: number }>;
+    topPages: Array<{ title: string; url: string; count: number }>;
+    bookmarks: number;
   };
 }
 

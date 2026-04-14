@@ -98,7 +98,7 @@ export function getDashboardSnapshots(): DomainSnapshot[] {
     { id: 'physical', label: 'Physical', icon: '⌚', value: `${latestHealth.steps.toLocaleString()} steps`, helper: `${latestHealth.sleepQuality}/10 sleep` },
     { id: 'relationships', label: 'Relationships', icon: '🤝', value: `${daysAgo} days ago`, helper: 'last meaningful contact' },
     { id: 'finance', label: 'Finance', icon: '💷', value: `£${latestFinance.totalSpend}`, helper: 'today vs daily average' },
-    { id: 'consumption', label: 'Consumption', icon: '🎵', value: `${Math.round(latestMusic.valence * 100)} valence`, helper: `${latestMusic.topGenre} this week` },
+    { id: 'consumption', label: 'Media', icon: '🎵', value: `${Math.round(latestMusic.valence * 100)} valence`, helper: `${latestMusic.topGenre} this week` },
     { id: 'location', label: 'Location', icon: '📍', value: latestLocation.totalTimeOutMinutes ? `Outside ${formatMinutes(latestLocation.totalTimeOutMinutes)}` : 'Home-only day', helper: `${latestLocation.placesVisitedCount} places today` },
   ];
 }
@@ -204,13 +204,13 @@ export function getDashboardInsights(checkIns: DailyCheckIn[] = checkInHistory):
     },
     {
       id: 'consumption-pattern',
-      category: 'Consumption',
+      category: 'Media',
       categoryIcon: '🎵',
       lens: 'CBT',
-      narrative: `Your music valence is averaging ${lowValence.toFixed(2)} over the last five days, which is below baseline and tends to lead mood dips by a day or two. Consumption is acting like an early-warning signal here.`,
+      narrative: `Your music valence is averaging ${lowValence.toFixed(2)} over the last five days, which is below baseline and tends to lead mood dips by a day or two. Media is acting like an early-warning signal here.`,
       action: 'Notice the shift early and add one higher-valence input on purpose.',
       domainId: 'consumption',
-      viewLabel: 'View Consumption',
+      viewLabel: 'View Media',
     },
     {
       id: 'location-pattern',

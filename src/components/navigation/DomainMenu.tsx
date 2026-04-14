@@ -12,7 +12,7 @@ interface DomainMenuProps {
 const items = [
   { id: 'relationships' as const, label: 'Relationships', icon: '🤝', description: 'Your people, interactions, coaching' },
   { id: 'finance' as const, label: 'Finance', icon: '💷', description: 'Spending patterns and emotional triggers' },
-  { id: 'consumption' as const, label: 'Consumption', icon: '🎵', description: 'Music, YouTube, mood mirror' },
+  { id: 'consumption' as const, label: 'Media', icon: '🎵', description: 'Spotify, YouTube, and browser attention' },
   { id: 'location' as const, label: 'Location', icon: '📍', description: 'Movement context, routines, restorative places' },
 ];
 
