@@ -617,7 +617,7 @@ def seed_demo_data(
         db.add(
             DataSourceConnection(
                 source_id="garmin",
-                display_name="Garmin Connect",
+                display_name="Garmin Drive Import",
                 category="Body - Steps, Sleep, HRV, Workouts",
                 connected=False,
                 available=False,

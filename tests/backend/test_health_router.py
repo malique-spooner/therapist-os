@@ -32,7 +32,7 @@ def test_health_sync_is_automatic_only(client):
 def test_health_sync_throttles_after_rate_limit(client, db_session):
     record = db_session.get(DataSourceConnection, "garmin")
     if not record:
-        record = DataSourceConnection(source_id="garmin", display_name="Garmin Connect", category="Body")
+        record = DataSourceConnection(source_id="garmin", display_name="Garmin Drive Import", category="Body")
         db_session.add(record)
     record.available = True
     record.connected = False

@@ -218,7 +218,7 @@ def test_data_source_sync_uses_service_result(client, monkeypatch):
     async def fake_sync(source_id, db, trigger="manual"):
         return {
             "id": source_id,
-            "name": "Garmin Connect",
+            "name": "Garmin Drive Import",
             "category": "Body - Steps, Sleep, HRV, Workouts",
             "icon": "⌚",
             "connected": True,

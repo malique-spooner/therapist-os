@@ -32,7 +32,7 @@ describe('SettingsPage data sources', () => {
         return Promise.resolve({
           ok: true,
           json: async () => ([
-            { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: false, available: false, connectionState: 'setup-required', lastSync: null, lastSyncStatus: null, connectionHint: 'Put Garmin exports into the TherapistOS Google Drive folder to enable sync.', lastError: null },
+            { id: 'garmin', name: 'Garmin Drive Import', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: false, available: false, connectionState: 'setup-required', lastSync: null, lastSyncStatus: null, connectionHint: 'Put Garmin exports into the TherapistOS Google Drive folder to enable sync.', lastError: null },
           ]),
         } as Response);
       }
@@ -42,7 +42,7 @@ describe('SettingsPage data sources', () => {
           ok: true,
           json: async () => ({
             id: 'garmin',
-            name: 'Garmin Connect',
+            name: 'Garmin Drive Import',
             mode: 'folder',
             title: 'Connect Garmin exports',
             description: 'Save the Garmin export folder so Therapist OS can sync steps, sleep, HRV, and workouts.',
@@ -65,7 +65,7 @@ describe('SettingsPage data sources', () => {
           ok: true,
           json: async () => ({
             detail: 'Data source connected',
-            source: { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: true, available: true, connectionState: 'connected', lastSync: 'just now', lastSyncStatus: 'success', connectionHint: null, lastError: null },
+            source: { id: 'garmin', name: 'Garmin Drive Import', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: true, available: true, connectionState: 'connected', lastSync: 'just now', lastSyncStatus: 'success', connectionHint: null, lastError: null },
           }),
         } as Response);
       }
@@ -79,7 +79,7 @@ describe('SettingsPage data sources', () => {
           ok: true,
           json: async () => ({
             id: 'garmin',
-            name: 'Garmin Connect',
+            name: 'Garmin Drive Import',
             mode: 'folder',
             title: 'Connect Garmin exports',
             description: 'Save the Garmin export folder so Therapist OS can sync steps, sleep, HRV, and workouts.',
@@ -113,20 +113,20 @@ describe('SettingsPage data sources', () => {
     const onOpenBrain = vi.fn();
     render(<SettingsPage onBack={() => {}} onOpenBrain={onOpenBrain} />);
 
-    expect(await screen.findByText('Garmin Connect')).toBeInTheDocument();
+    expect(await screen.findByText('Garmin Drive Import')).toBeInTheDocument();
     expect(screen.getByText('Google Drive')).toBeInTheDocument();
     expect(screen.getByText('Google Maps API')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Brain' })).toBeInTheDocument();
     expect(screen.getByText('Therapist LLM')).toBeInTheDocument();
     expect(screen.getByText('Therapist Voice')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Connect Garmin Connect' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Garmin Drive Import' }));
     expect(await screen.findByText('Connect Garmin exports')).toBeInTheDocument();
     expect(screen.getByLabelText('Garmin export folder *')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Garmin export folder *'), { target: { value: 'TherapistOS/Garmin' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Garmin folder' }));
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Manage Garmin Connect' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Manage Garmin Drive Import' })).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Brain' }));
     expect(onOpenBrain).toHaveBeenCalledTimes(1);
@@ -137,7 +137,7 @@ describe('SettingsPage data sources', () => {
 
     render(<SettingsPage onBack={() => {}} onOpenBrain={() => {}} />);
 
-    expect(await screen.findByText('Garmin Connect')).toBeInTheDocument();
+    expect(await screen.findByText('Garmin Drive Import')).toBeInTheDocument();
     expect(screen.getByText('Google Drive')).toBeInTheDocument();
     expect(screen.getByText(/Live connection status unavailable/i)).toBeInTheDocument();
   });

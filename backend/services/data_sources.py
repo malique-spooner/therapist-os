@@ -39,15 +39,15 @@ from .whisper_service import WhisperService
 
 DEFAULT_SOURCES = {
     "garmin": {
-        "name": "Garmin Connect",
-        "category": "Semi-automated - Health export folder",
+        "name": "Garmin Drive Import",
+        "category": "Semi-automated - Health Drive import",
         "icon": "⌚",
         "hint": "Save Garmin exports into the TherapistOS Google Drive folder so Therapist OS can import health data periodically.",
         "folder_path": FILE_IMPORT_FOLDERS["garmin"],
         "setup": {
             "mode": "folder",
             "title": "Connect Garmin exports",
-            "description": "Point Garmin Connect exports at the TherapistOS Drive folder.",
+            "description": "Point Garmin export files at the TherapistOS Drive folder.",
             "actionLabel": "Save Garmin folder",
             "instructions": [
                 "Put Garmin export files in the TherapistOS Google Drive folder.",

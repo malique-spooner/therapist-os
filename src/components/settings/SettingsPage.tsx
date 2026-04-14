@@ -66,8 +66,8 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
   },
   {
     id: 'garmin',
-    name: 'Garmin Connect',
-    category: 'Semi-automated - Health export folder',
+    name: 'Garmin Drive Import',
+    category: 'Semi-automated - Health Drive import',
     icon: '⌚',
     connected: false,
     available: false,
