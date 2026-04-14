@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 import hashlib
@@ -11,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ...models import RawImportRow
+from ...models.life_data import FinanceDataReal, HealthDataReal
 from ...models.life_data import SpotifyPlayEventReal
 from ...models.source_data import (
     ChromeHistoryEvent,
@@ -55,9 +57,13 @@ class SourceCleanerService:
 
     def clean_source(self, source_id: str, db: Session) -> int:
         if source_id == "chrome":
-            return self._clean_chrome_fast(db)
+            count = self._clean_chrome_fast(db)
+            db.commit()
+            return count
         if source_id in {"instagram", "snapchat"}:
-            return self._clean_social_fast(source_id, db)
+            count = self._clean_social_fast(source_id, db)
+            db.commit()
+            return count
         rows = db.scalars(select(RawImportRow).where(RawImportRow.source_id == source_id)).all()
         count = 0
         for staged in rows:
@@ -70,6 +76,13 @@ class SourceCleanerService:
             if made:
                 staged.status = "cleaned"
                 count += made
+        db.commit()
+        if source_id == "garmin":
+            count += self._materialize_health_from_garmin(db)
+        if source_id in {"revolut", "natwest"}:
+            count += self._materialize_finance_from_transactions(db)
+        if source_id == "google_drive":
+            count += self._materialize_google_drive_source_tables(db)
         db.commit()
         return count
 
@@ -199,6 +212,132 @@ class SourceCleanerService:
         if "chrome" in lower_path or "bookmark" in lower_path or "history.json" in lower_path:
             return self._clean_chrome(path, row, staged, db)
         return 0
+
+    def _materialize_google_drive_source_tables(self, db: Session) -> int:
+        # Google Drive takeouts already populate the source tables directly.
+        return 0
+
+    def _materialize_health_from_garmin(self, db: Session) -> int:
+        days: dict[date, dict[str, Any]] = defaultdict(dict)
+
+        for row in db.scalars(select(GarminDailyWellness).order_by(GarminDailyWellness.date, GarminDailyWellness.updated_at, GarminDailyWellness.id)).all():
+            bucket = days[row.date]
+            bucket["date"] = row.date
+            bucket["steps"] = max(int(bucket.get("steps") or 0), int(row.steps or 0))
+            bucket["resting_hr"] = row.resting_heart_rate if row.resting_heart_rate is not None else bucket.get("resting_hr")
+            bucket["hrv_ms"] = bucket.get("hrv_ms") or 0
+
+        for row in db.scalars(select(GarminSleepSession).order_by(GarminSleepSession.sleep_date, GarminSleepSession.started_at, GarminSleepSession.id)).all():
+            target_date = row.sleep_date or (row.started_at.date() if row.started_at else None)
+            if target_date is None:
+                continue
+            bucket = days[target_date]
+            bucket["date"] = target_date
+            duration_minutes = int(row.duration_minutes or 0)
+            if duration_minutes >= int(bucket.get("sleep_duration_minutes") or 0):
+                bucket["sleep_duration_minutes"] = duration_minutes
+                bucket["sleep_quality"] = row.sleep_score if row.sleep_score is not None else bucket.get("sleep_quality")
+
+        for row in db.scalars(select(GarminBodyMetric).order_by(GarminBodyMetric.metric_date, GarminBodyMetric.measured_at, GarminBodyMetric.id)).all():
+            target_date = row.metric_date or (row.measured_at.date() if row.measured_at else None)
+            if target_date is None:
+                continue
+            bucket = days[target_date]
+            bucket["date"] = target_date
+            bucket.setdefault("weight_kg", row.weight_kg)
+
+        for workout in self._garmin_workouts(db):
+            bucket = days[workout["date"]]
+            bucket["date"] = workout["date"]
+            bucket["workout_logged"] = True
+            if workout.get("workout_duration_minutes") is not None and workout["workout_duration_minutes"] >= int(bucket.get("workout_duration_minutes") or 0):
+                bucket["workout_duration_minutes"] = workout["workout_duration_minutes"]
+                bucket["workout_type"] = workout.get("workout_type")
+
+        rows_synced = 0
+        for target_date in sorted(days):
+            bucket = days[target_date]
+            record = db.scalar(select(HealthDataReal).where(HealthDataReal.date == target_date))
+            if not record:
+                record = HealthDataReal(date=target_date)
+                db.add(record)
+            record.steps = int(bucket.get("steps") or 0)
+            record.sleep_duration_hours = round(int(bucket.get("sleep_duration_minutes") or 0) / 60, 2)
+            record.sleep_quality = float(bucket.get("sleep_quality") or 0)
+            record.hrv_ms = float(bucket.get("hrv_ms") or 0)
+            record.resting_hr = int(bucket.get("resting_hr") or 0)
+            record.workout_logged = bool(bucket.get("workout_logged"))
+            record.workout_type = bucket.get("workout_type")
+            record.workout_duration_minutes = int(bucket.get("workout_duration_minutes") or 0)
+            rows_synced += 1
+
+        return rows_synced
+
+    def _garmin_workouts(self, db: Session) -> list[dict[str, Any]]:
+        workouts: list[dict[str, Any]] = []
+        rows = db.scalars(select(RawImportRow).where(RawImportRow.source_id == "garmin")).all()
+        for staged in rows:
+            payload = staged.raw_payload or {}
+            path = str(payload.get("path") or "")
+            if "workout.json" not in path.lower():
+                continue
+            row = payload.get("row") if isinstance(payload.get("row"), dict) else payload
+            if not isinstance(row, dict):
+                continue
+            items = row.get("workoutList")
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                created = self._dt(item.get("createdDate") or item.get("updatedDate"))
+                if not created:
+                    continue
+                workouts.append(
+                    {
+                        "date": created.date(),
+                        "workout_type": (item.get("sportType") or {}).get("sportTypeKey") or item.get("workoutName"),
+                        "workout_duration_minutes": self._minutes(item.get("estimatedDurationInSecs")),
+                    }
+                )
+        return workouts
+
+    def _materialize_finance_from_transactions(self, db: Session) -> int:
+        rows_synced = 0
+        for source_id, model in (("revolut", RevolutTransaction), ("natwest", NatWestTransaction)):
+            rows = db.scalars(select(model)).all()
+            for row in rows:
+                if source_id == "revolut":
+                    tx_date = row.occurred_at.date() if row.occurred_at else None
+                    amount_minor = row.amount_minor
+                    tx_type = row.type or ""
+                    description = row.description or ""
+                    merchant = description or None
+                else:
+                    tx_date = row.occurred_on
+                    amount_minor = row.value_minor
+                    tx_type = row.type or ""
+                    description = row.description or ""
+                    merchant = self._merchant_from_description(description)
+                if tx_date is None or amount_minor is None:
+                    continue
+                amount_pence = self._finance_amount_pence(amount_minor, tx_type)
+                transaction_id = f"{source_id}:{row.source_row_hash}"
+                record = db.scalar(select(FinanceDataReal).where(FinanceDataReal.transaction_id == transaction_id))
+                if not record:
+                    record = FinanceDataReal(transaction_id=transaction_id)
+                    db.add(record)
+                record.date = tx_date
+                record.amount_pence = amount_pence
+                record.category = self._finance_category(description, tx_type)
+                record.merchant = merchant
+                record.description = description or None
+                record.bank_name = "Revolut" if source_id == "revolut" else "NatWest"
+                record.account_name = getattr(row, "account_name", None)
+                record.account_ref = getattr(row, "account_ref", None)
+                record.source_type = tx_type or None
+                rows_synced += 1
+        return rows_synced
 
     def _clean_garmin(self, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
         if "UDSFile" in path and row.get("calendarDate"):
@@ -525,6 +664,36 @@ class SourceCleanerService:
             return int(Decimal(str(value).replace(",", "").strip()) * 100)
         except (InvalidOperation, ValueError):
             return None
+
+    @staticmethod
+    def _finance_amount_pence(amount_minor: int, tx_type: str) -> int:
+        if amount_minor < 0:
+            return abs(amount_minor)
+        if tx_type.strip() in {"Topup", "Card Refund", "BAC", "INT", "TFR", "PAYMENT"}:
+            return -amount_minor
+        return amount_minor
+
+    @staticmethod
+    def _finance_category(text: str, tx_type: str) -> str:
+        haystack = f"{text} {tx_type}".lower()
+        if any(token in haystack for token in ("tesco", "sainsbury", "lidl", "morrisons", "grocery", "supermarket", "publix", "walmart", "iceland")):
+            return "groceries"
+        if any(token in haystack for token in ("tfl", "trainline", "uber", "lyft", "voi", "lime", "easyjet", "ryanair", "santander cycles")):
+            return "transport"
+        if any(token in haystack for token in ("mcdonald", "kfc", "gregg", "pizza", "restaurant", "cafe", "burger", "subway", "chick-fil-a", "pret")):
+            return "eating_out"
+        if any(token in haystack for token in ("pub", "bar", "club", "eventbrite", "dice", "theatre", "cinema", "tickets")):
+            return "social"
+        if any(token in haystack for token in ("spotify", "netflix", "audible", "openai", "claude", "apple.com/bill", "adobe", "elevenlabs", "cloudflare")):
+            return "entertainment"
+        return "other"
+
+    @staticmethod
+    def _merchant_from_description(description: str) -> str | None:
+        parts = [part.strip() for part in description.split(",") if part.strip()]
+        if not parts:
+            return None
+        return parts[1] if parts and parts[0].isdigit() and len(parts) > 1 else parts[0]
 
     @staticmethod
     def _chrome_time(value: Any) -> datetime | None:

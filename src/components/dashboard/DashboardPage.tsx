@@ -31,7 +31,7 @@ interface DashboardPageProps {
 }
 
 export function DashboardPage({ onSettings, onOpenBrain, onNavigateToTherapist }: DashboardPageProps) {
-  const [period, setPeriod] = useState<Period>('today');
+  const [period, setPeriod] = useState<Period>('this-week');
   const dataMode = useSettingsStore((state) => state.dataMode);
   const { data, isLoading, error, refetch } = useApiQuery(() => api.getDashboard(period), [period, dataMode]);
   const rings = data?.rings ?? [];

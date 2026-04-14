@@ -417,15 +417,29 @@ type DataMode = 'real-only';
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? '';
 
 function getApiBase() {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-
   if (typeof window !== 'undefined') {
+    const configured = process.env.NEXT_PUBLIC_API_URL;
+    if (configured) {
+      try {
+        const configuredHost = new URL(configured).hostname;
+        const currentHost = window.location.hostname;
+        const configuredLooksLocal = configuredHost === 'localhost' || configuredHost === '127.0.0.1';
+        const currentLooksLocal = currentHost === 'localhost' || currentHost === '127.0.0.1';
+
+        if (configuredLooksLocal && !currentLooksLocal) {
+          return window.location.origin;
+        }
+      } catch {
+        return configured;
+      }
+
+      return configured;
+    }
+
     return window.location.origin;
   }
 
-  return 'http://127.0.0.1:8000';
+  return process.env.INTERNAL_API_URL ?? 'http://api:8000';
 }
 
 function getDataMode(): DataMode {
