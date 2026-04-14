@@ -5,8 +5,10 @@ from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 from html.parser import HTMLParser
+from html import unescape
 import io
 import json
+import re
 from typing import Any
 import zipfile
 
@@ -413,6 +415,11 @@ class GoogleDriveImportService:
         return [{"kind": "json_value", "path": file_name, "row": data}]
 
     def _extract_html_rows(self, file_name: str, content: bytes) -> list[dict[str, Any]]:
+        lower = file_name.lower()
+        if "watch-history.html" in lower or "search-history.html" in lower:
+            youtube_rows = self._extract_youtube_history_rows(file_name, content)
+            if youtube_rows:
+                return youtube_rows
         parser = TableHTMLParser()
         parser.feed(self._decode_text(content))
         if not parser.rows:
@@ -426,6 +433,29 @@ class GoogleDriveImportService:
             else:
                 row = {"cells": cells}
             rows.append({"kind": "html_table_row", "path": file_name, "row_index": index, "row": row})
+        return rows
+
+    def _extract_youtube_history_rows(self, file_name: str, content: bytes) -> list[dict[str, Any]]:
+        text = self._decode_text(content)
+        blocks = re.findall(r'<div class="content-cell[^"]*">(.*?)</div>', text, flags=re.I | re.S)
+        rows: list[dict[str, Any]] = []
+        for block in blocks:
+            anchors = re.findall(r'<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>', block, flags=re.I | re.S)
+            time_match = re.search(r'<br>\s*([^<].*?)\s*$', block, flags=re.I | re.S)
+            if not time_match:
+                continue
+            row: dict[str, Any] = {
+                "time": unescape(re.sub(r"<[^>]+>", "", time_match.group(1))).strip(),
+            }
+            if anchors:
+                first_href, first_title = anchors[0]
+                row["title"] = unescape(re.sub(r"<[^>]+>", "", first_title)).strip()
+                row["titleUrl"] = unescape(first_href).strip()
+            if len(anchors) > 1:
+                second_href, second_title = anchors[1]
+                row["channel"] = unescape(re.sub(r"<[^>]+>", "", second_title)).strip()
+                row["channelUrl"] = unescape(second_href).strip()
+            rows.append({"kind": "html_table_row", "path": file_name, "row_index": len(rows) + 1, "row": row})
         return rows
 
     @staticmethod

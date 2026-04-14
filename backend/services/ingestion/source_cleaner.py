@@ -206,6 +206,8 @@ class SourceCleanerService:
         return 0
 
     def _clean_google_drive(self, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
+        if row.get("kind") == "archive_entry":
+            return 0
         lower_path = path.lower()
         if "watch-history" in lower_path or "search-history" in lower_path or "subscriptions" in lower_path:
             return self._clean_youtube(path, row, staged, db)
@@ -435,6 +437,8 @@ class SourceCleanerService:
 
     def _clean_youtube(self, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
         lower_path = path.lower()
+        if row.get("kind") == "archive_entry":
+            return 0
         if "watch-history" in lower_path:
             record = self._upsert(db, YoutubeWatchEvent, staged.row_hash)
             record.import_file_id = staged.import_id
@@ -466,6 +470,8 @@ class SourceCleanerService:
 
     def _clean_chrome(self, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
         lower_path = path.lower()
+        if row.get("kind") == "archive_entry":
+            return 0
         if "history" in lower_path:
             if "chrome/history.json" not in lower_path:
                 return 0
@@ -610,9 +616,17 @@ class SourceCleanerService:
         if not value:
             return None
         text = str(value).replace("Z", "+00:00")
-        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d"):
+        for fmt in (
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S.%f",
+            "%Y-%m-%d",
+            "%b %d, %Y, %I:%M:%S %p %Z",
+            "%B %d, %Y, %I:%M:%S %p %Z",
+            "%b %d, %Y, %I:%M:%S %p",
+            "%B %d, %Y, %I:%M:%S %p",
+        ):
             try:
-                return datetime.strptime(str(value), fmt)
+                return datetime.strptime(text, fmt)
             except ValueError:
                 pass
         try:
@@ -701,7 +715,7 @@ class SourceCleanerService:
             raw = int(value)
         except (TypeError, ValueError):
             return None
-        return datetime(1601, 1, 1) + timedelta(microseconds=raw)
+        return datetime.utcfromtimestamp(raw / 1_000_000)
 
     @staticmethod
     def _interaction_type(source_id: str, path: str) -> str:

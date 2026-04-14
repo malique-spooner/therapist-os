@@ -32,7 +32,7 @@ function sumProviderMetric<T>(days: T[], pick: (day: T) => number | undefined | 
 
 export function ConsumptionPage({ onBack, onSettings }: ConsumptionPageProps) {
   const dataMode = useSettingsStore((state) => state.dataMode);
-  const { data, error, refetch } = useApiQuery(() => api.getConsumption('3-months'), [dataMode]);
+  const { data, error, refetch } = useApiQuery(() => api.getConsumption('12-months'), [dataMode]);
   const allDays = useMemo(() => data ?? [], [data]);
   const availableDates = useMemo(() => allDays.map((day) => day.date), [allDays]);
   const latestDate = availableDates[availableDates.length - 1] ?? APP_TODAY;

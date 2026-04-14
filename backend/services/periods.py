@@ -13,6 +13,8 @@ PERIOD_TO_DAYS = {
     "last-month": 31,
     "3months": 90,
     "3-months": 90,
+    "12months": 365,
+    "12-months": 365,
 }
 
 
