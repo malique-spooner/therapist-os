@@ -49,7 +49,7 @@ function SourceActivityCard({ item }: { item: DataSourceActivityItemPayload }) {
   const hasRows = item.recordsAvailable > 0;
   const statusLabel = item.syncBlocked
     ? 'Cooldown'
-    : ['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(item.id) && item.available
+    : ['garmin', 'revolut', 'natwest', 'instagram', 'snapchat'].includes(item.id) && item.available
       ? 'Import folder set'
       : item.id === 'owntracks' && item.available && !item.connected
         ? 'Waiting for phone'

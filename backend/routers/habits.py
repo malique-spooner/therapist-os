@@ -10,9 +10,8 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..middleware.auth import verify_api_key
 from ..models import Habit
-from ..models.life_data import HabitLogDemo, HabitLogReal
+from ..models.life_data import HabitLogReal
 from ..schemas.habits import HabitLogUpsert, HabitUpsert, HabitsOverviewSchema
-from ..services.data_mode import dataset_model
 
 router = APIRouter(prefix="/habits", tags=["habits"], dependencies=[Depends(verify_api_key)])
 
@@ -74,11 +73,10 @@ def _log_value(log) -> bool | float | int | None:
 def get_habits(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
     habits = db.scalars(select(Habit).where(Habit.active.is_(True)).order_by(Habit.created_at)).all()
     history_start = date.today() - timedelta(days=89)
-    log_model = dataset_model(mode, HabitLogReal, HabitLogDemo)
     logs = db.scalars(
-        select(log_model)
-        .where(log_model.date >= history_start)
-        .order_by(log_model.date)
+        select(HabitLogReal)
+        .where(HabitLogReal.date >= history_start)
+        .order_by(HabitLogReal.date)
     ).all()
 
     by_day: dict[str, dict[str, bool | float | int | None]] = defaultdict(dict)
@@ -95,9 +93,9 @@ def get_habits(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
     streaks: dict[str, dict[str, int]] = {}
     for habit in habits:
         habit_logs = db.scalars(
-            select(log_model)
-            .where(log_model.habit_id == habit.id)
-            .order_by(log_model.date)
+            select(HabitLogReal)
+            .where(HabitLogReal.habit_id == habit.id)
+            .order_by(HabitLogReal.date)
         ).all()
         longest = current = 0
         for log in habit_logs:
@@ -138,11 +136,10 @@ def get_habits(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
 def get_habit_logs(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     habits = db.scalars(select(Habit).where(Habit.active.is_(True))).all()
     habit_ids = {habit.id for habit in habits}
-    log_model = dataset_model(mode, HabitLogReal, HabitLogDemo)
     logs = db.scalars(
-        select(log_model)
-        .where(log_model.habit_id.in_(habit_ids))
-        .order_by(log_model.date)
+        select(HabitLogReal)
+        .where(HabitLogReal.habit_id.in_(habit_ids))
+        .order_by(HabitLogReal.date)
     ).all()
     by_day: dict[str, dict[str, bool | float | int | None]] = defaultdict(dict)
     for log in logs:
@@ -156,10 +153,9 @@ def upsert_habit_log(payload: HabitLogUpsert, mode: str | None = None, db: Sessi
     if not habit:
         raise HTTPException(status_code=404, detail="Habit not found")
     target_date = date.fromisoformat(payload.date) if payload.date else date.today()
-    log_model = dataset_model(mode or "real-only", HabitLogReal, HabitLogDemo)
-    log = db.scalar(select(log_model).where(log_model.habit_id == habit.id, log_model.date == target_date))
+    log = db.scalar(select(HabitLogReal).where(HabitLogReal.habit_id == habit.id, HabitLogReal.date == target_date))
     if not log:
-        log = log_model(habit_id=habit.id, date=target_date)
+        log = HabitLogReal(habit_id=habit.id, date=target_date)
         db.add(log)
 
     log.created_at = datetime.utcnow()

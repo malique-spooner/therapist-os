@@ -9,44 +9,30 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...models import Habit
 from ...models.life_data import (
-    AIConversationDemo,
     AIConversationReal,
-    FinanceDataDemo,
     FinanceDataReal,
-    HabitLogDemo,
     HabitLogReal,
-    HealthDataDemo,
     HealthDataReal,
-    UserProfileDemo,
     UserProfileReal,
-    WeatherDataDemo,
     WeatherDataReal,
 )
-from ..data_mode import dataset_model, normalize_data_mode
 
 
 class ContextBuilder:
     async def build_context_document(self, db: Session, mode: str | None = None) -> str:
-        normalized_mode = normalize_data_mode(mode)
-        health_model = dataset_model(normalized_mode, HealthDataReal, HealthDataDemo)
-        finance_model = dataset_model(normalized_mode, FinanceDataReal, FinanceDataDemo)
-        habit_log_model = dataset_model(normalized_mode, HabitLogReal, HabitLogDemo)
-        profile_model = dataset_model(normalized_mode, UserProfileReal, UserProfileDemo)
-        weather_model = dataset_model(normalized_mode, WeatherDataReal, WeatherDataDemo)
-        conversation_model = dataset_model(normalized_mode, AIConversationReal, AIConversationDemo)
         today = date.today()
         health = db.scalars(
-            select(health_model).where(health_model.date >= today - timedelta(days=6)).order_by(health_model.date)
+            select(HealthDataReal).where(HealthDataReal.date >= today - timedelta(days=6)).order_by(HealthDataReal.date)
         ).all()
-        finance = db.scalars(select(finance_model).where(finance_model.date >= today - timedelta(days=6))).all()
+        finance = db.scalars(select(FinanceDataReal).where(FinanceDataReal.date >= today - timedelta(days=6))).all()
         habits = db.scalars(select(Habit)).all()
-        habit_logs = db.scalars(select(habit_log_model).where(habit_log_model.date >= today - timedelta(days=6))).all()
-        profile = db.scalar(select(profile_model).limit(1))
+        habit_logs = db.scalars(select(HabitLogReal).where(HabitLogReal.date >= today - timedelta(days=6))).all()
+        profile = db.scalar(select(UserProfileReal).limit(1))
         recent_sessions = db.scalars(
-            select(conversation_model).order_by(conversation_model.started_at.desc()).limit(3)
+            select(AIConversationReal).order_by(AIConversationReal.started_at.desc()).limit(3)
         ).all()
         weather = db.scalars(
-            select(weather_model).where(weather_model.date >= today - timedelta(days=2)).order_by(weather_model.date)
+            select(WeatherDataReal).where(WeatherDataReal.date >= today - timedelta(days=2)).order_by(WeatherDataReal.date)
         ).all()
 
         sections: list[str] = []
@@ -108,18 +94,15 @@ class ContextBuilder:
         )
 
     async def generate_opening_message(self, db: Session, mode: str | None = None) -> str:
-        normalized_mode = normalize_data_mode(mode)
-        health_model = dataset_model(normalized_mode, HealthDataReal, HealthDataDemo)
-        profile_model = dataset_model(normalized_mode, UserProfileReal, UserProfileDemo)
         today = date.today()
-        health = db.scalar(select(health_model).where(health_model.date == today))
+        health = db.scalar(select(HealthDataReal).where(HealthDataReal.date == today))
         if health:
             if (health.sleep_duration_hours or 0) < 6:
                 return f"You slept {health.sleep_duration_hours:.1f} hours last night, which is below your recent baseline. What feels most important to notice about your energy today?"
             if (health.steps or 0) > 10000:
                 return f"You've been moving more than usual, and your recovery markers look steadier today. What's been helping lately?"
 
-        profile = db.scalar(select(profile_model).limit(1))
+        profile = db.scalar(select(UserProfileReal).limit(1))
         if profile and profile.notable_patterns:
             return f"I’m holding the patterns you’ve been working on, especially {profile.notable_patterns[0].lower()}. Where does that feel most active today?"
 

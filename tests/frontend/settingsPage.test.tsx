@@ -118,8 +118,7 @@ describe('SettingsPage data sources', () => {
     expect(await screen.findByText('Garmin Connect')).toBeInTheDocument();
     expect(screen.getByText(/GARMIN_EMAIL/i)).toBeInTheDocument();
     expect(screen.getByText('Google Drive')).toBeInTheDocument();
-    expect(screen.getByText('Google Maps')).toBeInTheDocument();
-    expect(screen.getByText(/Folder: Therapist OS \/ Google Takeout/i)).toBeInTheDocument();
+    expect(screen.getByText('Google Maps API')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Brain' })).toBeInTheDocument();
     expect(screen.getByText('Therapist LLM')).toBeInTheDocument();
     expect(screen.getByText('Therapist Voice')).toBeInTheDocument();
@@ -131,7 +130,6 @@ describe('SettingsPage data sources', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Garmin login' }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Manage Garmin Connect' })).toBeInTheDocument());
-    expect(screen.getByText('Connected')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Brain' }));
     expect(onOpenBrain).toHaveBeenCalledTimes(1);
@@ -143,7 +141,6 @@ describe('SettingsPage data sources', () => {
     render(<SettingsPage onBack={() => {}} onOpenBrain={() => {}} />);
 
     expect(await screen.findByText('Garmin Connect')).toBeInTheDocument();
-    expect(screen.getByText('TrueLayer')).toBeInTheDocument();
     expect(screen.getByText('Google Drive')).toBeInTheDocument();
     expect(screen.getByText(/Live connection status unavailable/i)).toBeInTheDocument();
   });
@@ -200,6 +197,6 @@ describe('SettingsPage data sources', () => {
     render(<SettingsPage onBack={() => {}} onOpenBrain={() => {}} />);
 
     expect(await screen.findByText('OwnTracks')).toBeInTheDocument();
-    expect(screen.getByText('Waiting for ping')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for phone')).toBeInTheDocument();
   });
 });

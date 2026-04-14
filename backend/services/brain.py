@@ -6,30 +6,18 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..models.life_data import (
-    AIConversationDemo,
     AIConversationReal,
-    DailyCheckInDemo,
     DailyCheckInReal,
-    FinanceDataDemo,
     FinanceDataReal,
-    HabitLogDemo,
     HabitLogReal,
-    HealthDataDemo,
     HealthDataReal,
-    LocationDailySummaryDemo,
     LocationDailySummaryReal,
-    MusicDataDemo,
     MusicDataReal,
-    RelationshipDemo,
-    RelationshipInteractionDemo,
     RelationshipInteractionReal,
     RelationshipReal,
-    UserProfileDemo,
     UserProfileReal,
-    WeatherDataDemo,
     WeatherDataReal,
 )
-from .data_mode import dataset_model, normalize_data_mode
 
 
 DEFAULT_LAYERS = [
@@ -220,26 +208,19 @@ DEFAULT_VERSIONS = [
 
 class BrainService:
     def get_payload(self, db: Session, mode: str | None = None) -> dict:
-        normalized_mode = normalize_data_mode(mode)
-        habit_model = dataset_model(normalized_mode, HabitLogReal, HabitLogDemo)
-        relationship_model = dataset_model(normalized_mode, RelationshipReal, RelationshipDemo)
-        interaction_model = dataset_model(normalized_mode, RelationshipInteractionReal, RelationshipInteractionDemo)
-        checkin_model = dataset_model(normalized_mode, DailyCheckInReal, DailyCheckInDemo)
-        profile_model = dataset_model(normalized_mode, UserProfileReal, UserProfileDemo)
-        conversation_model = dataset_model(normalized_mode, AIConversationReal, AIConversationDemo)
-        source_coverage = self._source_coverage(db, normalized_mode)
+        source_coverage = self._source_coverage(db)
         tracked_habits = (
-            db.scalar(select(func.count(func.distinct(habit_model.habit_id))).select_from(habit_model)) or 0
+            db.scalar(select(func.count(func.distinct(HabitLogReal.habit_id))).select_from(HabitLogReal)) or 0
         )
-        conversations = db.scalar(select(func.count()).select_from(conversation_model)) or 0
+        conversations = db.scalar(select(func.count()).select_from(AIConversationReal)) or 0
         relationship_count = db.scalar(
-            select(func.count()).select_from(relationship_model).where(relationship_model.active.is_(True))
+            select(func.count()).select_from(RelationshipReal).where(RelationshipReal.active.is_(True))
         ) or 0
         interaction_count = db.scalar(
-            select(func.count()).select_from(interaction_model)
+            select(func.count()).select_from(RelationshipInteractionReal)
         ) or 0
-        checkin_count = db.scalar(select(func.count()).select_from(checkin_model)) or 0
-        profile = db.scalar(select(profile_model).limit(1))
+        checkin_count = db.scalar(select(func.count()).select_from(DailyCheckInReal)) or 0
+        profile = db.scalar(select(UserProfileReal).limit(1))
 
         active_systems = sum(len(layer.get("detectors", [])) + len(layer.get("models", [])) for layer in DEFAULT_LAYERS)
         candidate_signals = self._candidate_signals(
@@ -315,18 +296,13 @@ class BrainService:
         return 1
 
     @staticmethod
-    def _source_coverage(db: Session, mode: str) -> int:
-        health_model = dataset_model(mode, HealthDataReal, HealthDataDemo)
-        finance_model = dataset_model(mode, FinanceDataReal, FinanceDataDemo)
-        music_model = dataset_model(mode, MusicDataReal, MusicDataDemo)
-        location_model = dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
-        weather_model = dataset_model(mode, WeatherDataReal, WeatherDataDemo)
+    def _source_coverage(db: Session) -> int:
         counts = [
-            db.scalar(select(func.count()).select_from(health_model)) or 0,
-            db.scalar(select(func.count()).select_from(finance_model)) or 0,
-            db.scalar(select(func.count()).select_from(music_model)) or 0,
-            db.scalar(select(func.count()).select_from(location_model)) or 0,
-            db.scalar(select(func.count()).select_from(weather_model)) or 0,
+            db.scalar(select(func.count()).select_from(HealthDataReal)) or 0,
+            db.scalar(select(func.count()).select_from(FinanceDataReal)) or 0,
+            db.scalar(select(func.count()).select_from(MusicDataReal)) or 0,
+            db.scalar(select(func.count()).select_from(LocationDailySummaryReal)) or 0,
+            db.scalar(select(func.count()).select_from(WeatherDataReal)) or 0,
         ]
         return sum(1 for count in counts if count > 0)
 

@@ -1,4 +1,4 @@
-"""add source-specific standard tables
+"""add source-specific live tables
 
 Revision ID: 0025_source_specific_standard
 Revises: 0024_source_clean_tables
@@ -17,7 +17,15 @@ branch_labels = None
 depends_on = None
 
 
-def _base() -> list[sa.Column]:
+def _bind():
+    return op.get_bind()
+
+
+def _has_table(name: str) -> bool:
+    return sa.inspect(_bind()).has_table(name)
+
+
+def _base_columns() -> list[sa.Column]:
     return [
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("source_row_hash", sa.String(length=64), nullable=False),
@@ -28,301 +36,198 @@ def _base() -> list[sa.Column]:
     ]
 
 
-def _create(name: str, extra: list[sa.Column]) -> None:
-    op.create_table(name, *_base(), *extra)
+def _create(name: str, extra_columns: list[sa.Column]) -> bool:
+    if _has_table(name):
+        return False
+    op.create_table(name, *_base_columns(), *extra_columns)
     op.create_index(f"ix_{name}_source_row_hash", name, ["source_row_hash"], unique=True)
+    op.create_index(f"ix_{name}_import_file_id", name, ["import_file_id"], unique=False)
+    return True
 
 
 def upgrade() -> None:
     _create(
-        "owntracks_location_points",
-        [
-            sa.Column("recorded_at", sa.DateTime(), nullable=True),
-            sa.Column("device_id", sa.String(length=120), nullable=True),
-            sa.Column("latitude", sa.Float(), nullable=True),
-            sa.Column("longitude", sa.Float(), nullable=True),
-            sa.Column("accuracy", sa.Float(), nullable=True),
-            sa.Column("battery_level", sa.Integer(), nullable=True),
-            sa.Column("status", sa.String(length=40), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "owntracks_device_events",
-        [
-            sa.Column("occurred_at", sa.DateTime(), nullable=True),
-            sa.Column("device_id", sa.String(length=120), nullable=True),
-            sa.Column("event_type", sa.String(length=40), nullable=False),
-            sa.Column("detail", sa.String(length=255), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "owntracks_transition_events",
-        [
-            sa.Column("occurred_at", sa.DateTime(), nullable=True),
-            sa.Column("device_id", sa.String(length=120), nullable=True),
-            sa.Column("waypoint_id", sa.String(length=120), nullable=True),
-            sa.Column("waypoint_name", sa.String(length=255), nullable=True),
-            sa.Column("transition", sa.String(length=40), nullable=True),
-            sa.Column("latitude", sa.Float(), nullable=True),
-            sa.Column("longitude", sa.Float(), nullable=True),
-            sa.Column("radius", sa.Float(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "owntracks_waypoints",
-        [
-            sa.Column("waypoint_id", sa.String(length=120), nullable=False),
-            sa.Column("waypoint_name", sa.String(length=255), nullable=True),
-            sa.Column("latitude", sa.Float(), nullable=True),
-            sa.Column("longitude", sa.Float(), nullable=True),
-            sa.Column("radius", sa.Float(), nullable=True),
-            sa.Column("category", sa.String(length=80), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "openweather_daily",
+        "garmin_daily_wellness",
         [
             sa.Column("date", sa.Date(), nullable=False),
-            sa.Column("sunrise_time", sa.DateTime(), nullable=True),
-            sa.Column("sunset_time", sa.DateTime(), nullable=True),
-            sa.Column("daylight_hours", sa.Float(), nullable=True),
-            sa.Column("temperature_high_c", sa.Float(), nullable=True),
-            sa.Column("temperature_low_c", sa.Float(), nullable=True),
-            sa.Column("condition", sa.String(length=80), nullable=True),
-            sa.Column("uv_index", sa.Float(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
+            sa.Column("steps", sa.Integer(), nullable=True),
+            sa.Column("distance_meters", sa.Integer(), nullable=True),
+            sa.Column("total_calories", sa.Float(), nullable=True),
+            sa.Column("active_calories", sa.Float(), nullable=True),
+            sa.Column("active_seconds", sa.Integer(), nullable=True),
+            sa.Column("min_heart_rate", sa.Integer(), nullable=True),
+            sa.Column("max_heart_rate", sa.Integer(), nullable=True),
+            sa.Column("resting_heart_rate", sa.Integer(), nullable=True),
         ],
     )
     _create(
-        "openweather_hourly",
+        "garmin_sleep_sessions",
         [
-            sa.Column("observed_at", sa.DateTime(), nullable=False),
-            sa.Column("date", sa.Date(), nullable=False),
-            sa.Column("temperature_c", sa.Float(), nullable=True),
-            sa.Column("feels_like_c", sa.Float(), nullable=True),
-            sa.Column("humidity", sa.Integer(), nullable=True),
-            sa.Column("condition", sa.String(length=80), nullable=True),
-            sa.Column("uv_index", sa.Float(), nullable=True),
-            sa.Column("precipitation_mm", sa.Float(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
+            sa.Column("sleep_date", sa.Date(), nullable=True),
+            sa.Column("started_at", sa.DateTime(), nullable=True),
+            sa.Column("ended_at", sa.DateTime(), nullable=True),
+            sa.Column("duration_minutes", sa.Integer(), nullable=True),
+            sa.Column("deep_minutes", sa.Integer(), nullable=True),
+            sa.Column("light_minutes", sa.Integer(), nullable=True),
+            sa.Column("rem_minutes", sa.Integer(), nullable=True),
+            sa.Column("awake_minutes", sa.Integer(), nullable=True),
+            sa.Column("sleep_score", sa.Float(), nullable=True),
         ],
     )
     _create(
-        "spotify_artists",
+        "garmin_body_metrics",
         [
-            sa.Column("spotify_artist_id", sa.String(length=120), nullable=False),
+            sa.Column("measured_at", sa.DateTime(), nullable=True),
+            sa.Column("metric_date", sa.Date(), nullable=True),
+            sa.Column("weight_kg", sa.Float(), nullable=True),
+            sa.Column("bmi", sa.Float(), nullable=True),
+            sa.Column("body_fat_percent", sa.Float(), nullable=True),
+        ],
+    )
+    _create(
+        "garmin_fitness_metrics",
+        [
+            sa.Column("metric_date", sa.Date(), nullable=True),
+            sa.Column("metric_type", sa.String(length=80), nullable=False),
+            sa.Column("value", sa.Float(), nullable=True),
+        ],
+    )
+    _create(
+        "garmin_hydration_logs",
+        [
+            sa.Column("logged_at", sa.DateTime(), nullable=True),
+            sa.Column("log_date", sa.Date(), nullable=True),
+            sa.Column("volume_ml", sa.Float(), nullable=True),
+        ],
+    )
+    created = _create(
+        "revolut_transactions",
+        [
+            sa.Column("transaction_uid", sa.String(length=120), nullable=False),
+            sa.Column("occurred_at", sa.DateTime(), nullable=True),
+            sa.Column("completed_at", sa.DateTime(), nullable=True),
+            sa.Column("type", sa.String(length=80), nullable=True),
+            sa.Column("product", sa.String(length=80), nullable=True),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column("amount_minor", sa.BigInteger(), nullable=True),
+            sa.Column("fee_minor", sa.BigInteger(), nullable=True),
+            sa.Column("currency", sa.String(length=10), nullable=True),
+            sa.Column("state", sa.String(length=40), nullable=True),
+            sa.Column("balance_minor", sa.BigInteger(), nullable=True),
+        ],
+    )
+    if created:
+        op.create_index("ix_revolut_transactions_transaction_uid", "revolut_transactions", ["transaction_uid"], unique=True)
+    created = _create(
+        "natwest_transactions",
+        [
+            sa.Column("transaction_uid", sa.String(length=120), nullable=False),
+            sa.Column("occurred_on", sa.Date(), nullable=True),
+            sa.Column("type", sa.String(length=80), nullable=True),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column("value_minor", sa.BigInteger(), nullable=True),
+            sa.Column("balance_minor", sa.BigInteger(), nullable=True),
+            sa.Column("account_name", sa.String(length=160), nullable=True),
+            sa.Column("account_ref", sa.String(length=120), nullable=True),
+        ],
+    )
+    if created:
+        op.create_index("ix_natwest_transactions_transaction_uid", "natwest_transactions", ["transaction_uid"], unique=True)
+    created = _create(
+        "spotify_tracks",
+        [
+            sa.Column("spotify_track_id", sa.String(length=120), nullable=False),
             sa.Column("name", sa.String(length=255), nullable=True),
-            sa.Column("genres", sa.JSON(), nullable=True),
+            sa.Column("artist_name", sa.String(length=255), nullable=True),
+            sa.Column("album_name", sa.String(length=255), nullable=True),
+            sa.Column("duration_ms", sa.Integer(), nullable=True),
+            sa.Column("explicit", sa.Boolean(), nullable=True),
             sa.Column("popularity", sa.Integer(), nullable=True),
             sa.Column("spotify_url", sa.String(length=500), nullable=True),
         ],
     )
-    _create(
-        "spotify_albums",
+    if created:
+        op.create_index("ix_spotify_tracks_spotify_track_id", "spotify_tracks", ["spotify_track_id"], unique=True)
+    created = _create(
+        "spotify_play_events",
         [
-            sa.Column("spotify_album_id", sa.String(length=120), nullable=False),
-            sa.Column("name", sa.String(length=255), nullable=True),
-            sa.Column("album_type", sa.String(length=80), nullable=True),
-            sa.Column("release_date", sa.String(length=40), nullable=True),
-            sa.Column("total_tracks", sa.Integer(), nullable=True),
-            sa.Column("artist_names", sa.JSON(), nullable=True),
-            sa.Column("spotify_url", sa.String(length=500), nullable=True),
+            sa.Column("played_at", sa.DateTime(), nullable=False),
+            sa.Column("spotify_track_id", sa.String(length=120), nullable=True),
+            sa.Column("context_type", sa.String(length=80), nullable=True),
+            sa.Column("context_uri", sa.String(length=255), nullable=True),
+        ],
+    )
+    if created:
+        op.create_index(
+            "ix_spotify_play_events_played_at_spotify_track_id",
+            "spotify_play_events",
+            ["played_at", "spotify_track_id"],
+            unique=True,
+        )
+    _create(
+        "youtube_watch_events",
+        [
+            sa.Column("watched_at", sa.DateTime(), nullable=True),
+            sa.Column("title", sa.Text(), nullable=True),
+            sa.Column("video_url", sa.Text(), nullable=True),
+            sa.Column("channel_name", sa.String(length=255), nullable=True),
+            sa.Column("channel_url", sa.Text(), nullable=True),
         ],
     )
     _create(
-        "spotify_track_artists",
+        "youtube_search_events",
         [
-            sa.Column("spotify_track_id", sa.String(length=120), nullable=False),
-            sa.Column("spotify_artist_id", sa.String(length=120), nullable=False),
-            sa.Column("artist_name", sa.String(length=255), nullable=True),
-            sa.Column("artist_order", sa.Integer(), nullable=True),
-            sa.Column("album_id", sa.String(length=120), nullable=True),
+            sa.Column("searched_at", sa.DateTime(), nullable=True),
+            sa.Column("query", sa.Text(), nullable=True),
         ],
     )
     _create(
-        "spotify_audio_features",
-        [
-            sa.Column("spotify_track_id", sa.String(length=120), nullable=False),
-            sa.Column("danceability", sa.Float(), nullable=True),
-            sa.Column("energy", sa.Float(), nullable=True),
-            sa.Column("valence", sa.Float(), nullable=True),
-            sa.Column("tempo", sa.Float(), nullable=True),
-            sa.Column("acousticness", sa.Float(), nullable=True),
-            sa.Column("instrumentalness", sa.Float(), nullable=True),
-            sa.Column("liveness", sa.Float(), nullable=True),
-            sa.Column("speechiness", sa.Float(), nullable=True),
-            sa.Column("loudness", sa.Float(), nullable=True),
-            sa.Column("duration_ms", sa.Integer(), nullable=True),
-            sa.Column("musical_key", sa.Integer(), nullable=True),
-            sa.Column("mode", sa.Integer(), nullable=True),
-            sa.Column("time_signature", sa.Integer(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "youtube_channels",
+        "youtube_subscriptions",
         [
             sa.Column("channel_id", sa.String(length=160), nullable=True),
             sa.Column("channel_url", sa.Text(), nullable=True),
             sa.Column("channel_title", sa.String(length=255), nullable=True),
-            sa.Column("subscription_date", sa.DateTime(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
         ],
     )
     _create(
-        "youtube_playlists",
+        "chrome_history_events",
         [
-            sa.Column("playlist_id", sa.String(length=160), nullable=True),
-            sa.Column("playlist_url", sa.Text(), nullable=True),
-            sa.Column("playlist_title", sa.String(length=255), nullable=True),
-            sa.Column("item_count", sa.Integer(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
+            sa.Column("visited_at", sa.DateTime(), nullable=True),
+            sa.Column("url", sa.Text(), nullable=True),
+            sa.Column("title", sa.Text(), nullable=True),
+            sa.Column("domain", sa.String(length=255), nullable=True),
         ],
     )
     _create(
-        "chrome_extensions",
+        "chrome_bookmarks",
         [
-            sa.Column("extension_id", sa.String(length=120), nullable=True),
-            sa.Column("name", sa.String(length=255), nullable=True),
-            sa.Column("version", sa.String(length=80), nullable=True),
-            sa.Column("description", sa.Text(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
+            sa.Column("url", sa.Text(), nullable=True),
+            sa.Column("title", sa.Text(), nullable=True),
+            sa.Column("folder", sa.String(length=255), nullable=True),
         ],
     )
     _create(
-        "chrome_devices",
+        "instagram_interactions",
         [
-            sa.Column("device_id", sa.String(length=160), nullable=True),
-            sa.Column("device_name", sa.String(length=255), nullable=True),
-            sa.Column("device_type", sa.String(length=80), nullable=True),
-            sa.Column("last_active_at", sa.DateTime(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "instagram_profiles",
-        [
-            sa.Column("profile_id", sa.String(length=120), nullable=True),
-            sa.Column("username", sa.String(length=255), nullable=True),
-            sa.Column("display_name", sa.String(length=255), nullable=True),
-            sa.Column("bio", sa.Text(), nullable=True),
-            sa.Column("profile_url", sa.Text(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "instagram_messages",
-        [
-            sa.Column("thread_id", sa.String(length=120), nullable=True),
-            sa.Column("sent_at", sa.DateTime(), nullable=True),
-            sa.Column("sender", sa.String(length=255), nullable=True),
-            sa.Column("recipient", sa.String(length=255), nullable=True),
-            sa.Column("text", sa.Text(), nullable=True),
-            sa.Column("path", sa.Text(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "instagram_media",
-        [
-            sa.Column("media_id", sa.String(length=120), nullable=True),
-            sa.Column("posted_at", sa.DateTime(), nullable=True),
-            sa.Column("media_type", sa.String(length=40), nullable=True),
-            sa.Column("caption", sa.Text(), nullable=True),
-            sa.Column("media_url", sa.Text(), nullable=True),
-            sa.Column("path", sa.Text(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "instagram_reactions",
-        [
-            sa.Column("reacted_at", sa.DateTime(), nullable=True),
-            sa.Column("reaction_type", sa.String(length=80), nullable=False),
+            sa.Column("occurred_at", sa.DateTime(), nullable=True),
+            sa.Column("interaction_type", sa.String(length=80), nullable=False),
             sa.Column("actor", sa.String(length=255), nullable=True),
-            sa.Column("target", sa.String(length=255), nullable=True),
             sa.Column("text", sa.Text(), nullable=True),
             sa.Column("path", sa.Text(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
         ],
     )
     _create(
-        "snapchat_friends",
+        "snapchat_interactions",
         [
-            sa.Column("friend_id", sa.String(length=120), nullable=True),
-            sa.Column("username", sa.String(length=255), nullable=True),
-            sa.Column("display_name", sa.String(length=255), nullable=True),
-            sa.Column("friend_status", sa.String(length=40), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "snapchat_chat_events",
-        [
-            sa.Column("chat_id", sa.String(length=120), nullable=True),
-            sa.Column("sent_at", sa.DateTime(), nullable=True),
-            sa.Column("sender", sa.String(length=255), nullable=True),
-            sa.Column("recipient", sa.String(length=255), nullable=True),
+            sa.Column("occurred_at", sa.DateTime(), nullable=True),
+            sa.Column("interaction_type", sa.String(length=80), nullable=False),
+            sa.Column("actor", sa.String(length=255), nullable=True),
             sa.Column("text", sa.Text(), nullable=True),
             sa.Column("path", sa.Text(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "snapchat_snap_events",
-        [
-            sa.Column("snap_id", sa.String(length=120), nullable=True),
-            sa.Column("sent_at", sa.DateTime(), nullable=True),
-            sa.Column("sender", sa.String(length=255), nullable=True),
-            sa.Column("caption", sa.Text(), nullable=True),
-            sa.Column("media_url", sa.Text(), nullable=True),
-            sa.Column("path", sa.Text(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
-        ],
-    )
-    _create(
-        "snapchat_story_events",
-        [
-            sa.Column("story_id", sa.String(length=120), nullable=True),
-            sa.Column("posted_at", sa.DateTime(), nullable=True),
-            sa.Column("author", sa.String(length=255), nullable=True),
-            sa.Column("title", sa.String(length=255), nullable=True),
-            sa.Column("path", sa.Text(), nullable=True),
-            sa.Column("payload_json", sa.JSON(), nullable=True),
         ],
     )
 
 
 def downgrade() -> None:
-    for name in reversed(
-        [
-            "snapchat_story_events",
-            "snapchat_snap_events",
-            "snapchat_chat_events",
-            "snapchat_friends",
-            "instagram_reactions",
-            "instagram_media",
-            "instagram_messages",
-            "instagram_profiles",
-            "chrome_devices",
-            "chrome_extensions",
-            "youtube_playlists",
-            "youtube_channels",
-            "spotify_audio_features",
-            "spotify_track_artists",
-            "spotify_albums",
-            "spotify_artists",
-            "openweather_hourly",
-            "openweather_daily",
-            "owntracks_waypoints",
-            "owntracks_transition_events",
-            "owntracks_device_events",
-            "owntracks_location_points",
-        ]
-    ):
-        op.drop_index(f"ix_{name}_source_row_hash", table_name=name)
-        op.drop_table(name)
+    # This migration only creates missing live tables; dropping them is not safe on a live dataset.
+    pass

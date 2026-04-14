@@ -8,15 +8,11 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..middleware.auth import verify_api_key
 from ..models.life_data import (
-    RelationshipDemo,
-    RelationshipInteractionDemo,
     RelationshipInteractionReal,
     RelationshipReal,
-    RelationshipScreenshotImportDemo,
     RelationshipScreenshotImportReal,
 )
 from ..schemas.relationships import RelationshipCreateSchema, RelationshipInteractionCreateSchema, RelationshipScreenshotImportSchema
-from ..services.data_mode import dataset_model
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/relationships", tags=["relationships"], dependencies=[Depends(verify_api_key)])
@@ -69,19 +65,17 @@ def _serialize_import(row) -> dict:
 
 @router.get("")
 def get_relationships(mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
-    relationship_model = dataset_model(mode, RelationshipReal, RelationshipDemo)
     rows = db.scalars(
-        select(relationship_model)
-        .where(relationship_model.active.is_(True))
-        .order_by(relationship_model.created_at)
+        select(RelationshipReal)
+        .where(RelationshipReal.active.is_(True))
+        .order_by(RelationshipReal.created_at)
     ).all()
     return [_serialize_person(row) for row in rows]
 
 
 @router.post("")
 def create_relationship(payload: RelationshipCreateSchema, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
-    relationship_model = dataset_model(mode or "real-only", RelationshipReal, RelationshipDemo)
-    row = relationship_model(
+    row = RelationshipReal(
         id=str(uuid.uuid4()),
         name=payload.name,
         type=payload.type,
@@ -99,11 +93,10 @@ def create_relationship(payload: RelationshipCreateSchema, mode: str | None = No
 @router.get("/interactions")
 def get_relationship_interactions(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
-    interaction_model = dataset_model(mode, RelationshipInteractionReal, RelationshipInteractionDemo)
     rows = db.scalars(
-        select(interaction_model)
-        .where(interaction_model.date.between(start, end))
-        .order_by(interaction_model.timestamp)
+        select(RelationshipInteractionReal)
+        .where(RelationshipInteractionReal.date.between(start, end))
+        .order_by(RelationshipInteractionReal.timestamp)
     ).all()
     return [_serialize_interaction(row) for row in rows]
 
@@ -116,8 +109,7 @@ def create_relationship_interaction(payload: RelationshipInteractionCreateSchema
     if payload.date:
         target_timestamp = datetime.combine(target_date, now.time())
         timestamp = int(target_timestamp.timestamp() * 1000)
-    interaction_model = dataset_model(mode or "real-only", RelationshipInteractionReal, RelationshipInteractionDemo)
-    row = interaction_model(
+    row = RelationshipInteractionReal(
         id=str(uuid.uuid4()),
         date=target_date,
         timestamp=timestamp,
@@ -134,8 +126,7 @@ def create_relationship_interaction(payload: RelationshipInteractionCreateSchema
 
 @router.delete("/interactions/{interaction_id}")
 def delete_relationship_interaction(interaction_id: str, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
-    interaction_model = dataset_model(mode or "real-only", RelationshipInteractionReal, RelationshipInteractionDemo)
-    row = db.get(interaction_model, interaction_id)
+    row = db.get(RelationshipInteractionReal, interaction_id)
     if not row:
         raise HTTPException(status_code=404, detail="Interaction not found")
     db.delete(row)
@@ -145,12 +136,10 @@ def delete_relationship_interaction(interaction_id: str, mode: str | None = None
 
 @router.get("/due")
 def get_due_relationships(mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
-    relationship_model = dataset_model(mode, RelationshipReal, RelationshipDemo)
-    interaction_model = dataset_model(mode, RelationshipInteractionReal, RelationshipInteractionDemo)
-    people = db.scalars(select(relationship_model).where(relationship_model.active.is_(True))).all()
+    people = db.scalars(select(RelationshipReal).where(RelationshipReal.active.is_(True))).all()
     interactions = db.scalars(
-        select(interaction_model)
-        .order_by(interaction_model.timestamp)
+        select(RelationshipInteractionReal)
+        .order_by(RelationshipInteractionReal.timestamp)
     ).all()
     last_by_person: dict[str, object] = {}
     for interaction in interactions:
@@ -175,10 +164,9 @@ def get_due_relationships(mode: str | None = None, db: Session = Depends(get_db)
 
 @router.get("/imports")
 def get_relationship_imports(mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
-    import_model = dataset_model(mode or "real-only", RelationshipScreenshotImportReal, RelationshipScreenshotImportDemo)
     rows = db.scalars(
-        select(import_model)
-        .order_by(import_model.imported_at.desc())
+        select(RelationshipScreenshotImportReal)
+        .order_by(RelationshipScreenshotImportReal.imported_at.desc())
     ).all()
     return [_serialize_import(row) for row in rows]
 
@@ -198,8 +186,7 @@ async def import_snapchat_best_friends_screenshot(
     labels = [item.strip() for item in detectedLabels.split(",") if item.strip()]
     captured_at = datetime.fromisoformat(capturedAt) if capturedAt else None
 
-    import_model = dataset_model(mode or "real-only", RelationshipScreenshotImportReal, RelationshipScreenshotImportDemo)
-    row = import_model(
+    row = RelationshipScreenshotImportReal(
         source="snapchat_best_friends",
         filename=screenshot.filename or "snapchat-best-friends.png",
         mime_type=screenshot.content_type,

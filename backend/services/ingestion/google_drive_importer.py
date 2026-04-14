@@ -25,8 +25,7 @@ FILE_IMPORT_FOLDERS = {
     "natwest": "TherapistOS/Finance/NatWest",
     "instagram": "TherapistOS/People/Instagram",
     "snapchat": "TherapistOS/People/Snapchat",
-    "youtube": "TherapistOS/Media/YouTube",
-    "chrome": "TherapistOS/Media/Chrome",
+    "google_drive": "Therapist OS / Google Takeout",
 }
 
 SOURCE_FOLDER_NAMES = {
@@ -35,8 +34,7 @@ SOURCE_FOLDER_NAMES = {
     "natwest": ("natwest", "NatWest"),
     "instagram": ("meta-2026-Apr-07-01-16-52", "Instagram", "Meta"),
     "snapchat": ("Snapchat",),
-    "youtube": ("Google",),
-    "chrome": ("Google",),
+    "google_drive": ("Google",),
 }
 
 TEXT_SUFFIXES = (".csv", ".json", ".txt", ".html")
@@ -121,9 +119,9 @@ class GoogleDriveImportService:
         return record
 
     async def scan_source(self, source_id: str, db: Session) -> dict[str, Any]:
-        folder_path = self.folder_for(source_id)
         if source_id == "google_drive":
-            return await self.scan_all(db)
+            return await self._scan_takeout(db)
+        folder_path = self.folder_for(source_id)
         if not folder_path or source_id not in SOURCE_FOLDER_NAMES:
             return {"source_id": source_id, "status": "unsupported", "files_discovered": 0}
         token = await self._access_token()
@@ -163,7 +161,7 @@ class GoogleDriveImportService:
 
     async def scan_all(self, db: Session) -> dict[str, Any]:
         totals = {"files_discovered": 0, "raw_rows": 0, "clean_rows": 0}
-        sources = ("garmin", "revolut", "natwest", "instagram", "snapchat", "youtube", "chrome")
+        sources = ("garmin", "revolut", "natwest", "instagram", "snapchat", "google_drive")
         for source_id in sources:
             result = await self.scan_source(source_id, db)
             totals["files_discovered"] += int(result.get("files_discovered", 0))
@@ -177,6 +175,43 @@ class GoogleDriveImportService:
             "raw_rows": totals["raw_rows"],
             "clean_rows": totals["clean_rows"],
             "rows_synced": totals["clean_rows"],
+        }
+
+    async def _scan_takeout(self, db: Session) -> dict[str, Any]:
+        folder_path = self.folder_for("google_drive")
+        token = await self._access_token()
+        folder_id = await self._source_folder_id("google_drive", token)
+        if not folder_id:
+            return {"source_id": "google_drive", "status": "folder-not-found", "folder_path": folder_path, "files_discovered": 0}
+
+        files = await self._list_files_recursive(folder_id, token)
+        raw_rows = 0
+        for item in files:
+            file_ref = self._file_ref("google_drive", folder_path, item)
+            import_record = self.record_discovered_file(file_ref, db)
+            try:
+                content = await self._download_file(item["id"], token)
+                import_record.downloaded_at = datetime.utcnow()
+                raw_rows += self._save_raw_content(import_record, "google_drive", item["name"], content, db)
+                import_record.status = "parsed"
+                import_record.parsed_at = datetime.utcnow()
+                import_record.parser_version = "drive-raw-v1"
+                import_record.error = None
+            except Exception as exc:  # noqa: BLE001
+                import_record.status = "failed"
+                import_record.error = str(exc)
+        db.commit()
+        from .source_cleaner import SourceCleanerService
+
+        clean_rows = SourceCleanerService().clean_source("google_drive", db)
+        return {
+            "source_id": "google_drive",
+            "status": "scanned",
+            "folder_path": folder_path,
+            "files_discovered": len(files),
+            "raw_rows": raw_rows,
+            "clean_rows": clean_rows,
+            "rows_synced": clean_rows,
         }
 
     def list_imports(self, db: Session, source_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:

@@ -38,7 +38,7 @@ function attemptStatusLabel(status: string) {
 }
 
 function shouldShowSourceError(source: DataSourcePayload) {
-  return !(['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(source.id) && source.available);
+  return !(['garmin', 'revolut', 'natwest', 'instagram', 'snapchat'].includes(source.id) && source.available);
 }
 
 interface DataSourceSetupSheetProps {
@@ -94,7 +94,7 @@ export function DataSourceSetupSheet({
   const statusLabel = useMemo(() => {
     const currentSource = source;
     if (!currentSource) return 'Setup required';
-    if (['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(currentSource.id) && currentSource.available) return 'Import folder set';
+    if (['garmin', 'revolut', 'natwest', 'instagram', 'snapchat'].includes(currentSource.id) && currentSource.available) return 'Import folder set';
     if (currentSource.id === 'owntracks' && currentSource.available && !currentSource.connected) return 'Waiting for phone';
     if (currentSource.syncBlocked) return 'Cooldown';
     if (currentSource.lastSyncStatus === 'failed') return 'Sync failed';
@@ -148,8 +148,6 @@ export function DataSourceSetupSheet({
         ];
       case 'instagram':
       case 'snapchat':
-      case 'youtube':
-      case 'chrome':
         return [
           'Put export files in the TherapistOS Google Drive folder.',
           'Therapist OS will use this folder for semi-automated imports.',

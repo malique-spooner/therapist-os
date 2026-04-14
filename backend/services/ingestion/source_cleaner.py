@@ -15,8 +15,6 @@ from ...models.life_data import SpotifyPlayEventReal
 from ...models.source_data import (
     ChromeHistoryEvent,
     ChromeBookmark,
-    ChromeDevice,
-    ChromeExtension,
     GarminBodyMetric,
     GarminDailyWellness,
     GarminFitnessMetric,
@@ -40,8 +38,6 @@ from ...models.source_data import (
     SpotifyPlayEvent,
     SpotifyTrack,
     SpotifyTrackArtist,
-    YoutubeChannel,
-    YoutubePlaylist,
     YoutubeSearchEvent,
     YoutubeSubscription,
     YoutubeWatchEvent,
@@ -51,7 +47,7 @@ from ...models.source_data import (
 class SourceCleanerService:
     def clean_all(self, db: Session) -> dict[str, int]:
         totals: dict[str, int] = {}
-        for source_id in ("garmin", "revolut", "natwest", "youtube", "chrome", "instagram", "snapchat"):
+        for source_id in ("garmin", "revolut", "natwest", "google_drive", "youtube", "chrome", "instagram", "snapchat"):
             totals[source_id] = self.clean_source(source_id, db)
         totals["spotify"] = self.clean_spotify(db)
         db.commit()
@@ -184,6 +180,8 @@ class SourceCleanerService:
             return self._clean_revolut(row.get("row", row), staged, db)
         if source_id == "natwest":
             return self._clean_natwest(row.get("row", row), staged, db)
+        if source_id == "google_drive":
+            return self._clean_google_drive(path, row, staged, db)
         if source_id == "youtube":
             return self._clean_youtube(path, row, staged, db)
         if source_id == "chrome":
@@ -192,6 +190,14 @@ class SourceCleanerService:
             return self._clean_instagram(path, row, staged, db)
         if source_id == "snapchat":
             return self._clean_snapchat(path, row, staged, db)
+        return 0
+
+    def _clean_google_drive(self, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
+        lower_path = path.lower()
+        if "watch-history" in lower_path or "search-history" in lower_path or "subscriptions" in lower_path:
+            return self._clean_youtube(path, row, staged, db)
+        if "chrome" in lower_path or "bookmark" in lower_path or "history.json" in lower_path:
+            return self._clean_chrome(path, row, staged, db)
         return 0
 
     def _clean_garmin(self, path: str, row: dict[str, Any], staged: RawImportRow, db: Session) -> int:
@@ -301,15 +307,6 @@ class SourceCleanerService:
                 record.channel_name = subtitles[0].get("name")
                 record.channel_url = subtitles[0].get("url")
             record.metadata_json = row
-            channel_id = row.get("channelId") or row.get("channel_id") or record.channel_url or record.channel_name
-            if channel_id:
-                channel = self._upsert(db, YoutubeChannel, self._hash("youtube-channel", channel_id))
-                channel.import_file_id = staged.import_id
-                channel.channel_id = str(channel_id)
-                channel.channel_url = record.channel_url
-                channel.channel_title = record.channel_name
-                channel.subscription_date = record.watched_at
-                channel.payload_json = row
             return 1
         if "search-history" in lower_path:
             record = self._upsert(db, YoutubeSearchEvent, staged.row_hash)
@@ -325,25 +322,6 @@ class SourceCleanerService:
             record.channel_url = row.get("Channel Url") or row.get("Channel URL")
             record.channel_title = row.get("Channel Title") or row.get("Title")
             record.metadata_json = row
-            channel = self._upsert(db, YoutubeChannel, self._hash("youtube-channel", record.channel_id or record.channel_url or record.channel_title))
-            channel.import_file_id = staged.import_id
-            channel.channel_id = record.channel_id
-            channel.channel_url = record.channel_url
-            channel.channel_title = record.channel_title
-            channel.subscription_date = self._dt(row.get("Subscribed At") or row.get("Subscription Date"))
-            channel.payload_json = row
-            return 1
-        if "playlist" in lower_path:
-            playlist_key = row.get("Playlist Id") or row.get("playlistId") or row.get("Playlist URL") or row.get("Playlist Title")
-            if not playlist_key:
-                return 0
-            playlist = self._upsert(db, YoutubePlaylist, self._hash("youtube-playlist", playlist_key))
-            playlist.import_file_id = staged.import_id
-            playlist.playlist_id = row.get("Playlist Id") or row.get("playlistId")
-            playlist.playlist_url = row.get("Playlist URL") or row.get("playlistUrl")
-            playlist.playlist_title = row.get("Playlist Title") or row.get("Title")
-            playlist.item_count = self._int(row.get("Video Count") or row.get("Item Count") or row.get("videos"))
-            playlist.payload_json = row
             return 1
         return 0
 
@@ -368,30 +346,6 @@ class SourceCleanerService:
             bookmark.title = row.get("title") or row.get("Title")
             bookmark.folder = row.get("folder") or row.get("Folder") or row.get("path")
             bookmark.metadata_json = row
-            return 1
-        if "extension" in lower_path:
-            extension_id = row.get("id") or row.get("extension_id") or row.get("name")
-            if not extension_id:
-                return 0
-            extension = self._upsert(db, ChromeExtension, self._hash("chrome-extension", extension_id))
-            extension.import_file_id = staged.import_id
-            extension.extension_id = str(extension_id)
-            extension.name = row.get("name") or row.get("Name")
-            extension.version = row.get("version") or row.get("Version")
-            extension.description = row.get("description") or row.get("Description")
-            extension.payload_json = row
-            return 1
-        if "device" in lower_path:
-            device_id = row.get("id") or row.get("device_id") or row.get("name")
-            if not device_id:
-                return 0
-            device = self._upsert(db, ChromeDevice, self._hash("chrome-device", device_id))
-            device.import_file_id = staged.import_id
-            device.device_id = str(device_id)
-            device.device_name = row.get("name") or row.get("Name")
-            device.device_type = row.get("type") or row.get("Type")
-            device.last_active_at = self._dt(row.get("last_active_at") or row.get("lastActiveAt") or row.get("last_seen"))
-            device.payload_json = row
             return 1
         return 0
 

@@ -1,18 +1,16 @@
 # Data Architecture
 
-Therapist OS currently uses one physical database, but it should behave like **two logical databases**:
+Therapist OS now runs a **single live dataset**.
 
-- `demo-only`
-- `real-only`
+The guiding rule is simple:
 
-The rule is:
+- all user-facing life data is stored in real tables only
+- raw imports remain separate as the traceable intake layer
+- app/runtime state stays in shared tables when it is not life history
 
-- user-facing life data must be separated by mode
-- shared infrastructure state can stay global only if it is not pretending to be life data
+## Core Tables
 
-## Split Tables
-
-These tables now participate in the demo/real split through `is_demo`:
+Canonical live tables include:
 
 - `health_data`
 - `finance_data`
@@ -33,29 +31,19 @@ These tables now participate in the demo/real split through `is_demo`:
 
 ## Shared Tables
 
-These stay global for now because they represent app/runtime state rather than demo life history:
+These remain global app state:
 
 - `data_source_connections`
 - `habits`
 - `app_open_prompt_states`
 
-Notes:
+## Import Flow
 
-- `habits` are treated as the canonical habit definitions shared by both datasets
-- data-source credentials are always real app configuration, not demo content
-
-## Page Mapping
-
-- Dashboard: aggregates split domain tables and must honor mode end to end
-- Health: `health_data`
-- Finance: `finance_data`, `monthly_budget`
-- Consumption: `music_data`
-- Location: `location_data`, `location_daily_summary`, `location_companion_logs`
-- Nutrition: `nutrition_log`
-- Relationships: `relationships`, `relationship_interactions`, `relationship_screenshot_imports`
-- Therapist: `ai_conversations`, `ai_messages`, `monthly_budget`, contextual reads from split domain/profile tables
-- Brain: derived overview using split tables plus shared source configuration
+1. Source files and API payloads land in raw import tables.
+2. Importers normalise and dedupe the incoming rows.
+3. Cleaners write the final data into the canonical live tables.
+4. Derived summaries are recomputed from those live tables.
 
 ## Invariant
 
-If a page is in `real-only`, it should never need frontend fallbacks to hide demo records. The backend query path should already be scoped correctly.
+The backend should read and write live tables directly. There is no demo fallback path left in the product.

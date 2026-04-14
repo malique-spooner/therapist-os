@@ -140,36 +140,6 @@ const DEFAULT_DATA_SOURCES: DataSourcePayload[] = [
     manualSyncAllowed: true,
   },
   {
-    id: 'youtube',
-    name: 'YouTube',
-    category: 'Semi-automated - Media export folder',
-    icon: '▶️',
-    connected: false,
-    available: false,
-    lastSync: null,
-    lastSyncStatus: null,
-    connectionHint: 'Save YouTube exports into Google Drive so Therapist OS can import watch history periodically.',
-    lastError: null,
-    syncBlocked: false,
-    syncGuardMessage: null,
-    manualSyncAllowed: true,
-  },
-  {
-    id: 'chrome',
-    name: 'Chrome',
-    category: 'Semi-automated - Browser export folder',
-    icon: '🌐',
-    connected: false,
-    available: false,
-    lastSync: null,
-    lastSyncStatus: null,
-    connectionHint: 'Save Chrome exports into Google Drive so Therapist OS can import browser history periodically.',
-    lastError: null,
-    syncBlocked: false,
-    syncGuardMessage: null,
-    manualSyncAllowed: true,
-  },
-  {
     id: 'habits',
     name: 'Habits',
     category: 'Manual - App entries',
@@ -221,7 +191,7 @@ const VISIBLE_DATA_SOURCE_IDS = new Set(DEFAULT_DATA_SOURCES.map((source) => sou
 const DATA_SOURCE_GROUPS = [
   { title: 'Live Connections', ids: ['owntracks', 'spotify', 'weather'] },
   { title: 'Import Hub', ids: ['google_drive'] },
-  { title: 'File Imports', ids: ['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'] },
+  { title: 'File Imports', ids: ['garmin', 'revolut', 'natwest', 'instagram', 'snapchat'] },
   { title: 'API Keys', ids: ['google_maps'] },
   { title: 'Manual', ids: ['habits'] },
 ];
@@ -261,7 +231,7 @@ function getSourceActionLabel(source: DataSourcePayload) {
 function getSourceStatusLabel(source: DataSourcePayload) {
   if (source.id === 'habits') return 'Built in';
   if (source.id === 'google_drive' && source.connectionState === 'authorization-required') return 'Needs sign-in';
-  if (['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(source.id) && source.available) return 'Import folder set';
+  if (['garmin', 'revolut', 'natwest', 'instagram', 'snapchat'].includes(source.id) && source.available) return 'Import folder set';
   if (source.id === 'owntracks' && source.available && !source.connected) return 'Waiting for phone';
   if (source.syncBlocked) return 'Cooldown';
   if (source.lastSyncStatus === 'failed') return 'Sync failed';
@@ -273,7 +243,7 @@ function getSourceStatusLabel(source: DataSourcePayload) {
 }
 
 function shouldShowSourceError(source: DataSourcePayload) {
-  return !(['garmin', 'revolut', 'natwest', 'instagram', 'snapchat', 'youtube', 'chrome'].includes(source.id) && source.available);
+  return !(['garmin', 'revolut', 'natwest', 'instagram', 'snapchat'].includes(source.id) && source.available);
 }
 
 function canOpenSource(source: DataSourcePayload) {

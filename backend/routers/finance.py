@@ -6,8 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models.life_data import FinanceDataDemo, FinanceDataReal
-from ..services.data_mode import dataset_model
+from ..models.life_data import FinanceDataReal
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/finance", tags=["finance"], dependencies=[Depends(verify_api_key)])
@@ -42,11 +41,10 @@ def _serialize_day(day: str, categories: dict[str, int], bank_breakdown: dict[st
 @router.get("")
 def get_finance(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
-    model = dataset_model(mode, FinanceDataReal, FinanceDataDemo)
     rows = db.scalars(
-        select(model)
-        .where(model.date.between(start, end))
-        .order_by(model.date)
+        select(FinanceDataReal)
+        .where(FinanceDataReal.date.between(start, end))
+        .order_by(FinanceDataReal.date)
     ).all()
     by_date: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     by_date_bank: dict[str, dict[str, dict[str, int]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
@@ -63,11 +61,10 @@ def get_finance(period: str = "this-week", mode: str | None = None, db: Session 
 
 @router.get("/today")
 def get_finance_today(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
-    model = dataset_model(mode, FinanceDataReal, FinanceDataDemo)
-    latest = db.scalar(select(model.date).order_by(model.date.desc()))
+    latest = db.scalar(select(FinanceDataReal.date).order_by(FinanceDataReal.date.desc()))
     if latest is None:
         raise HTTPException(status_code=404, detail="Finance data not available")
-    rows = db.scalars(select(model).where(model.date == latest)).all()
+    rows = db.scalars(select(FinanceDataReal).where(FinanceDataReal.date == latest)).all()
     categories: dict[str, int] = defaultdict(int)
     bank_breakdown: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for row in rows:

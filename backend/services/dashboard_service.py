@@ -8,20 +8,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models.life_data import (
-    FinanceDataDemo,
     FinanceDataReal,
-    HabitLogDemo,
     HabitLogReal,
-    HealthDataDemo,
     HealthDataReal,
-    LocationDailySummaryDemo,
     LocationDailySummaryReal,
-    MusicDataDemo,
     MusicDataReal,
-    WeatherDataDemo,
     WeatherDataReal,
 )
-from .data_mode import dataset_model, normalize_data_mode
 from .insights_service import InsightsService
 from .periods import date_window
 
@@ -32,48 +25,41 @@ class DashboardService:
 
     def _load_health(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        model = dataset_model(mode, HealthDataReal, HealthDataDemo)
-        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
+        return db.scalars(select(HealthDataReal).where(HealthDataReal.date.between(start, end)).order_by(HealthDataReal.date)).all()
 
     def _load_finance(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        model = dataset_model(mode, FinanceDataReal, FinanceDataDemo)
-        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
+        return db.scalars(select(FinanceDataReal).where(FinanceDataReal.date.between(start, end)).order_by(FinanceDataReal.date)).all()
 
     def _load_habits(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        model = dataset_model(mode, HabitLogReal, HabitLogDemo)
-        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
+        return db.scalars(select(HabitLogReal).where(HabitLogReal.date.between(start, end)).order_by(HabitLogReal.date)).all()
 
     def _load_weather(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        model = dataset_model(mode, WeatherDataReal, WeatherDataDemo)
-        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
+        return db.scalars(select(WeatherDataReal).where(WeatherDataReal.date.between(start, end)).order_by(WeatherDataReal.date)).all()
 
     def _load_music(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        model = dataset_model(mode, MusicDataReal, MusicDataDemo)
-        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
+        return db.scalars(select(MusicDataReal).where(MusicDataReal.date.between(start, end)).order_by(MusicDataReal.date)).all()
 
     def _load_location(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        model = dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
-        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
+        return db.scalars(select(LocationDailySummaryReal).where(LocationDailySummaryReal.date.between(start, end)).order_by(LocationDailySummaryReal.date)).all()
 
     def build_dashboard(self, db: Session, period: str, mode: str | None = None) -> dict:
-        normalized_mode = normalize_data_mode(mode)
-        health = self._load_health(db, period, normalized_mode)
-        finance = self._load_finance(db, period, normalized_mode)
-        habits = self._load_habits(db, period, normalized_mode)
-        weather = self._load_weather(db, period, normalized_mode)
-        music = self._load_music(db, period, normalized_mode)
-        location = self._load_location(db, period, normalized_mode)
+        health = self._load_health(db, period, mode)
+        finance = self._load_finance(db, period, mode)
+        habits = self._load_habits(db, period, mode)
+        weather = self._load_weather(db, period, mode)
+        music = self._load_music(db, period, mode)
+        location = self._load_location(db, period, mode)
 
         avg_steps = round(mean(item.steps or 0 for item in health)) if health else 0
         avg_sleep = round(mean(item.sleep_quality or 0 for item in health), 1) if health else 0
         spend_total = round(sum(item.amount_pence for item in finance) / 100)
 
-        prev_health = self._load_health(db, "last-week", normalized_mode)
+        prev_health = self._load_health(db, "last-week", mode)
         prev_steps = round(mean(item.steps or 0 for item in prev_health)) if prev_health else 0
         step_trend = round(((avg_steps - prev_steps) / prev_steps) * 100) if prev_steps else 0
         window_label = "today" if period == "today" else "selected window"
@@ -86,8 +72,8 @@ class DashboardService:
             spend_by_category[item.category] += round(item.amount_pence / 100)
 
         enough_data = bool(health or finance or habits or weather or music or location)
-        hero_headline = self.insights_service.generate_hero_headline(period, db, normalized_mode) if enough_data else "Not enough data yet to generate a reliable daily read."
-        cards = self.insights_service.generate_dashboard_insights(period, db, normalized_mode) if enough_data else []
+        hero_headline = self.insights_service.generate_hero_headline(period, db, mode) if enough_data else "Not enough data yet to generate a reliable daily read."
+        cards = self.insights_service.generate_dashboard_insights(period, db, mode) if enough_data else []
 
         health_tail = health[-14:] if len(health) >= 14 else health
         dates = [item.date.isoformat() for item in health_tail]
@@ -153,5 +139,5 @@ class DashboardService:
             ],
             "insights": cards,
             "windowLabel": window_label,
-            "status": "ready" if enough_data else ("demo" if normalized_mode == "demo-only" else "waiting-for-data"),
+            "status": "ready" if enough_data else "waiting-for-data",
         }

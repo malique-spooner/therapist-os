@@ -13,17 +13,13 @@ from ..core.logging import get_logger
 from ..database import get_db
 from ..middleware.auth import verify_api_key
 from ..models.life_data import (
-    AIConversationDemo,
     AIConversationReal,
-    AIMessageDemo,
     AIMessageReal,
-    MonthlyBudgetDemo,
     MonthlyBudgetReal,
 )
 from ..schemas.ai import AIResponseSchema, AIRuntimeOptionsSchema, ConversationSchema, ConversationCreateSchema, ConversationStartSchema, LiveSessionSchema, MessageRequestSchema, OpeningMessageSchema, ProviderSchema, TTSRequestSchema, TranscriptionSchema
 from ..config import settings
 from ..services.ai.context_builder import ContextBuilder
-from ..services.data_mode import dataset_model, demo_filter, normalize_data_mode
 from ..services.ai.providers import REAL_PROVIDERS, has_real_provider, provider_payloads, select_provider
 from ..services.data_sources import DataSourceService
 from ..services.whisper_service import WhisperService
@@ -53,7 +49,7 @@ def _conversation_models(mode: str | None = None):
     return AIConversationReal, AIMessageReal
 
 
-def _serialize_message(message: AIMessageReal | AIMessageDemo) -> dict:
+def _serialize_message(message: AIMessageReal) -> dict:
     return {
         "id": message.id,
         "role": "ai" if message.role == "assistant" else message.role,
@@ -64,7 +60,7 @@ def _serialize_message(message: AIMessageReal | AIMessageDemo) -> dict:
     }
 
 
-def _serialize_conversation(conversation: AIConversationReal | AIConversationDemo) -> dict:
+def _serialize_conversation(conversation: AIConversationReal) -> dict:
     ordered_messages = sorted(conversation.messages, key=lambda item: item.created_at)
     return {
         "id": conversation.id,
@@ -131,12 +127,10 @@ async def _mint_openai_client_secret(system_prompt: str) -> dict:
 
 
 def _current_budget(db: Session, mode: str | None = None):
-    normalized_mode = normalize_data_mode(mode)
-    budget_model = dataset_model(normalized_mode, MonthlyBudgetReal, MonthlyBudgetDemo)
     month = datetime.utcnow().date().replace(day=1)
-    budget = db.scalar(select(budget_model).where(budget_model.month == month))
+    budget = db.scalar(select(MonthlyBudgetReal).where(MonthlyBudgetReal.month == month))
     if not budget:
-        budget = budget_model(month=month)
+        budget = MonthlyBudgetReal(month=month)
         db.add(budget)
         db.commit()
         db.refresh(budget)
@@ -228,7 +222,7 @@ async def start_conversation(payload: ConversationCreateSchema | None = None, mo
 
 @router.put("/conversations/{conversation_id}/end")
 def end_conversation(conversation_id: str, db: Session = Depends(get_db)) -> dict:
-    conversation = db.get(AIConversationReal, conversation_id) or db.get(AIConversationDemo, conversation_id)
+    conversation = db.get(AIConversationReal, conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     conversation.ended_at = datetime.utcnow()

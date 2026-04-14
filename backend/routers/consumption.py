@@ -4,8 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models.life_data import MusicDataDemo, MusicDataReal
-from ..services.data_mode import dataset_model
+from ..models.life_data import MusicDataReal
 from ..services.data_sources import DataSourceService
 from ..services.ingestion.spotify import SpotifyIngestionService
 from ..services.periods import date_window
@@ -47,19 +46,17 @@ def _serialize_music(row) -> dict:
 @router.get("")
 def get_consumption(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
-    model = dataset_model(mode, MusicDataReal, MusicDataDemo)
     rows = db.scalars(
-        select(model)
-        .where(model.date.between(start, end))
-        .order_by(model.date)
+        select(MusicDataReal)
+        .where(MusicDataReal.date.between(start, end))
+        .order_by(MusicDataReal.date)
     ).all()
     return [_serialize_music(row) for row in rows]
 
 
 @router.get("/today")
 def get_consumption_today(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
-    model = dataset_model(mode, MusicDataReal, MusicDataDemo)
-    row = db.scalar(select(model).order_by(model.date.desc()))
+    row = db.scalar(select(MusicDataReal).order_by(MusicDataReal.date.desc()))
     if not row:
         raise HTTPException(status_code=404, detail="Consumption data not available")
     return _serialize_music(row)

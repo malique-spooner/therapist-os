@@ -4,8 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models.life_data import HealthDataDemo, HealthDataReal
-from ..services.data_mode import dataset_model
+from ..models.life_data import HealthDataReal
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/health", tags=["health"], dependencies=[Depends(verify_api_key)])
@@ -28,19 +27,17 @@ def _serialize(row) -> dict:
 @router.get("")
 def get_health(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
-    model = dataset_model(mode, HealthDataReal, HealthDataDemo)
     rows = db.scalars(
-        select(model)
-        .where(model.date.between(start, end))
-        .order_by(model.date)
+        select(HealthDataReal)
+        .where(HealthDataReal.date.between(start, end))
+        .order_by(HealthDataReal.date)
     ).all()
     return [_serialize(row) for row in rows]
 
 
 @router.get("/today")
 def get_health_today(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
-    model = dataset_model(mode, HealthDataReal, HealthDataDemo)
-    row = db.scalar(select(model).order_by(model.date.desc()))
+    row = db.scalar(select(HealthDataReal).order_by(HealthDataReal.date.desc()))
     if not row:
         raise HTTPException(status_code=404, detail="Health data not available")
     return _serialize(row)

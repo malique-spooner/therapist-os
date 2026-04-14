@@ -9,15 +9,10 @@ from ..config import settings
 from ..database import get_db
 from ..middleware.auth import verify_api_key
 from ..models.life_data import (
-    LocationCompanionLogDemo,
     LocationCompanionLogReal,
-    LocationDailySummaryDemo,
     LocationDailySummaryReal,
-    LocationDataDemo,
     LocationDataReal,
-    LocationEventDemo,
     LocationEventReal,
-    LocationPlaceMemoryDemo,
     LocationPlaceMemoryReal,
 )
 from ..models.source_data import (
@@ -35,7 +30,6 @@ from ..schemas.location import (
     LocationPlaceMergeSchema,
     LocationPlaceSplitSchema,
 )
-from ..services.data_mode import dataset_model
 from ..services.data_sources import DataSourceService
 from ..services.location_intelligence import LocationIntelligenceService
 from ..services.location_summary import LocationSummaryService
@@ -110,21 +104,19 @@ def get_location(period: str = "this-week", mode: str | None = None, db: Session
     start, end = date_window(period)
     start_dt = datetime(start.year, start.month, start.day)
     end_dt = datetime(end.year, end.month, end.day, 23, 59, 59)
-    point_model = dataset_model(mode, LocationDataReal, LocationDataDemo)
     rows = db.scalars(
-        select(point_model)
-        .where(point_model.timestamp.between(start_dt, end_dt))
-        .order_by(point_model.timestamp)
+        select(LocationDataReal)
+        .where(LocationDataReal.timestamp.between(start_dt, end_dt))
+        .order_by(LocationDataReal.timestamp)
     ).all()
     return [_serialize_point(row) for row in rows]
 
 
 @router.get("/today", dependencies=[Depends(verify_api_key)])
 def get_location_today(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
-    summary_model = dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
     row = db.scalar(
-        select(summary_model)
-        .order_by(summary_model.date.desc())
+        select(LocationDailySummaryReal)
+        .order_by(LocationDailySummaryReal.date.desc())
     )
     if not row:
         raise HTTPException(status_code=404, detail="Location data not available")
@@ -134,11 +126,10 @@ def get_location_today(mode: str | None = None, db: Session = Depends(get_db)) -
 @router.get("/summary", dependencies=[Depends(verify_api_key)])
 def get_location_summary(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
-    summary_model = dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
     rows = db.scalars(
-        select(summary_model)
-        .where(summary_model.date.between(start, end))
-        .order_by(summary_model.date)
+        select(LocationDailySummaryReal)
+        .where(LocationDailySummaryReal.date.between(start, end))
+        .order_by(LocationDailySummaryReal.date)
     ).all()
     return [_serialize_summary(row) for row in rows]
 
@@ -146,9 +137,8 @@ def get_location_summary(period: str = "this-week", mode: str | None = None, db:
 @router.get("/companions", dependencies=[Depends(verify_api_key)])
 def get_location_companions(date: str, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
     target_date = datetime.fromisoformat(date).date()
-    companion_model = dataset_model(mode, LocationCompanionLogReal, LocationCompanionLogDemo)
     row = db.scalar(
-        select(companion_model).where(companion_model.date == target_date)
+        select(LocationCompanionLogReal).where(LocationCompanionLogReal.date == target_date)
     )
     if not row:
       return {"date": target_date.isoformat(), "personIds": [], "contextLabel": None, "note": None}
@@ -158,10 +148,9 @@ def get_location_companions(date: str, mode: str | None = None, db: Session = De
 @router.put("/companions", dependencies=[Depends(verify_api_key)])
 def upsert_location_companions(date: str, payload: LocationCompanionUpdateSchema, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
     target_date = datetime.fromisoformat(date).date()
-    companion_model = dataset_model(mode or "real-only", LocationCompanionLogReal, LocationCompanionLogDemo)
-    row = db.scalar(select(companion_model).where(companion_model.date == target_date))
+    row = db.scalar(select(LocationCompanionLogReal).where(LocationCompanionLogReal.date == target_date))
     if not row:
-        row = companion_model(date=target_date)
+        row = LocationCompanionLogReal(date=target_date)
         db.add(row)
 
     row.person_ids = payload.personIds
@@ -174,8 +163,7 @@ def upsert_location_companions(date: str, payload: LocationCompanionUpdateSchema
 
 @router.get("/places", dependencies=[Depends(verify_api_key)])
 def get_location_places(mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
-    place_model = dataset_model(mode, LocationPlaceMemoryReal, LocationPlaceMemoryDemo)
-    rows = db.scalars(select(place_model).order_by(place_model.updated_at.desc())).all()
+    rows = db.scalars(select(LocationPlaceMemoryReal).order_by(LocationPlaceMemoryReal.updated_at.desc())).all()
     return [_serialize_place_memory(row) for row in rows]
 
 
@@ -256,11 +244,10 @@ async def owntracks_webhook(
 
     payload_type = payload.get("_type")
     if payload_type in {"transition", "waypoint", "region"}:
-        event_model = dataset_model("real-only", LocationEventReal, LocationEventDemo)
         waypoint_name = payload.get("wtst") or payload.get("name") or payload.get("desc") or payload.get("regions")
         waypoint_id = str(payload.get("tid") or payload.get("waypoint") or payload.get("id") or payload.get("region") or waypoint_name or "unknown")
         recorded_at = datetime.fromtimestamp(int(tst), tz=UTC).replace(tzinfo=None)
-        event = event_model(
+        event = LocationEventReal(
             timestamp=recorded_at,
             event_type=str(payload_type),
             trigger=payload.get("event") or payload.get("trigger") or payload.get("desc"),

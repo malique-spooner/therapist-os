@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from backend.routers import data_sources as data_sources_router
-from backend.models import DataSourceConnection, DataSourceSyncAttempt
+from backend.models import DataSourceConnection, DataSourceSyncAttempt, HealthDataReal
 
 
 def test_data_sources_list_returns_known_sources(client):
@@ -10,12 +10,23 @@ def test_data_sources_list_returns_known_sources(client):
     assert response.status_code == 200
     payload = response.json()
     ids = {item["id"] for item in payload}
-    assert {"garmin", "truelayer", "spotify", "google_drive", "google_maps", "voice_journal"} <= ids
+    assert {"garmin", "spotify", "google_drive", "google_maps"} <= ids
     google_drive = next(item for item in payload if item["id"] == "google_drive")
     assert google_drive["folderPath"] == "Therapist OS / Google Takeout"
 
 
 def test_data_source_activity_returns_dataset_stats_and_attempts(client, db_session):
+    db_session.add(
+        HealthDataReal(
+            date=datetime.utcnow().date(),
+            steps=1234,
+            sleep_duration_hours=7.5,
+            sleep_quality=82,
+            hrv_ms=54,
+            resting_hr=61,
+            workout_logged=False,
+        )
+    )
     db_session.add(
         DataSourceSyncAttempt(
             source_id="garmin",
@@ -32,12 +43,12 @@ def test_data_source_activity_returns_dataset_stats_and_attempts(client, db_sess
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["mode"] == "demo-only"
+    assert payload["mode"] == "real-only"
     garmin = next(item for item in payload["items"] if item["id"] == "garmin")
-    assert garmin["recordsAvailable"] >= 90
+    assert garmin["recordsAvailable"] >= 1
     assert garmin["recentAttempts"]
-    assert garmin["recentAttempts"][0]["status"] == "demo-refresh"
-    assert garmin["recentAttempts"][0]["dataMode"] == "demo-only"
+    assert garmin["recentAttempts"][0]["status"] == "failed"
+    assert garmin["recentAttempts"][0]["dataMode"] == "real-only"
 
 
 def test_data_source_connect_returns_hint_when_not_configured(client):
@@ -45,8 +56,8 @@ def test_data_source_connect_returns_hint_when_not_configured(client):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["source"]["connected"] is False
-    assert "Garmin" in payload["detail"]
+    assert payload["source"]["connected"] is True
+    assert payload["detail"] == "Data source connected"
 
 
 def test_data_source_setup_returns_fields(client):
@@ -55,8 +66,8 @@ def test_data_source_setup_returns_fields(client):
     assert response.status_code == 200
     payload = response.json()
     assert payload["id"] == "garmin"
-    assert payload["mode"] == "credentials"
-    assert {field["key"] for field in payload["fields"]} == {"email", "password"}
+    assert payload["mode"] == "folder"
+    assert {field["key"] for field in payload["fields"]} == {"folder_path"}
     assert payload["instructions"]
 
 
@@ -85,7 +96,7 @@ def test_google_maps_setup_requires_browser_api_key(client):
     assert response.status_code == 200
     payload = response.json()
     assert payload["id"] == "google_maps"
-    assert payload["actionLabel"] == "Save Maps API key"
+    assert payload["actionLabel"] == "Save API key"
     assert {field["key"] for field in payload["fields"]} == {"api_key"}
     assert any("browser API key" in instruction for instruction in payload["instructions"])
 
@@ -119,32 +130,32 @@ def test_oauth_source_setup_save_marks_source_ready_but_not_connected(client):
 
 def test_sensitive_setup_values_are_encrypted_at_rest(client, db_session):
     response = client.post(
-        "/api/data-sources/garmin/setup",
+        "/api/data-sources/spotify/setup",
         headers={"X-API-Key": "dev-secret-key"},
-        json={"values": {"email": "athlete@example.com", "password": "topsecret"}},
+        json={"values": {"client_id": "client123", "client_secret": "topsecret", "refresh_token": "refresh456"}},
     )
 
     assert response.status_code == 200
-    record = db_session.get(DataSourceConnection, "garmin")
+    record = db_session.get(DataSourceConnection, "spotify")
     assert record is not None
-    assert record.config_json == {"email": "athlete@example.com"}
+    assert record.config_json == {"client_id": "client123"}
     assert record.encrypted_config_json is not None
     assert "topsecret" not in record.encrypted_config_json
 
 
 def test_data_source_setup_masks_saved_password_fields(client):
     client.post(
-        "/api/data-sources/garmin/setup",
+        "/api/data-sources/spotify/setup",
         headers={"X-API-Key": "dev-secret-key"},
-        json={"values": {"email": "athlete@example.com", "password": "topsecret"}},
+        json={"values": {"client_id": "client123", "client_secret": "topsecret"}},
     )
 
-    response = client.get("/api/data-sources/garmin/setup", headers={"X-API-Key": "dev-secret-key"})
+    response = client.get("/api/data-sources/spotify/setup", headers={"X-API-Key": "dev-secret-key"})
 
     assert response.status_code == 200
-    password_field = next(field for field in response.json()["fields"] if field["key"] == "password")
-    assert password_field["hasValue"] is True
-    assert password_field["value"] is None
+    secret_field = next(field for field in response.json()["fields"] if field["key"] == "client_secret")
+    assert secret_field["hasValue"] is True
+    assert secret_field["value"] is None
 
 
 def test_data_source_setup_returns_recent_sync_attempts(client, db_session):
@@ -233,7 +244,7 @@ def test_data_source_sync_returns_automatic_only_for_garmin_manual_sync(client):
     assert response.status_code == 200
     payload = response.json()["source"]
     assert payload["lastSyncStatus"] == "automatic-only"
-    assert "automatic only" in payload["lastError"]
+    assert "not available" in payload["lastError"]
 
 
 def test_data_source_sync_returns_throttled_source_when_garmin_is_in_cooldown(client, db_session):

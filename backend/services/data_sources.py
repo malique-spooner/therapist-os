@@ -17,31 +17,20 @@ from ..config import settings
 from ..core.secrets import secret_box
 from ..models import DataSourceConnection, DataSourceSyncAttempt
 from ..models.life_data import (
-    FinanceDataDemo,
     FinanceDataReal,
-    HealthDataDemo,
     HealthDataReal,
-    LocationCompanionLogDemo,
     LocationCompanionLogReal,
-    LocationDailySummaryDemo,
     LocationDailySummaryReal,
-    LocationDataDemo,
     LocationDataReal,
-    LocationEventDemo,
     LocationEventReal,
-    LocationPlaceMemoryDemo,
     LocationPlaceMemoryReal,
-    MusicDataDemo,
     MusicDataReal,
-    SpotifyPlayEventDemo,
     SpotifyPlayEventReal,
-    RelationshipDemo,
-    RelationshipInteractionDemo,
     RelationshipInteractionReal,
     RelationshipReal,
-    WeatherDataDemo,
     WeatherDataReal,
 )
+from ..models.source_data import ChromeBookmark, ChromeHistoryEvent, YoutubeSearchEvent, YoutubeSubscription, YoutubeWatchEvent
 from .ingestion.garmin import GarminIngestionService
 from .ingestion.google_drive_importer import FILE_IMPORT_FOLDERS, THERAPIST_OS_DRIVE_FOLDER
 from .ingestion.spotify import SpotifyIngestionService
@@ -111,18 +100,18 @@ DEFAULT_SOURCES = {
         "name": "Google Drive",
         "category": "Import hub - OAuth",
         "icon": "🗂️",
-        "hint": "Set the Takeout folder path and save your Google OAuth credentials so Therapist OS can read export archives.",
-        "folder_path": "TherapistOS",
+        "hint": "Set the Takeout folder path and save your Google OAuth credentials so Therapist OS can read Google Takeout archives.",
+        "folder_path": FILE_IMPORT_FOLDERS["google_drive"],
         "setup": {
             "mode": "oauth-credentials",
             "title": "Connect Google Drive",
-            "description": "Save the Takeout folder and your Google app credentials, then continue to Google to grant Drive read access.",
+            "description": "Save the Google Takeout folder and your Google app credentials, then continue to Google to grant Drive read access.",
             "actionLabel": "Save Drive setup",
             "authActionLabel": "Continue with Google",
             "instructions": [
                 "Create a Google OAuth Web application and copy the Client ID and Client Secret here.",
                 "Add the callback URL shown below to your authorized redirect URIs exactly as written.",
-                "Therapist OS requests read-only Drive access so it can download new Google Takeout archives from your chosen folder.",
+                "Therapist OS requests read-only Drive access so it can download new Google Takeout archives from your chosen folder, then split Chrome and YouTube rows into their own canonical tables.",
             ],
             "fields": [
                 {"key": "folder_path", "label": "TherapistOS folder", "type": "text", "placeholder": THERAPIST_OS_DRIVE_FOLDER, "required": True},
@@ -150,20 +139,6 @@ DEFAULT_SOURCES = {
                 {"key": "api_key", "label": "Google Maps API key", "type": "password", "placeholder": "AIza...", "required": True},
             ],
         },
-    },
-    "youtube": {
-        "name": "YouTube",
-        "category": "Semi-automated - Media export folder",
-        "icon": "▶️",
-        "hint": "Save YouTube exports into Google Drive so Therapist OS can import watch history periodically.",
-        "folder_path": FILE_IMPORT_FOLDERS["youtube"],
-    },
-    "chrome": {
-        "name": "Chrome",
-        "category": "Semi-automated - Browser export folder",
-        "icon": "🌐",
-        "hint": "Save Chrome history exports into Google Drive so Therapist OS can import browser patterns periodically.",
-        "folder_path": FILE_IMPORT_FOLDERS["chrome"],
     },
     "instagram": {
         "name": "Instagram",
@@ -237,8 +212,6 @@ VISIBLE_SOURCE_IDS = (
     "natwest",
     "instagram",
     "snapchat",
-    "youtube",
-    "chrome",
     "weather",
     "google_maps",
 )
@@ -273,10 +246,6 @@ class DataSourceService:
             return "Continuous live updates when your phone sends pings"
         if source_id == "google_drive":
             return "Manual refresh when you import new archives"
-        if source_id == "youtube":
-            return "Periodic import from Google Drive export folder"
-        if source_id == "chrome":
-            return "Periodic import from Google Drive export folder"
         if source_id in {"instagram", "snapchat"}:
             return "Periodic import from Google Drive people export folder"
         if source_id == "voice_journal":
@@ -285,7 +254,7 @@ class DataSourceService:
 
     @staticmethod
     def _manual_sync_allowed(source_id: str) -> bool:
-        return source_id not in {"garmin", "owntracks", "google_maps", "revolut", "natwest", "instagram", "snapchat", "youtube", "chrome"}
+        return source_id not in {"garmin", "owntracks", "google_maps", "revolut", "natwest", "instagram", "snapchat"}
 
     def _config(self, record: DataSourceConnection | None) -> dict[str, str]:
         if not record:
@@ -331,8 +300,6 @@ class DataSourceService:
             "spotify": SpotifyIngestionService(self._config(spotify)).is_configured,
             "google_drive": bool(self._config(google_drive).get("folder_path") and self._config(google_drive).get("client_id") and self._config(google_drive).get("client_secret") and self._config(google_drive).get("refresh_token")),
             "google_maps": bool(self._config(google_maps).get("api_key") or settings.GOOGLE_MAPS_API_KEY),
-            "youtube": bool(DEFAULT_SOURCES["youtube"].get("folder_path")),
-            "chrome": bool(DEFAULT_SOURCES["chrome"].get("folder_path")),
             "revolut": bool(DEFAULT_SOURCES["revolut"].get("folder_path")),
             "natwest": bool(DEFAULT_SOURCES["natwest"].get("folder_path")),
             "instagram": bool(DEFAULT_SOURCES["instagram"].get("folder_path")),
@@ -347,7 +314,7 @@ class DataSourceService:
             return False
         if source_id == "owntracks":
             return last_sync_status == "success"
-        if source_id in {"garmin", "revolut", "natwest", "instagram", "snapchat", "youtube", "chrome"}:
+        if source_id in {"garmin", "revolut", "natwest", "instagram", "snapchat"}:
             return available
         if source_id in {"spotify", "google_drive"}:
             return bool(config.get("refresh_token"))
@@ -483,22 +450,30 @@ class DataSourceService:
     @staticmethod
     def _source_dataset_specs(source_id: str):
         if source_id == "garmin":
-            return [(HealthDataReal, HealthDataDemo, "date", "updated_at")]
+            return [(HealthDataReal, "date", "updated_at")]
         if source_id in {"revolut", "natwest"}:
-            return [(FinanceDataReal, FinanceDataDemo, "date", "created_at")]
+            return [(FinanceDataReal, "date", "created_at")]
         if source_id == "spotify":
-            return [(SpotifyPlayEventReal, SpotifyPlayEventDemo, "played_date", "played_at")]
+            return [(SpotifyPlayEventReal, "played_date", "played_at")]
+        if source_id == "google_drive":
+            return [
+                (YoutubeWatchEvent, "created_at", "updated_at"),
+                (YoutubeSearchEvent, "created_at", "updated_at"),
+                (YoutubeSubscription, "created_at", "updated_at"),
+                (ChromeHistoryEvent, "created_at", "updated_at"),
+                (ChromeBookmark, "created_at", "updated_at"),
+            ]
         if source_id == "youtube":
-            return [(MusicDataReal, MusicDataDemo, "date", "updated_at")]
+            return [(MusicDataReal, "date", "updated_at")]
         if source_id == "weather":
-            return [(WeatherDataReal, WeatherDataDemo, "date", "created_at")]
+            return [(WeatherDataReal, "date", "created_at")]
         if source_id == "owntracks":
             return [
-                (LocationDataReal, LocationDataDemo, "timestamp", "timestamp"),
-                (LocationDailySummaryReal, LocationDailySummaryDemo, "date", "updated_at"),
-                (LocationCompanionLogReal, LocationCompanionLogDemo, "date", "updated_at"),
-                (LocationPlaceMemoryReal, LocationPlaceMemoryDemo, "updated_at", "updated_at"),
-                (LocationEventReal, LocationEventDemo, "timestamp", "created_at"),
+                (LocationDataReal, "timestamp", "timestamp"),
+                (LocationDailySummaryReal, "date", "updated_at"),
+                (LocationCompanionLogReal, "date", "updated_at"),
+                (LocationPlaceMemoryReal, "updated_at", "updated_at"),
+                (LocationEventReal, "timestamp", "created_at"),
             ]
         if source_id == "voice_journal":
             return []
@@ -523,6 +498,8 @@ class DataSourceService:
                 or getattr(row, "top_tracks", None)
                 or getattr(row, "top_genres", None)
             )
+        if source_id == "google_drive":
+            return True
         if source_id != "youtube":
             return True
         provider_breakdown = getattr(row, "provider_breakdown", None) or {}
@@ -534,9 +511,8 @@ class DataSourceService:
         last_collected_at: datetime | None = None
         latest_data_date: str | None = None
 
-        for real_model, demo_model, date_attr_name, updated_attr_name in specs:
-            model = dataset_model(mode, real_model, demo_model)
-            rows = db.query(model).all()
+        for real_model, date_attr_name, updated_attr_name in specs:
+            rows = db.query(real_model).all()
             for row in rows:
                 if not self._row_matches_source(source_id, row):
                     continue
@@ -636,7 +612,7 @@ class DataSourceService:
             config = self._config(record)
             record.available = availability.get(source_id, False)
             record.connected = self._is_connected(source_id, config, record.available, record.last_sync_status)
-            if source_id in {"garmin", "revolut", "natwest", "instagram", "snapchat", "youtube", "chrome"} and record.connected:
+            if source_id in {"garmin", "revolut", "natwest", "instagram", "snapchat"} and record.connected:
                 record.last_error = None
             record.connection_hint = self._connection_hint(source_id, config, record.available, record.connected)
             payload.append(self.serialize(record, default["icon"]))
@@ -907,7 +883,7 @@ class DataSourceService:
         self._store_config(source_id, record, next_config)
         record.available = self._availability(db).get(source_id, False)
         record.connected = self._is_connected(source_id, next_config, record.available, record.last_sync_status)
-        if source_id in {"owntracks", "garmin", "revolut", "natwest", "instagram", "snapchat", "youtube", "chrome"}:
+        if source_id in {"owntracks", "garmin", "revolut", "natwest", "instagram", "snapchat"}:
             record.last_sync_status = None
         record.last_error = None
         record.connection_hint = self._connection_hint(source_id, next_config, record.available, record.connected)

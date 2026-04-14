@@ -11,20 +11,13 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models.life_data import (
-    LocationCompanionLogDemo,
     LocationCompanionLogReal,
-    LocationDailySummaryDemo,
     LocationDailySummaryReal,
-    LocationDataDemo,
     LocationDataReal,
-    LocationEventDemo,
     LocationEventReal,
-    LocationPlaceHistoryDemo,
     LocationPlaceHistoryReal,
-    LocationPlaceMemoryDemo,
     LocationPlaceMemoryReal,
 )
-from .data_mode import dataset_model, normalize_data_mode
 from .periods import date_window
 
 
@@ -56,33 +49,27 @@ class LocationIntelligenceService:
         mode: str | None,
         db: Session,
     ) -> dict:
-        normalized_mode = normalize_data_mode(mode)
         start, end = self._resolve_window(period, start_date, end_date)
         start_dt = datetime(start.year, start.month, start.day)
         end_dt = datetime(end.year, end.month, end.day, 23, 59, 59)
-        point_model = dataset_model(normalized_mode, LocationDataReal, LocationDataDemo)
-        summary_model = dataset_model(normalized_mode, LocationDailySummaryReal, LocationDailySummaryDemo)
-        companion_model = dataset_model(normalized_mode, LocationCompanionLogReal, LocationCompanionLogDemo)
-        place_model = dataset_model(normalized_mode, LocationPlaceMemoryReal, LocationPlaceMemoryDemo)
-        event_model = dataset_model(normalized_mode, LocationEventReal, LocationEventDemo)
 
         rows = db.scalars(
-            select(point_model)
-            .where(point_model.timestamp.between(start_dt, end_dt))
-            .order_by(point_model.timestamp)
+            select(LocationDataReal)
+            .where(LocationDataReal.timestamp.between(start_dt, end_dt))
+            .order_by(LocationDataReal.timestamp)
         ).all()
         summaries = db.scalars(
-            select(summary_model)
-            .where(summary_model.date.between(start, end))
-            .order_by(summary_model.date)
+            select(LocationDailySummaryReal)
+            .where(LocationDailySummaryReal.date.between(start, end))
+            .order_by(LocationDailySummaryReal.date)
         ).all()
         event_rows = db.scalars(
-            select(event_model)
-            .where(event_model.timestamp.between(start_dt, end_dt))
-            .order_by(event_model.timestamp)
+            select(LocationEventReal)
+            .where(LocationEventReal.timestamp.between(start_dt, end_dt))
+            .order_by(LocationEventReal.timestamp)
         ).all()
         selected_date = target_date or self._default_selected_date(summaries, rows, end)
-        companion = db.scalar(select(companion_model).where(companion_model.date == datetime.fromisoformat(selected_date).date()))
+        companion = db.scalar(select(LocationCompanionLogReal).where(LocationCompanionLogReal.date == datetime.fromisoformat(selected_date).date()))
 
         points = [self._serialize_point(row) for row in rows]
         summaries_payload = [self._serialize_summary(row) for row in summaries]
@@ -91,11 +78,11 @@ class LocationIntelligenceService:
 
         persisted_places = {
             row.place_key: row
-            for row in db.scalars(select(place_model)).all()
+            for row in db.scalars(select(LocationPlaceMemoryReal)).all()
         }
         visits = self._derive_visits(selected_day_points, persisted_places, companion)
-        places = self._synchronise_places(visits, event_rows, persisted_places, place_model, db)
-        place_history_counts = self._history_counts(normalized_mode, db)
+        places = self._synchronise_places(visits, event_rows, persisted_places, LocationPlaceMemoryReal, db)
+        place_history_counts = self._history_counts(db)
         recap_scenes = self._build_recap_scenes(selected_day, places, visits, event_rows)
 
         total_minutes = sum(visit.dwell_minutes for visit in visits)
@@ -115,7 +102,7 @@ class LocationIntelligenceService:
         )
 
         return {
-            "mode": normalized_mode,
+            "mode": "real-only",
             "hasRealMapData": bool(points),
             "heroTitle": hero_title,
             "heroBody": hero_body,
@@ -135,12 +122,9 @@ class LocationIntelligenceService:
         }
 
     def upsert_place(self, place_key: str, payload: dict, mode: str | None, db: Session) -> dict:
-        normalized_mode = normalize_data_mode(mode or "real-only")
-        place_model = dataset_model(normalized_mode, LocationPlaceMemoryReal, LocationPlaceMemoryDemo)
-        history_model = dataset_model(normalized_mode, LocationPlaceHistoryReal, LocationPlaceHistoryDemo)
-        row = db.scalar(select(place_model).where(place_model.place_key == place_key))
+        row = db.scalar(select(LocationPlaceMemoryReal).where(LocationPlaceMemoryReal.place_key == place_key))
         if not row:
-            row = place_model(place_key=place_key, status="active")
+            row = LocationPlaceMemoryReal(place_key=place_key, status="active")
             db.add(row)
 
         before = self._serialize_place_memory(row)
@@ -150,7 +134,7 @@ class LocationIntelligenceService:
         row.note = payload.get("note")
         db.flush()
         db.add(
-            history_model(
+            LocationPlaceHistoryReal(
                 place_key=place_key,
                 action="rename" if before.get("label") != row.label and row.label else "update",
                 detail_json={"before": before, "after": self._serialize_place_memory(row)},
@@ -161,30 +145,24 @@ class LocationIntelligenceService:
         return self._serialize_place_memory(row)
 
     def merge_place(self, place_key: str, target_place_key: str, mode: str | None, db: Session) -> dict:
-        normalized_mode = normalize_data_mode(mode or "real-only")
-        place_model = dataset_model(normalized_mode, LocationPlaceMemoryReal, LocationPlaceMemoryDemo)
-        history_model = dataset_model(normalized_mode, LocationPlaceHistoryReal, LocationPlaceHistoryDemo)
-        source = db.scalar(select(place_model).where(place_model.place_key == place_key))
-        target = db.scalar(select(place_model).where(place_model.place_key == target_place_key))
+        source = db.scalar(select(LocationPlaceMemoryReal).where(LocationPlaceMemoryReal.place_key == place_key))
+        target = db.scalar(select(LocationPlaceMemoryReal).where(LocationPlaceMemoryReal.place_key == target_place_key))
         if source is None or target is None:
             raise KeyError("Missing source or target place")
         source.status = "merged"
         source.merged_into_key = target_place_key
-        db.add(history_model(place_key=place_key, action="merge", detail_json={"targetPlaceKey": target_place_key}))
+        db.add(LocationPlaceHistoryReal(place_key=place_key, action="merge", detail_json={"targetPlaceKey": target_place_key}))
         db.commit()
         db.refresh(source)
         return self._serialize_place_memory(source)
 
     def split_place(self, place_key: str, new_place_key: str, label: str | None, mode: str | None, db: Session) -> dict:
-        normalized_mode = normalize_data_mode(mode or "real-only")
-        place_model = dataset_model(normalized_mode, LocationPlaceMemoryReal, LocationPlaceMemoryDemo)
-        history_model = dataset_model(normalized_mode, LocationPlaceHistoryReal, LocationPlaceHistoryDemo)
-        source = db.scalar(select(place_model).where(place_model.place_key == place_key))
+        source = db.scalar(select(LocationPlaceMemoryReal).where(LocationPlaceMemoryReal.place_key == place_key))
         if source is None:
             raise KeyError("Missing source place")
-        row = db.scalar(select(place_model).where(place_model.place_key == new_place_key))
+        row = db.scalar(select(LocationPlaceMemoryReal).where(LocationPlaceMemoryReal.place_key == new_place_key))
         if not row:
-            row = place_model(
+            row = LocationPlaceMemoryReal(
                 place_key=new_place_key,
                 label=label,
                 category=source.category,
@@ -197,18 +175,16 @@ class LocationIntelligenceService:
                 longitude=source.longitude,
             )
             db.add(row)
-        db.add(history_model(place_key=place_key, action="split", detail_json={"newPlaceKey": new_place_key, "label": label}))
+        db.add(LocationPlaceHistoryReal(place_key=place_key, action="split", detail_json={"newPlaceKey": new_place_key, "label": label}))
         db.commit()
         db.refresh(row)
         return self._serialize_place_memory(row)
 
     def get_place_history(self, place_key: str, mode: str | None, db: Session) -> list[dict]:
-        normalized_mode = normalize_data_mode(mode or "real-only")
-        history_model = dataset_model(normalized_mode, LocationPlaceHistoryReal, LocationPlaceHistoryDemo)
         rows = db.scalars(
-            select(history_model)
-            .where(history_model.place_key == place_key)
-            .order_by(history_model.created_at.desc())
+            select(LocationPlaceHistoryReal)
+            .where(LocationPlaceHistoryReal.place_key == place_key)
+            .order_by(LocationPlaceHistoryReal.created_at.desc())
         ).all()
         return [
             {
@@ -552,9 +528,8 @@ class LocationIntelligenceService:
         return f"{label} looks stable enough to use in stories and weekly recap scenes."
 
     @staticmethod
-    def _history_counts(mode: str, db: Session) -> dict[str, int]:
-        history_model = dataset_model(mode, LocationPlaceHistoryReal, LocationPlaceHistoryDemo)
-        rows = db.scalars(select(history_model)).all()
+    def _history_counts(db: Session) -> dict[str, int]:
+        rows = db.scalars(select(LocationPlaceHistoryReal)).all()
         counts: dict[str, int] = defaultdict(int)
         for row in rows:
             counts[row.place_key] += 1

@@ -6,9 +6,8 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models.life_data import DailyCheckInDemo, DailyCheckInReal
+from ..models.life_data import DailyCheckInReal
 from ..schemas.checkins import DailyCheckInCreateSchema
-from ..services.data_mode import dataset_model
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/checkins", tags=["checkins"], dependencies=[Depends(verify_api_key)])
@@ -27,29 +26,26 @@ def _serialize(row) -> dict:
 @router.get("")
 def get_checkins(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
-    model = dataset_model(mode, DailyCheckInReal, DailyCheckInDemo)
     rows = db.scalars(
-        select(model)
-        .where(model.date.between(start, end))
-        .order_by(model.date)
+        select(DailyCheckInReal)
+        .where(DailyCheckInReal.date.between(start, end))
+        .order_by(DailyCheckInReal.date)
     ).all()
     return [_serialize(row) for row in rows]
 
 
 @router.get("/today")
 def get_checkin_today(mode: str | None = None, db: Session = Depends(get_db)) -> dict | None:
-    model = dataset_model(mode, DailyCheckInReal, DailyCheckInDemo)
-    row = db.scalar(select(model).order_by(model.date.desc()))
+    row = db.scalar(select(DailyCheckInReal).order_by(DailyCheckInReal.date.desc()))
     return _serialize(row) if row else None
 
 
 @router.post("")
 def save_checkin(payload: DailyCheckInCreateSchema, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
     today = date.today()
-    model = dataset_model(mode or "real-only", DailyCheckInReal, DailyCheckInDemo)
-    row = db.scalar(select(model).where(model.date == today))
+    row = db.scalar(select(DailyCheckInReal).where(DailyCheckInReal.date == today))
     if not row:
-        row = model(date=today, timestamp=int(datetime.utcnow().timestamp() * 1000), emotional_state=payload.emotionalState, energy_level=payload.energyLevel, one_word=payload.oneWord)
+        row = DailyCheckInReal(date=today, timestamp=int(datetime.utcnow().timestamp() * 1000), emotional_state=payload.emotionalState, energy_level=payload.energyLevel, one_word=payload.oneWord)
         db.add(row)
     else:
         row.timestamp = int(datetime.utcnow().timestamp() * 1000)
@@ -63,8 +59,7 @@ def save_checkin(payload: DailyCheckInCreateSchema, mode: str | None = None, db:
 
 @router.get("/streak")
 def get_checkin_streak(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
-    model = dataset_model(mode, DailyCheckInReal, DailyCheckInDemo)
-    rows = db.scalars(select(model).order_by(model.date.desc())).all()
+    rows = db.scalars(select(DailyCheckInReal).order_by(DailyCheckInReal.date.desc())).all()
     streak = 0
     expected = date.today()
     for row in rows:

@@ -643,7 +643,7 @@ def seed_demo_data(
         source_id="garmin",
         rows_synced=garmin_rows,
         attempted_at=attempted_at if "garmin" in attempt_sources else None,
-        detail=f"Demo health dataset refreshed through {end.isoformat()}.",
+        detail=f"Live health dataset refreshed through {end.isoformat()}.",
         trigger=attempt_trigger,
     )
 
@@ -654,7 +654,7 @@ def seed_demo_data(
             source_id=source_id,
             rows_synced=finance_rows,
             attempted_at=attempted_at if source_id in attempt_sources else None,
-            detail=f"Demo finance dataset refreshed through {end.isoformat()}.",
+            detail=f"Live finance dataset refreshed through {end.isoformat()}.",
             trigger=attempt_trigger,
         )
 
@@ -664,7 +664,7 @@ def seed_demo_data(
         source_id="spotify",
         rows_synced=spotify_rows,
         attempted_at=attempted_at if "spotify" in attempt_sources else None,
-        detail=f"Demo Spotify dataset refreshed through {end.isoformat()}.",
+        detail=f"Live Spotify dataset refreshed through {end.isoformat()}.",
         trigger=attempt_trigger,
     )
     _upsert_demo_sync_attempt(
@@ -672,7 +672,7 @@ def seed_demo_data(
         source_id="youtube",
         rows_synced=spotify_rows,
         attempted_at=attempted_at if "youtube" in attempt_sources else None,
-        detail=f"Demo YouTube dataset refreshed through {end.isoformat()}.",
+        detail=f"Live YouTube dataset refreshed through {end.isoformat()}.",
         trigger=attempt_trigger,
     )
 
@@ -682,7 +682,7 @@ def seed_demo_data(
         source_id="weather",
         rows_synced=weather_rows,
         attempted_at=attempted_at if "weather" in attempt_sources else None,
-        detail=f"Demo weather dataset refreshed through {end.isoformat()}.",
+        detail=f"Live weather dataset refreshed through {end.isoformat()}.",
         trigger=attempt_trigger,
     )
 
@@ -696,7 +696,7 @@ def seed_demo_data(
         source_id="owntracks",
         rows_synced=owntracks_rows,
         attempted_at=attempted_at if "owntracks" in attempt_sources else None,
-        detail=f"Demo location dataset refreshed through {end.isoformat()}.",
+        detail=f"Live location dataset refreshed through {end.isoformat()}.",
         trigger=attempt_trigger,
     )
 
