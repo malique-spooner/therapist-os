@@ -47,15 +47,6 @@ def sync_spotify_job() -> None:
     asyncio.run(_sync_spotify_job())
 
 
-async def _sync_garmin_job() -> None:
-    with SessionLocal() as db:
-        await DataSourceService().sync("garmin", db, trigger="background")
-
-
-def sync_garmin_job() -> None:
-    asyncio.run(_sync_garmin_job())
-
-
 async def _sync_google_drive_job() -> None:
     with SessionLocal() as db:
         service = DataSourceService()
@@ -112,7 +103,6 @@ def profile_refresh_job() -> None:
 def main() -> None:
     scheduler = BlockingScheduler(timezone="Europe/London")
     scheduler.add_job(sync_spotify_job, "interval", minutes=settings.SPOTIFY_SYNC_INTERVAL_MINUTES)
-    scheduler.add_job(sync_garmin_job, "cron", hour=settings.GARMIN_SYNC_HOUR, minute=settings.GARMIN_SYNC_MINUTE)
     scheduler.add_job(sync_google_drive_job, "interval", hours=2, minutes=15)
     scheduler.add_job(sync_weather_job, "cron", hour=6, minute=0)
     scheduler.add_job(sync_weather_job, "cron", hour=20, minute=0)

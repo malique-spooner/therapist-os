@@ -105,7 +105,7 @@ def test_data_source_setup_save_marks_source_connected(client):
     response = client.post(
         "/api/data-sources/garmin/setup",
         headers={"X-API-Key": "dev-secret-key"},
-        json={"values": {"email": "athlete@example.com", "password": "topsecret"}},
+        json={"values": {"folder_path": "TherapistOS/Garmin"}},
     )
 
     assert response.status_code == 200
@@ -247,7 +247,7 @@ def test_data_source_sync_returns_automatic_only_for_garmin_manual_sync(client):
     assert "not available" in payload["lastError"]
 
 
-def test_data_source_sync_returns_throttled_source_when_garmin_is_in_cooldown(client, db_session):
+def test_data_source_sync_ignores_legacy_garmin_cooldown(client, db_session):
     service = data_sources_router.service
     record = service._record("garmin", db_session)
     record.available = True
@@ -261,8 +261,8 @@ def test_data_source_sync_returns_throttled_source_when_garmin_is_in_cooldown(cl
 
     assert response.status_code == 200
     payload = response.json()["source"]
-    assert payload["lastSyncStatus"] == "throttled"
-    assert "cooldown" in payload["lastError"]
+    assert payload["lastSyncStatus"] == "automatic-only"
+    assert "not available" in payload["lastError"]
 
 
 def test_data_source_serializes_relative_sync_time(db_session):

@@ -32,7 +32,7 @@ describe('SettingsPage data sources', () => {
         return Promise.resolve({
           ok: true,
           json: async () => ([
-            { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: false, available: false, connectionState: 'setup-required', lastSync: null, lastSyncStatus: null, connectionHint: 'Add GARMIN_EMAIL and GARMIN_PASSWORD on the backend to enable sync.', lastError: null },
+            { id: 'garmin', name: 'Garmin Connect', category: 'Body - Steps, Sleep, HRV, Workouts', icon: '⌚', connected: false, available: false, connectionState: 'setup-required', lastSync: null, lastSyncStatus: null, connectionHint: 'Put Garmin exports into the TherapistOS Google Drive folder to enable sync.', lastError: null },
           ]),
         } as Response);
       }
@@ -43,16 +43,15 @@ describe('SettingsPage data sources', () => {
           json: async () => ({
             id: 'garmin',
             name: 'Garmin Connect',
-            mode: 'credentials',
-            title: 'Connect Garmin Connect',
-            description: 'Save your Garmin login so Therapist OS can sync steps, sleep, HRV, and workouts.',
+            mode: 'folder',
+            title: 'Connect Garmin exports',
+            description: 'Save the Garmin export folder so Therapist OS can sync steps, sleep, HRV, and workouts.',
             instructions: [],
-            actionLabel: 'Save Garmin login',
+            actionLabel: 'Save Garmin folder',
             connected: false,
             available: false,
             fields: [
-              { key: 'email', label: 'Garmin email', type: 'email', required: true, placeholder: 'you@example.com', hasValue: false, value: null },
-              { key: 'password', label: 'Garmin password', type: 'password', required: true, placeholder: 'Password', hasValue: false, value: null },
+              { key: 'folder_path', label: 'Garmin export folder', type: 'text', required: true, placeholder: 'TherapistOS/Garmin', hasValue: false, value: null },
             ],
             webhookUrl: null,
             callbackUrl: null,
@@ -81,16 +80,15 @@ describe('SettingsPage data sources', () => {
           json: async () => ({
             id: 'garmin',
             name: 'Garmin Connect',
-            mode: 'credentials',
-            title: 'Connect Garmin Connect',
-            description: 'Save your Garmin login so Therapist OS can sync steps, sleep, HRV, and workouts.',
+            mode: 'folder',
+            title: 'Connect Garmin exports',
+            description: 'Save the Garmin export folder so Therapist OS can sync steps, sleep, HRV, and workouts.',
             instructions: [],
-            actionLabel: 'Save Garmin login',
+            actionLabel: 'Save Garmin folder',
             connected: true,
             available: true,
             fields: [
-              { key: 'email', label: 'Garmin email', type: 'email', required: true, placeholder: 'you@example.com', hasValue: true, value: 'athlete@example.com' },
-              { key: 'password', label: 'Garmin password', type: 'password', required: true, placeholder: 'Password', hasValue: true, value: null },
+              { key: 'folder_path', label: 'Garmin export folder', type: 'text', required: true, placeholder: 'TherapistOS/Garmin', hasValue: true, value: 'TherapistOS/Garmin' },
             ],
             webhookUrl: null,
             callbackUrl: null,
@@ -116,7 +114,6 @@ describe('SettingsPage data sources', () => {
     render(<SettingsPage onBack={() => {}} onOpenBrain={onOpenBrain} />);
 
     expect(await screen.findByText('Garmin Connect')).toBeInTheDocument();
-    expect(screen.getByText(/GARMIN_EMAIL/i)).toBeInTheDocument();
     expect(screen.getByText('Google Drive')).toBeInTheDocument();
     expect(screen.getByText('Google Maps API')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Brain' })).toBeInTheDocument();
@@ -124,10 +121,10 @@ describe('SettingsPage data sources', () => {
     expect(screen.getByText('Therapist Voice')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Garmin Connect' }));
-    expect(await screen.findByText('Connect Garmin Connect')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Garmin email *'), { target: { value: 'athlete@example.com' } });
-    fireEvent.change(screen.getByLabelText('Garmin password *'), { target: { value: 'topsecret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Garmin login' }));
+    expect(await screen.findByText('Connect Garmin exports')).toBeInTheDocument();
+    expect(screen.getByLabelText('Garmin export folder *')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Garmin export folder *'), { target: { value: 'TherapistOS/Garmin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Garmin folder' }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Manage Garmin Connect' })).toBeInTheDocument());
 

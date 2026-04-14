@@ -621,7 +621,7 @@ def seed_demo_data(
                 category="Body - Steps, Sleep, HRV, Workouts",
                 connected=False,
                 available=False,
-                connection_hint="Add GARMIN_EMAIL and GARMIN_PASSWORD on the backend to enable sync.",
+                connection_hint="Put Garmin exports into the TherapistOS Google Drive folder to enable sync.",
             )
         )
     for source_id, display_name in (("revolut", "Revolut"), ("natwest", "NatWest")):

@@ -31,7 +31,6 @@ from ..models.life_data import (
     WeatherDataReal,
 )
 from ..models.source_data import ChromeBookmark, ChromeHistoryEvent, YoutubeSearchEvent, YoutubeSubscription, YoutubeWatchEvent
-from .ingestion.garmin import GarminIngestionService
 from .ingestion.google_drive_importer import FILE_IMPORT_FOLDERS, THERAPIST_OS_DRIVE_FOLDER
 from .ingestion.spotify import SpotifyIngestionService
 from .data_mode import dataset_model, normalize_data_mode
@@ -236,10 +235,7 @@ class DataSourceService:
         if source_id == "weather":
             return "Twice daily in the background, plus manual sync"
         if source_id == "garmin":
-            return (
-                f"Daily in the background at {settings.GARMIN_SYNC_HOUR:02d}:{settings.GARMIN_SYNC_MINUTE:02d}, "
-                f"with at least {settings.GARMIN_MIN_SYNC_INTERVAL_MINUTES // 60:g} hours between attempts"
-            )
+            return "Periodic import from the Google Drive Garmin export folder"
         if source_id in {"revolut", "natwest"}:
             return "Periodic import from Google Drive finance export folder"
         if source_id == "owntracks":
@@ -555,40 +551,9 @@ class DataSourceService:
             db.flush()
 
     def sync_guard_message(self, source_id: str, db: Session) -> str | None:
-        if source_id != "garmin":
-            return None
-
-        record = self._record(source_id, db)
-        return self._sync_guard_message_for_record(record)
+        return None
 
     def _sync_guard_message_for_record(self, record: DataSourceConnection) -> str | None:
-        if record.source_id != "garmin":
-            return None
-        now = datetime.utcnow()
-
-        retry_after_raw = (record.config_json or {}).get("garmin_retry_after")
-        if retry_after_raw:
-            try:
-                retry_after_dt = datetime.fromisoformat(str(retry_after_raw))
-            except ValueError:
-                retry_after_dt = None
-            if retry_after_dt:
-                remaining_minutes = max(0, int(((retry_after_dt - now).total_seconds() + 59) // 60))
-                if remaining_minutes > 0:
-                    return (
-                        f"Garmin sync is in cooldown after a rate-limit response. "
-                        f"Wait about {remaining_minutes} more minute{'s' if remaining_minutes != 1 else ''} before trying again."
-                    )
-
-        if record.last_sync_at:
-            retry_after = record.last_sync_at.timestamp() + (settings.GARMIN_MIN_SYNC_INTERVAL_MINUTES * 60)
-            remaining_minutes = max(0, int((retry_after - now.timestamp() + 59) // 60))
-            if remaining_minutes > 0:
-                return (
-                    f"Garmin sync is limited to once every {settings.GARMIN_MIN_SYNC_INTERVAL_MINUTES} minutes. "
-                    f"Wait about {remaining_minutes} more minute{'s' if remaining_minutes != 1 else ''} before syncing again."
-                )
-
         return None
 
     @staticmethod
@@ -716,7 +681,6 @@ class DataSourceService:
             record.last_sync_status = "success"
             record.last_error = None
             record.connection_hint = None
-            self._with_runtime_state(record, garmin_retry_after=None)
             if source_id == "spotify" and isinstance(result, dict):
                 cursor_ms = result.get("cursor_ms")
                 self._with_runtime_state(record, spotify_recent_after_ms=str(cursor_ms) if cursor_ms else None)
@@ -733,17 +697,12 @@ class DataSourceService:
             record.last_sync_status = "failed"
             record.last_error = str(exc)
             record.connection_hint = DEFAULT_SOURCES[source_id]["hint"]
-            cooldown_until = None
-            if source_id == "garmin" and ("429" in record.last_error or "Too Many Requests" in record.last_error):
-                cooldown_until = datetime.utcnow() + timedelta(minutes=settings.GARMIN_RATE_LIMIT_BACKOFF_MINUTES)
-                self._with_runtime_state(record, garmin_retry_after=cooldown_until.isoformat())
             self._append_sync_attempt(
                 source_id,
                 "failed",
                 db,
                 detail=record.last_error,
                 trigger=trigger,
-                cooldown_until=cooldown_until,
                 data_mode="real-only",
                 rows_synced=0,
             )
@@ -772,12 +731,7 @@ class DataSourceService:
         if runtime_updates:
             self._with_runtime_state(record, **runtime_updates)
         if success:
-            self._with_runtime_state(record, garmin_retry_after=None)
             self._append_sync_attempt(source_id, "success", db, detail=None, data_mode="real-only", rows_synced=rows_synced)
-        elif source_id == "garmin" and error and ("429" in error or "Too Many Requests" in error):
-            retry_after = datetime.utcnow() + timedelta(minutes=settings.GARMIN_RATE_LIMIT_BACKOFF_MINUTES)
-            self._with_runtime_state(record, garmin_retry_after=retry_after.isoformat())
-            self._append_sync_attempt(source_id, "failed", db, detail=error, cooldown_until=retry_after, data_mode="real-only", rows_synced=0)
         elif not success:
             self._append_sync_attempt(source_id, "failed", db, detail=error, data_mode="real-only", rows_synced=0)
         db.commit()
@@ -785,7 +739,13 @@ class DataSourceService:
     def _sync_action(self, source_id: str, record: DataSourceConnection) -> Callable[[Session], object] | None:
         config = self._config(record)
         if source_id == "garmin":
-            return GarminIngestionService(config).sync_last_7_days
+            from .ingestion.google_drive_importer import GoogleDriveImportService
+
+            async def _sync_garmin(db: Session) -> object:
+                drive_config = self.get_runtime_config("google_drive", db)
+                return await GoogleDriveImportService(drive_config).scan_source("garmin", db)
+
+            return _sync_garmin
         if source_id == "spotify":
             return SpotifyIngestionService(config).sync_recent_listening
         if source_id == "weather":

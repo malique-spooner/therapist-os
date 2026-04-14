@@ -161,7 +161,7 @@ class GoogleDriveImportService:
 
     async def scan_all(self, db: Session) -> dict[str, Any]:
         totals = {"files_discovered": 0, "raw_rows": 0, "clean_rows": 0}
-        sources = ("garmin", "revolut", "natwest", "instagram", "snapchat", "google_drive")
+        sources = ("revolut", "natwest", "instagram", "snapchat", "google_drive")
         for source_id in sources:
             result = await self.scan_source(source_id, db)
             totals["files_discovered"] += int(result.get("files_discovered", 0))
