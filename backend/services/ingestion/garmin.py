@@ -41,15 +41,15 @@ class GarminIngestionService:
                 self._client = client
             except AssertionError as exc:
                 raise RuntimeError(
-                    "Garmin login succeeded partway but no profile was returned. This usually means Garmin changed the login flow, the credentials are wrong, or the account needs extra verification in Garmin Connect."
+                    "Garmin sync succeeded partway but no profile was returned. This usually means the underlying source changed, the export is incomplete, or the account needs extra verification."
                 ) from exc
             except Exception as exc:
                 message = str(exc)
                 if "429" in message or "Too Many Requests" in message:
                     raise RuntimeError(
-                        "Garmin is rate-limiting login attempts right now (429 Too Many Requests). Wait a bit, sign into Garmin Connect in the browser if needed, then try syncing again."
+                        "Garmin is rate-limiting sync attempts right now (429 Too Many Requests). Wait a bit, then try syncing again."
                     ) from exc
-                raise RuntimeError(f"Garmin sync failed during login: {message}") from exc
+                raise RuntimeError(f"Garmin sync failed: {message}") from exc
         return self._client
 
     @staticmethod

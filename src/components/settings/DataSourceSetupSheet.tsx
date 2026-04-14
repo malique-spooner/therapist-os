@@ -113,7 +113,7 @@ export function DataSourceSetupSheet({
         return [
           'Save the TherapistOS Drive folder plus Google OAuth client ID and secret.',
           'Tap Continue with Google.',
-          'Approve Drive read-only access so imports can read Garmin, finance, people, YouTube, and Chrome exports.',
+          'Approve Drive read-only access so imports can read Garmin, finance, people, and other Takeout exports.',
         ];
       case 'google_maps':
         return [

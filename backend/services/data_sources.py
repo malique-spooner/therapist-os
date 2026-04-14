@@ -110,7 +110,7 @@ DEFAULT_SOURCES = {
             "instructions": [
                 "Create a Google OAuth Web application and copy the Client ID and Client Secret here.",
                 "Add the callback URL shown below to your authorized redirect URIs exactly as written.",
-                "Therapist OS requests read-only Drive access so it can download new Google Takeout archives from your chosen folder, then split Chrome and YouTube rows into their own canonical tables.",
+                "Therapist OS requests read-only Drive access so it can download new Google Takeout archives from your chosen folder, then split the rows into their canonical tables.",
             ],
             "fields": [
                 {"key": "folder_path", "label": "TherapistOS folder", "type": "text", "placeholder": THERAPIST_OS_DRIVE_FOLDER, "required": True},
