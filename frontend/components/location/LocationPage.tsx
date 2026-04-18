@@ -23,6 +23,8 @@ import { useApiQuery } from '@/hooks/useApiQuery';
 import { useRelationshipsStore } from '@/state/relationships';
 import { useSettingsStore } from '@/state/settings';
 import { GoogleMapCanvas } from './GoogleMapCanvas';
+import { LocationLiveStatusCard } from './LocationLiveStatusCard';
+import { LocationTimeSplitDonut } from './LocationTimeSplitDonut';
 
 interface LocationPageProps {
   onBack: () => void;
@@ -182,6 +184,7 @@ export function LocationPage({ onBack, onSettings, onTalkAboutThis }: LocationPa
     },
     [dataMode, intelligenceData, range.endDate],
   );
+  const lastPointTimestamp = experience.points[experience.points.length - 1]?.timestamp ?? null;
 
   const selectedVisit = experience.visits.find((visit) => visit.id === selectedVisitId) ?? experience.visits[0] ?? null;
   const selectedPlace =
@@ -309,37 +312,49 @@ export function LocationPage({ onBack, onSettings, onTalkAboutThis }: LocationPa
 
         <div className="pt-2">
           <motion.div
-            className="relative overflow-hidden"
-            style={{
-              backgroundColor: '#08111f',
-            }}
+            className="px-4"
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
           >
-            <div className="relative h-[70vh] min-h-[520px]">
-              <GoogleMapCanvas
-                apiKey={googleMapsApiKey}
-                points={experience.selectedDayPoints.length ? experience.selectedDayPoints : experience.points.slice(-90)}
-                places={experience.places}
-                highlightedPlaceKey={selectedPlace?.key ?? null}
-                activeScene={recapPlaying ? activeScene : null}
-                onPlaceSelect={(placeKey) => {
-                  setSelectedPlaceKey(placeKey);
-                  setDetailMode('place');
-                  setDetailOpen(true);
-                }}
-                className="rounded-none border-0"
-              />
+            <div className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
+              <div className="relative min-h-[520px] overflow-hidden rounded-[32px]" style={{ backgroundColor: '#08111f' }}>
+                <GoogleMapCanvas
+                  apiKey={googleMapsApiKey}
+                  points={experience.selectedDayPoints.length ? experience.selectedDayPoints : experience.points.slice(-90)}
+                  places={experience.places}
+                  highlightedPlaceKey={selectedPlace?.key ?? null}
+                  activeScene={recapPlaying ? activeScene : null}
+                  onPlaceSelect={(placeKey) => {
+                    setSelectedPlaceKey(placeKey);
+                    setDetailMode('place');
+                    setDetailOpen(true);
+                  }}
+                  className="rounded-none border-0"
+                />
 
-              <button
-                type="button"
-                onClick={() => selectedPlace && setDetailOpen(true)}
-                className="absolute bottom-4 left-4 rounded-2xl px-3 py-2 text-xs font-semibold"
-                style={{ backgroundColor: 'rgba(8,17,31,0.72)', color: '#fff', backdropFilter: 'blur(12px)' }}
-              >
-                {recapPlaying && activeScene ? activeScene.title : 'Tap a place for details'}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => selectedPlace && setDetailOpen(true)}
+                  className="absolute bottom-4 left-4 rounded-2xl px-3 py-2 text-xs font-semibold"
+                  style={{ backgroundColor: 'rgba(8,17,31,0.72)', color: '#fff', backdropFilter: 'blur(12px)' }}
+                >
+                  {recapPlaying && activeScene ? activeScene.title : 'Tap a place for details'}
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <LocationLiveStatusCard
+                  heroTitle={experience.heroTitle}
+                  heroBody={experience.heroBody}
+                  lastPointTimestamp={lastPointTimestamp}
+                  pointCount={experience.points.length}
+                  visitCount={experience.visits.length}
+                  placeCount={experience.places.length}
+                  rangeStats={experience.rangeStats}
+                />
+                <LocationTimeSplitDonut visits={experience.visits} />
+              </div>
             </div>
 
             {!googleMapsApiKey && (
