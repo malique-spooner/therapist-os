@@ -1,14 +1,14 @@
 services:
-  api:
+  backend:
     volumes:
-      - ./backend:/app/backend
+      - ./backend:/app
 
   scheduler:
     volumes:
-      - ./backend:/app/backend
+      - ./backend:/app
 
   backend-tests:
     volumes:
-      - ./backend:/app/backend
-      - ./tests:/app/tests
-      - ./pytest.ini:/app/pytest.ini:ro
+      - ./backend:/app
+      - ./backend/tests:/app/tests
+      - ./backend/pytest.ini:/app/pytest.ini:ro

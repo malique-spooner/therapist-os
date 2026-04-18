@@ -10,6 +10,13 @@ The project now has:
 - backend ingestion and sync paths for multiple life domains
 - a Brain system UI that maps how insights are meant to be generated over time
 
+Folder map:
+- `frontend` = website
+- `backend` = backend API and database
+- `deployment` = nginx, certbot, and VPS files
+- `docs` = guides and plans
+- `tools` = scripts and helpers
+
 ## What The App Does
 
 Therapist OS tracks and connects:
@@ -135,7 +142,7 @@ If port `3000` is already in use, Next may move to another port such as `3001`.
 The production compose stack now expects:
 
 - `frontend` for the Next.js app
-- `api` for FastAPI
+- `backend` for FastAPI
 - `scheduler` for background jobs
 - `postgres` for storage
 - `nginx` as the public entry point

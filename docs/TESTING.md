@@ -26,7 +26,7 @@ Current frontend tests cover things like:
 
 Frontend tests live in:
 
-- `tests/frontend`
+- `frontend/tests/unit`
 
 ## Backend Tests
 
@@ -38,7 +38,7 @@ docker compose run --rm backend-tests
 
 Backend tests live in:
 
-- `tests/backend`
+- `backend/tests/api`
 
 They cover:
 - router behavior
@@ -103,7 +103,7 @@ Notes:
 - if you want to target a different running frontend, set `PLAYWRIGHT_BASE_URL`
 - the backend should already be available on `127.0.0.1:8000`
 - the suite stubs daily check-in API calls so screenshot runs are not blocked by the modal
-- snapshots are stored under `tests/e2e/*-snapshots`
+- snapshots are stored under `frontend/tests/e2e/*-snapshots`
 - runtime artifacts go to `playwright-report` and `test-results`, which are gitignored
 
 ## Recommended Release Check

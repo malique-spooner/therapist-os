@@ -17,17 +17,17 @@
 
 ## Frontend Structure
 
-- `src/app`
+- `frontend/app`
   Next.js entry and global styling
-- `src/components`
+- `frontend/components`
   product components by feature
-- `src/store`
+- `frontend/store`
   client state
-- `src/lib`
+- `frontend/lib`
   frontend utilities, API client, brain blueprint
-- `src/hooks`
+- `frontend/hooks`
   reusable hooks
-- `src/data`
+- `frontend/data`
   seeded or helper data still used by some surfaces
 
 ## Backend Structure
@@ -40,7 +40,7 @@
   FastAPI endpoints
 - `backend/services`
   backend logic, ingestion, summaries, AI helpers
-- `backend/alembic`
+- `backend/migrations`
   migrations
 - `backend/middleware`
   auth and request context
@@ -64,9 +64,9 @@ Frontend feature folders include:
 
 ## Important Cross-Cutting Files
 
-- `src/components/AppShell.tsx`
+- `frontend/components/AppShell.tsx`
   main product shell and navigation
-- `src/lib/api.ts`
+- `frontend/lib/api.ts`
   frontend API client
 - `backend/main.py`
   backend app registration

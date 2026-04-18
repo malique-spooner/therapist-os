@@ -13,32 +13,32 @@ It is responsible for:
 
 ## Main Backend Modules
 
-- `backend/main.py`
+- `backend/app/main.py`
   FastAPI app entrypoint
-- `backend/database.py`
+- `backend/app/database.py`
   engine, session, base wiring
-- `backend/config.py`
+- `backend/app/config.py`
   environment and settings
-- `backend/bootstrap.py`
+- `backend/app/bootstrap.py`
   migration/bootstrap flow
-- `backend/scheduler.py`
+- `backend/app/scheduler.py`
   APScheduler entrypoint
 
 ## Backend Structure
 
-- `backend/models`
+- `backend/app/models`
   ORM models
-- `backend/schemas`
+- `backend/app/schemas`
   API schemas
-- `backend/routers`
+- `backend/app/routers`
   FastAPI endpoints
-- `backend/services`
+- `backend/app/services`
   business logic, ingestion, AI support, summaries
-- `backend/alembic`
+- `backend/migrations`
   migrations
-- `backend/middleware`
+- `backend/app/middleware`
   auth and request context middleware
-- `backend/core`
+- `backend/app/core`
   logging and shared backend internals
 
 ## Key Router Areas
@@ -89,7 +89,7 @@ That shift is already reflected in frontend language, but the backend still cont
 - `backend/start-api.sh`
 - `backend/start-scheduler.sh`
 - `backend/start-test.sh`
-- `infra/nginx/default.conf`
+- `deployment/nginx/default.conf`
 
 ## Current Priorities
 

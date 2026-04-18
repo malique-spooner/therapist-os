@@ -19,7 +19,7 @@ docker compose up --build
 
 This starts:
 - postgres
-- api
+- backend
 - scheduler
 - nginx
 
@@ -29,7 +29,7 @@ The backend uses a migration-first flow.
 
 Bootstrap is handled by:
 
-- `backend/bootstrap.py`
+- `app/bootstrap.py`
 
 This is used by the container startup scripts and can also be run locally in a Python 3.11 environment.
 
@@ -43,19 +43,19 @@ docker compose run --rm backend-tests
 
 ## Key Entry Files
 
-- `main.py`
-- `bootstrap.py`
-- `scheduler.py`
-- `config.py`
-- `database.py`
+- `app/main.py`
+- `app/bootstrap.py`
+- `app/scheduler.py`
+- `app/config.py`
+- `app/database.py`
 
 ## Important Directories
 
-- `models`
-- `schemas`
-- `routers`
-- `services`
-- `alembic`
+- `app/models`
+- `app/schemas`
+- `app/routers`
+- `app/services`
+- `migrations`
 
 ## AI Direction
 

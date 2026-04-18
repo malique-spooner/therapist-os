@@ -15,7 +15,7 @@
 - Targeted backend test suite passes in Docker:
 
 ```bash
-docker compose run --rm -e PYTHONPATH=/app backend-tests pytest tests/backend/test_location_router.py tests/backend/test_data_sources_router.py tests/backend/test_ai_router.py -q
+docker compose run --rm -e PYTHONPATH=/app backend-tests pytest backend/tests/api/test_location_router.py backend/tests/api/test_data_sources_router.py backend/tests/api/test_ai_router.py -q
 ```
 
 - Result at last run:

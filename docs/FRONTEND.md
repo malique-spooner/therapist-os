@@ -11,15 +11,15 @@ It is designed to:
 
 ## Main Frontend Areas
 
-- `src/app`
+- `frontend/app`
   App entry, layout, global styles
-- `src/components`
+- `frontend/components`
   Product UI grouped by feature area
-- `src/store`
+- `frontend/state`
   Zustand stores for session state, settings, check-ins, and relationships
-- `src/lib`
+- `frontend/lib`
   API client, brain blueprint data, date/domain utilities
-- `src/hooks`
+- `frontend/hooks`
   Shared frontend hooks like API query handling
 
 ## Key Screens
@@ -54,7 +54,7 @@ Typography direction:
 The frontend now prefers API-backed flows rather than local mock imports.
 
 Typical flow:
-1. screen calls methods from `src/lib/api.ts`
+1. screen calls methods from `frontend/lib/api.ts`
 2. `useApiQuery` or store hydration loads data
 3. screen renders loading, success, or retry states
 4. optimistic updates are used selectively for smoother interaction
@@ -72,15 +72,15 @@ It does not yet mean every layer is fully implemented server-side.
 
 ## Important Frontend Files
 
-- `src/components/AppShell.tsx`
-- `src/components/dashboard/DashboardPage.tsx`
-- `src/components/brain/BrainPage.tsx`
-- `src/components/therapist/TherapistPage.tsx`
-- `src/components/settings/SettingsPage.tsx`
-- `src/components/habits/HabitsPage.tsx`
-- `src/lib/api.ts`
-- `src/app/globals.css`
-- `src/app/layout.tsx`
+- `frontend/components/AppShell.tsx`
+- `frontend/components/dashboard/DashboardPage.tsx`
+- `frontend/components/brain/BrainPage.tsx`
+- `frontend/components/therapist/TherapistPage.tsx`
+- `frontend/components/settings/SettingsPage.tsx`
+- `frontend/components/habits/HabitsPage.tsx`
+- `frontend/lib/api.ts`
+- `frontend/app/globals.css`
+- `frontend/app/layout.tsx`
 
 ## Current Priorities
 

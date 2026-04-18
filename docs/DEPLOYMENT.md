@@ -47,6 +47,7 @@ That gives you the normal safe workflow:
 - `docker compose run --rm backend-tests`
 - `npm test`
 - `npm run build`
+- `bash tools/deployment/smoke-test.sh`
 
 Recommended live values:
 
@@ -108,13 +109,14 @@ Useful checks:
 
 ```bash
 docker compose ps
-docker compose logs api --tail=100
+docker compose logs backend --tail=100
 docker compose logs frontend --tail=100
 docker compose logs scheduler --tail=100
 docker compose logs nginx --tail=100
 curl -I http://127.0.0.1/
 curl http://127.0.0.1/healthz
 curl http://127.0.0.1/readyz
+bash tools/deployment/smoke-test.sh
 ```
 
 ## Current Public Routing
@@ -137,7 +139,7 @@ The included nginx config is now set up for a Let's Encrypt webroot flow:
 3. create the certbot directories if needed:
 
 ```bash
-mkdir -p infra/certbot/www infra/certbot/conf
+mkdir -p deployment/certbot/www deployment/certbot/conf
 ```
 
 4. stop nginx if it is already running without TLS:
@@ -156,8 +158,8 @@ certbot certonly --standalone -d maliquespooner.com -d app.maliquespooner.com
 6. copy the generated certificates into the mounted compose path:
 
 ```bash
-mkdir -p /root/therapist-os/infra/certbot/conf
-cp -R /etc/letsencrypt/* /root/therapist-os/infra/certbot/conf/
+mkdir -p /root/therapist-os/deployment/certbot/conf
+cp -R /etc/letsencrypt/* /root/therapist-os/deployment/certbot/conf/
 ```
 
 7. start the stack again:
@@ -175,8 +177,8 @@ curl -I https://maliquespooner.com
 
 Notes:
 
-- The nginx config expects certificate files under `infra/certbot/conf/live/maliquespooner.com/`.
-- If you reissue or renew certificates on the host, copy the updated `/etc/letsencrypt` contents back into `infra/certbot/conf/` before restarting nginx.
+- The nginx config expects certificate files under `deployment/certbot/conf/live/maliquespooner.com/`.
+- If you reissue or renew certificates on the host, copy the updated `/etc/letsencrypt` contents back into `deployment/certbot/conf/` before restarting nginx.
 
 ## Future Privacy-First Deployment Model
 

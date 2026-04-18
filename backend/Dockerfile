@@ -15,9 +15,9 @@ RUN apt-get update \
 COPY backend/requirements*.txt /tmp/
 RUN pip install --no-cache-dir -r /tmp/${REQUIREMENTS_FILE}
 
-COPY backend /app/backend
-RUN chmod +x /app/backend/start-api.sh /app/backend/start-scheduler.sh /app/backend/start-test.sh
+COPY backend /app
+RUN chmod +x /app/start-api.sh /app/start-scheduler.sh /app/start-test.sh
 
 EXPOSE 8000
 
-CMD ["/app/backend/start-api.sh"]
+CMD ["/app/start-api.sh"]
