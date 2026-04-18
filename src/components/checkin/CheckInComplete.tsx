@@ -4,9 +4,10 @@ import { motion } from 'framer-motion';
 
 interface CheckInCompleteProps {
   onContinue: () => void;
+  isEvening?: boolean;
 }
 
-export function CheckInComplete({ onContinue }: CheckInCompleteProps) {
+export function CheckInComplete({ onContinue, isEvening = false }: CheckInCompleteProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -19,7 +20,9 @@ export function CheckInComplete({ onContinue }: CheckInCompleteProps) {
       <div>
         <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Baseline saved</h2>
         <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
-          Your dashboard and therapist will use today&apos;s emotional baseline.
+          {isEvening 
+            ? "Your evening reflection has been recorded."
+            : "Your dashboard will use today's emotional baseline."}
         </p>
       </div>
       <button

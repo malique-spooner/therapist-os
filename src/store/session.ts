@@ -12,8 +12,18 @@ export interface Message {
   isTyping?: boolean;
 }
 
+interface CheckInRecord {
+  timestamp: number;
+  type: 'morning' | 'evening';
+  emotionalState?: number;
+  energyLevel?: number;
+  eveningReflection?: number;
+}
+
 interface SessionState {
   messages: Message[];
+  checkIns: CheckInRecord[];
+  lastCheckInType?: 'morning' | 'evening';
   isTyping: boolean;
   mode: 'async' | 'live';
   liveState: 'idle' | 'listening' | 'processing' | 'speaking';
@@ -30,6 +40,8 @@ interface SessionState {
 
 export const useSessionStore = create<SessionState>()((set) => ({
   messages: [],
+  checkIns: [],
+  lastCheckInType: undefined,
   isTyping: false,
   mode: 'async',
   liveState: 'idle',
@@ -45,5 +57,5 @@ export const useSessionStore = create<SessionState>()((set) => ({
   setMode: (mode) => set({ mode }),
   setLiveState: (liveState) => set({ liveState }),
   setPreloadedContext: (preloadedContext) => set({ preloadedContext }),
-  clearSession: () => set({ messages: [], isTyping: false, liveState: 'idle' }),
+  clearSession: () => set({ messages: [], checkIns: [], lastCheckInType: undefined, isTyping: false, liveState: 'idle' }),
 }));

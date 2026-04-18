@@ -65,47 +65,47 @@ export function DailyCheckIn({ onComplete, period }: DailyCheckInProps) {
         </div>
 
         <AnimatePresence mode="wait">
-            <motion.div key="questions" className="space-y-6">
-              <CheckInQuestion
-                visible
-                title="How are you feeling right now?"
-                options={emotionOptions}
-                selected={emotionalState}
-                onSelect={setEmotionalState}
-              />
+          <motion.div key="questions" className="space-y-6">
+            <CheckInQuestion
+              visible
+              title="How are you feeling right now?"
+              options={emotionOptions}
+              selected={emotionalState}
+              onSelect={setEmotionalState}
+            />
 
-              <CheckInQuestion
-                visible={q2Visible}
-                title="What’s your energy like?"
-                options={energyOptions}
-                selected={energyLevel}
-                onSelect={setEnergyLevel}
-              />
+            <CheckInQuestion
+              visible={q2Visible}
+              title="What's your energy level?"
+              options={energyOptions}
+              selected={energyLevel}
+              onSelect={setEnergyLevel}
+            />
 
-              <CheckInQuestion
-                visible={q3Visible}
-                title={period === 'morning' ? 'One word for today?' : 'One word for tonight?'}
-              >
-                <div className="space-y-3">
-                  <input
-                    value={oneWord}
-                    onChange={(event) => setOneWord(event.target.value)}
-                    placeholder="anxious, hopeful, distracted..."
-                    className="w-full rounded-2xl px-4 py-3 text-sm outline-none"
-                    style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                </div>
-              </CheckInQuestion>
+            <CheckInQuestion
+              visible={q3Visible}
+              title={period === 'morning' ? 'One word for today?' : 'One word for tonight?'}
+            >
+              <div className="space-y-3">
+                <input
+                  value={oneWord}
+                  onChange={(event) => setOneWord(event.target.value)}
+                  placeholder="anxious, hopeful, distracted..."
+                  className="w-full rounded-2xl px-4 py-3 text-sm outline-none"
+                  style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </div>
+            </CheckInQuestion>
 
-              <button
-                onClick={handleSubmit}
-                disabled={!canStart}
-                className="w-full h-[52px] rounded-xl font-semibold transition-opacity"
-                style={{ backgroundColor: canStart ? 'var(--color-primary)' : 'var(--color-border)', color: canStart ? '#fff' : 'var(--color-text-muted)' }}
-              >
-                Go home
-              </button>
-            </motion.div>
+            <button
+              onClick={handleSubmit}
+              disabled={!canStart}
+              className="w-full h-[52px] rounded-xl font-semibold transition-opacity"
+              style={{ backgroundColor: canStart ? 'var(--color-primary)' : 'var(--color-border)', color: canStart ? '#fff' : 'var(--color-text-muted)' }}
+            >
+              {period === 'morning' ? 'Start my day' : 'Complete reflection'}
+            </button>
+          </motion.div>
         </AnimatePresence>
       </div>
     </div>

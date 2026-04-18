@@ -60,3 +60,21 @@ export function formatRangeLabel(startDate: string, endDate: string) {
 
   return `${getDayLabel(startDate, { day: 'numeric', month: 'short' })} - ${getDayLabel(endDate, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
+
+export function getPeriodDateRange(period: string): { start: string; end: string } {
+  const today = londonIsoToday();
+  switch (period) {
+    case 'today':
+      return { start: today, end: today };
+    case 'last-week':
+      return { start: addDays(today, -14), end: today };
+    case 'last-month':
+      return { start: addDays(today, -62), end: today };
+    case 'this-month':
+      return { start: addDays(today, -31), end: today };
+    case '3-months':
+      return { start: addDays(today, -90), end: today };
+    default:
+      return { start: addDays(today, -7), end: today };
+  }
+}

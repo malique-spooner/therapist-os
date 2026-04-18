@@ -14,14 +14,7 @@ const PAGE_SEQUENCE = [
   { id: 'brain', label: 'Brain' },
 ] as const;
 
-function londonIsoToday() {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/London',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
-}
+import { londonIsoToday } from '../../src/lib/date';
 
 async function stubCheckInEndpoints(page: Page) {
   const today = londonIsoToday();
