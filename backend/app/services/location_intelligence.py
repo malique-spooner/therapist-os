@@ -86,10 +86,13 @@ class LocationIntelligenceService:
         recap_scenes = self._build_recap_scenes(selected_day, places, visits, event_rows)
 
         total_minutes = self._clamp_day_minutes(sum(visit.dwell_minutes for visit in visits))
-        outside_minutes = selected_day["timeOutdoorsMinutes"] if selected_day else sum(
-            visit.dwell_minutes for visit in visits if visit.category != "home"
-        )
+        derived_outside_minutes = sum(visit.dwell_minutes for visit in visits if visit.category != "home")
+        outside_minutes = selected_day["timeOutdoorsMinutes"] if selected_day else derived_outside_minutes
         outside_minutes = self._clamp_day_minutes(outside_minutes)
+        if derived_outside_minutes:
+            outside_minutes = min(outside_minutes, self._clamp_day_minutes(derived_outside_minutes))
+        if selected_day:
+            selected_day["timeOutdoorsMinutes"] = outside_minutes
         waypoint_events = [row for row in event_rows if (row.event_type or "").lower() in {"transition", "waypoint", "region"}]
         hero_title = (
             "Movement and people are shaping the story"
