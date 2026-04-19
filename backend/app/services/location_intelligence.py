@@ -445,7 +445,7 @@ class LocationIntelligenceService:
     def _is_micro_transition_visit(visit: Visit, group: list[dict]) -> bool:
         if visit.place_key == "home" or visit.correction:
             return False
-        return visit.category in {"errands", "misc"} and visit.dwell_minutes <= 5 and len(group) <= 2 and visit.confidence_score < 0.6
+        return visit.category in {"errands", "misc"} and visit.dwell_minutes <= 5 and visit.confidence_score < 0.6
 
     def _movement_from_micro_visit(self, visit: Visit, group: list[dict]) -> Movement:
         first = group[0]
