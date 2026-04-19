@@ -1,4 +1,26 @@
+from datetime import UTC, datetime
+
 from app.routers import location as location_router
+
+
+def _timestamp(value: str) -> int:
+    return int(datetime.fromisoformat(value).replace(tzinfo=UTC).timestamp())
+
+
+def _post_location_point(client, iso_timestamp: str, lat: float, lon: float, *, activities: list[str] | None = None, vel: float | None = None):
+    payload = {
+        "_type": "location",
+        "lat": lat,
+        "lon": lon,
+        "acc": 10,
+        "batt": 90,
+        "tst": _timestamp(iso_timestamp),
+    }
+    if activities is not None:
+        payload["motionactivities"] = activities
+    if vel is not None:
+        payload["vel"] = vel
+    return client.post("/api/location/owntracks", json=payload)
 
 
 def test_location_summary_requires_api_key(client):
@@ -273,6 +295,96 @@ def test_location_intelligence_comes_from_backend_inference(client):
     assert any(place["status"] == "active" for place in payload["places"])
     assert any(scene["id"] == "geofence-signal" for scene in payload["recapScenes"])
     assert any(stat["label"] == "OwnTracks events" for stat in payload["rangeStats"])
+
+
+def test_location_intelligence_returns_mixed_timeline_and_preserves_visits(client):
+    for minute in (0, 15, 30):
+        response = _post_location_point(client, f"2026-04-19T09:{minute:02d}:00", 51.5450, -0.0560, activities=["stationary"], vel=0)
+        assert response.status_code == 200
+    for minute, lon in ((45, -0.052), (55, -0.048)):
+        response = _post_location_point(client, f"2026-04-19T09:{minute:02d}:00", 51.5450, lon, activities=["walking"], vel=1.6)
+        assert response.status_code == 200
+    for minute in (10, 25):
+        response = _post_location_point(client, f"2026-04-19T10:{minute:02d}:00", 51.5230, -0.0410, activities=["stationary"], vel=0)
+        assert response.status_code == 200
+
+    intelligence = client.get(
+        "/api/location/intelligence?startDate=2026-04-19&endDate=2026-04-19&date=2026-04-19&mode=real-only",
+        headers={"X-API-Key": "dev-secret-key"},
+    )
+
+    assert intelligence.status_code == 200
+    payload = intelligence.json()
+    assert payload["visits"]
+    assert payload["timeline"]
+    assert any(row["kind"] == "visit" for row in payload["timeline"])
+    assert any(row["kind"] == "movement" and row["movementType"] == "walking" for row in payload["timeline"])
+    assert sum(row["durationMinutes"] for row in payload["timeline"]) <= 1440
+
+
+def test_location_movement_engine_classifies_cycling_and_transit(client):
+    for minute, lon in ((0, -0.0560), (10, -0.0460), (20, -0.0360)):
+        response = _post_location_point(client, f"2026-04-19T11:{minute:02d}:00", 51.5450, lon, activities=["cycling"], vel=4.2)
+        assert response.status_code == 200
+    for minute, lon in ((0, -0.0360), (10, 0.0150), (20, 0.0750)):
+        response = _post_location_point(client, f"2026-04-19T12:{minute:02d}:00", 51.5450, lon, activities=["automotive"], vel=15)
+        assert response.status_code == 200
+
+    intelligence = client.get(
+        "/api/location/intelligence?startDate=2026-04-19&endDate=2026-04-19&date=2026-04-19&mode=real-only",
+        headers={"X-API-Key": "dev-secret-key"},
+    )
+
+    assert intelligence.status_code == 200
+    movement_types = {row["movementType"] for row in intelligence.json()["timeline"] if row["kind"] == "movement"}
+    assert "cycling" in movement_types
+    assert "transit" in movement_types
+
+
+def test_location_timeline_tag_override_updates_future_place_inference(client):
+    for minute in (0, 20, 40):
+        response = _post_location_point(client, f"2026-04-19T13:{minute:02d}:00", 51.6000, -0.0700, activities=["stationary"], vel=0)
+        assert response.status_code == 200
+
+    intelligence = client.get(
+        "/api/location/intelligence?startDate=2026-04-19&endDate=2026-04-19&date=2026-04-19&mode=real-only",
+        headers={"X-API-Key": "dev-secret-key"},
+    )
+    assert intelligence.status_code == 200
+    visit_row = next(row for row in intelligence.json()["timeline"] if row["kind"] == "visit")
+
+    correction = client.put(
+        f"/api/location/timeline/{visit_row['rowId']}/tag",
+        headers={"X-API-Key": "dev-secret-key"},
+        json={"category": "work", "label": "Studio"},
+    )
+    assert correction.status_code == 200
+    assert correction.json()["row"]["category"] == "work"
+
+    refreshed = client.get(
+        "/api/location/intelligence?startDate=2026-04-19&endDate=2026-04-19&date=2026-04-19&mode=real-only",
+        headers={"X-API-Key": "dev-secret-key"},
+    )
+    assert refreshed.status_code == 200
+    corrected_rows = [row for row in refreshed.json()["timeline"] if row["kind"] == "visit" and row["placeKey"] == visit_row["placeKey"]]
+    assert corrected_rows
+    assert corrected_rows[0]["category"] == "work"
+    assert corrected_rows[0]["label"] == "Studio"
+
+
+def test_low_confidence_rows_stay_visible_as_unsure(client):
+    response = _post_location_point(client, "2026-04-19T14:00:00", 51.7000, -0.0800)
+    assert response.status_code == 200
+
+    intelligence = client.get(
+        "/api/location/intelligence?startDate=2026-04-19&endDate=2026-04-19&date=2026-04-19&mode=real-only",
+        headers={"X-API-Key": "dev-secret-key"},
+    )
+
+    assert intelligence.status_code == 200
+    timeline = intelligence.json()["timeline"]
+    assert timeline
+    assert any(row["isLowConfidence"] for row in timeline)
 
 
 def test_location_companion_tags_can_be_saved_and_loaded(client):

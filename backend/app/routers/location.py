@@ -29,6 +29,7 @@ from ..schemas.location import (
     LocationPlaceMemoryUpdateSchema,
     LocationPlaceMergeSchema,
     LocationPlaceSplitSchema,
+    LocationTimelineTagUpdateSchema,
 )
 from ..services.data_sources import DataSourceService
 from ..services.location_intelligence import LocationIntelligenceService
@@ -48,6 +49,12 @@ def _serialize_point(point) -> dict:
         "longitude": point.longitude,
         "accuracy": point.accuracy,
         "batteryLevel": point.battery_level,
+        "velocity": getattr(point, "velocity", None),
+        "motionActivities": getattr(point, "motion_activities", None) or [],
+        "inRegions": getattr(point, "in_regions", None) or [],
+        "inRegionIds": getattr(point, "in_region_ids", None) or [],
+        "connection": getattr(point, "connection", None),
+        "course": getattr(point, "course", None),
     }
 
 
@@ -205,6 +212,14 @@ def get_location_intelligence(
     return location_intelligence_service.get_intelligence(period, date, startDate, endDate, mode, db)
 
 
+@router.put("/timeline/{row_id}/tag", dependencies=[Depends(verify_api_key)])
+def tag_location_timeline_row(row_id: str, payload: LocationTimelineTagUpdateSchema, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
+    try:
+        return location_intelligence_service.tag_timeline_row(row_id, payload.model_dump(), mode, db)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.post("/owntracks")
 async def owntracks_webhook(
     payload: dict,
@@ -309,6 +324,12 @@ async def owntracks_webhook(
         longitude=float(payload["lon"]),
         accuracy=float(payload["acc"]) if payload.get("acc") is not None else None,
         battery_level=int(payload["batt"]) if payload.get("batt") is not None else None,
+        velocity=float(payload["vel"]) if payload.get("vel") is not None else None,
+        motion_activities=payload.get("motionactivities") if isinstance(payload.get("motionactivities"), list) else None,
+        in_regions=payload.get("inregions") if isinstance(payload.get("inregions"), list) else None,
+        in_region_ids=payload.get("inrids") if isinstance(payload.get("inrids"), list) else None,
+        connection=str(payload.get("conn")) if payload.get("conn") is not None else None,
+        course=float(payload["cog"]) if payload.get("cog") is not None else None,
     )
     db.add(point)
     _upsert_source_row(

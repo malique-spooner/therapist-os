@@ -58,6 +58,43 @@ class LocationVisitSchema(BaseModel):
     longitude: float
     highlight: str
     tone: str
+    confidenceScore: float | None = None
+    correction: dict | None = None
+
+
+class LocationTimelineRowSchema(BaseModel):
+    id: str
+    rowId: str
+    kind: str
+    label: str
+    startTimestamp: str
+    endTimestamp: str
+    durationMinutes: int
+    confidenceScore: float | None = None
+    isLowConfidence: bool = False
+    correction: dict | None = None
+    placeKey: str | None = None
+    placeLabel: str | None = None
+    category: str | None = None
+    movementType: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    startLatitude: float | None = None
+    startLongitude: float | None = None
+    endLatitude: float | None = None
+    endLongitude: float | None = None
+    distanceMetres: float | None = None
+    averageSpeedKmh: float | None = None
+    highlight: str | None = None
+    tone: str | None = None
+
+
+class LocationTimelineTagUpdateSchema(BaseModel):
+    label: str | None = None
+    category: str | None = None
+    movementType: str | None = None
+    tone: str | None = None
+    note: str | None = None
 
 
 class LocationRecapSceneSchema(BaseModel):
@@ -96,6 +133,7 @@ class LocationIntelligenceResponseSchema(BaseModel):
     selectedDay: dict | None = None
     points: list[dict]
     selectedDayPoints: list[dict]
+    timeline: list[LocationTimelineRowSchema] = []
     visits: list[LocationVisitSchema]
     places: list[LocationPlaceMemorySchema]
     recapScenes: list[LocationRecapSceneSchema]

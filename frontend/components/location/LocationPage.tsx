@@ -31,6 +31,7 @@ function fallbackExperience(mode: 'real-only'): LocationIntelligencePayload {
     selectedDay: null,
     points: [],
     selectedDayPoints: [],
+    timeline: [],
     visits: [],
     places: [],
     recapScenes: [],
@@ -150,11 +151,13 @@ export function LocationPage({ onBack, onSettings }: LocationPageProps) {
         <div className="space-y-4 px-4">
           <LocationStoryIntelligence
             selectedDay={experience.selectedDay}
+            timeline={experience.timeline}
             visits={experience.visits}
             places={experience.places}
             selectedDayPoints={experience.selectedDayPoints}
             rangeLabel={rangeLabel}
             lastPointTimestamp={lastPointTimestamp}
+            onTimelineTagged={refetch}
           />
         </div>
       </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Bike,
@@ -15,7 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import type { LocationPlaceMemoryPayload, LocationPointPayload, LocationSummaryPayload, LocationVisitPayload } from '@/lib/api';
+import { api, type LocationPlaceMemoryPayload, type LocationPointPayload, type LocationSummaryPayload, type LocationTimelinePayload, type LocationVisitPayload } from '@/lib/api';
 
 interface NormalizedPlace extends LocationPlaceMemoryPayload {
   key: string;
@@ -29,6 +30,7 @@ interface NormalizedPlace extends LocationPlaceMemoryPayload {
 
 interface LocationStoryIntelligenceProps {
   selectedDay: LocationSummaryPayload | null | undefined;
+  timeline: LocationTimelinePayload[];
   visits: LocationVisitPayload[];
   places: NormalizedPlace[];
   selectedDayPoints: LocationPointPayload[];
@@ -36,6 +38,7 @@ interface LocationStoryIntelligenceProps {
   lastPointTimestamp: string | null;
   onSelectVisit?: (visit: LocationVisitPayload) => void;
   onSelectPlace?: (placeKey: string) => void;
+  onTimelineTagged?: () => void;
 }
 
 const categoryMeta: Record<string, { label: string; color: string; bg: string; icon: LucideIcon }> = {
@@ -46,12 +49,25 @@ const categoryMeta: Record<string, { label: string; color: string; bg: string; i
   cafe: { label: 'Cafe', color: '#b7791f', bg: 'rgba(183, 121, 31, 0.12)', icon: MapPin },
   social: { label: 'Social', color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.12)', icon: Users },
   errands: { label: 'Errands', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)', icon: Bike },
+  errand: { label: 'Errand', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)', icon: Bike },
   transit: { label: 'Transit', color: '#f4a261', bg: 'rgba(244, 162, 97, 0.14)', icon: Bus },
   misc: { label: 'Other', color: 'var(--color-text-muted)', bg: 'var(--color-surface-2)', icon: MapPin },
+  other: { label: 'Other', color: 'var(--color-text-muted)', bg: 'var(--color-surface-2)', icon: MapPin },
+};
+
+const movementMeta: Record<string, { label: string; color: string; bg: string; icon: LucideIcon }> = {
+  walking: { label: 'Walk', color: 'var(--color-primary)', bg: 'rgba(45, 106, 79, 0.12)', icon: MapPin },
+  cycling: { label: 'Cycle', color: '#f4a261', bg: 'rgba(244, 162, 97, 0.14)', icon: Bike },
+  transit: { label: 'Transit', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
+  unknown_movement: { label: 'Unsure movement', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)', icon: MapPin },
 };
 
 function getMeta(category: string) {
   return categoryMeta[category] ?? categoryMeta.misc;
+}
+
+function getMovementMeta(movementType: string | null | undefined) {
+  return movementMeta[movementType ?? 'unknown_movement'] ?? movementMeta.unknown_movement;
 }
 
 function formatMinutes(totalMinutes: number) {
@@ -124,15 +140,30 @@ function SectionLabel({ label, action }: { label: string; action?: string }) {
   );
 }
 
-function TimeBreakdown({ visits }: { visits: LocationVisitPayload[] }) {
+function TimeBreakdown({ timeline, visits }: { timeline: LocationTimelinePayload[]; visits: LocationVisitPayload[] }) {
+  const effectiveTimeline = timeline.length
+    ? timeline
+    : visits.map((visit) => ({
+      id: visit.id,
+      rowId: visit.id,
+      kind: 'visit' as const,
+      label: visit.placeLabel,
+      startTimestamp: visit.startTimestamp,
+      endTimestamp: visit.endTimestamp,
+      durationMinutes: visit.dwellMinutes,
+      category: visit.category,
+    }));
+  const placeMinutes = effectiveTimeline.filter((row) => row.kind === 'visit').reduce((sum, row) => sum + row.durationMinutes, 0);
+  const movementMinutes = effectiveTimeline.filter((row) => row.kind === 'movement').reduce((sum, row) => sum + row.durationMinutes, 0);
   const breakdown = buildCategoryBreakdown(visits);
   const totalMinutes = breakdown.reduce((sum, item) => sum + item.minutes, 0);
+  const trackedMinutes = effectiveTimeline.reduce((sum, row) => sum + row.durationMinutes, 0);
   const circumference = 2 * Math.PI * 42;
   let previousLength = 0;
 
   return (
     <div className="rounded-[30px] p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-      <SectionLabel label="Time breakdown" action={totalMinutes ? formatMinutes(totalMinutes) : undefined} />
+      <SectionLabel label="Time breakdown" action={trackedMinutes ? formatMinutes(trackedMinutes) : undefined} />
       <div className="flex items-center gap-5">
         <div className="relative h-[112px] w-[112px] flex-shrink-0">
           <svg viewBox="0 0 110 110" className="h-full w-full">
@@ -161,11 +192,21 @@ function TimeBreakdown({ visits }: { visits: LocationVisitPayload[] }) {
             })}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <p className="text-2xl font-semibold leading-none" style={{ color: 'var(--color-text)' }}>{formatMinutes(totalMinutes || 0)}</p>
+            <p className="text-2xl font-semibold leading-none" style={{ color: 'var(--color-text)' }}>{formatMinutes(trackedMinutes || 0)}</p>
             <p className="mt-1 text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>tracked</p>
           </div>
         </div>
         <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex items-center gap-2 rounded-2xl px-3 py-2" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }} />
+            <span className="min-w-0 flex-1 truncate text-sm" style={{ color: 'var(--color-text-muted)' }}>Places</span>
+            <span className="text-sm font-semibold" style={{ color: 'var(--color-primary)' }}>{formatMinutes(placeMinutes)}</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-2xl px-3 py-2" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#f4a261' }} />
+            <span className="min-w-0 flex-1 truncate text-sm" style={{ color: 'var(--color-text-muted)' }}>Movement</span>
+            <span className="text-sm font-semibold" style={{ color: '#f4a261' }}>{formatMinutes(movementMinutes)}</span>
+          </div>
           {breakdown.length ? breakdown.slice(0, 5).map((item) => (
             <div key={item.category} className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.meta.color }} />
@@ -183,19 +224,49 @@ function TimeBreakdown({ visits }: { visits: LocationVisitPayload[] }) {
   );
 }
 
-function VisitTimeline({ visits, onSelectVisit }: { visits: LocationVisitPayload[]; onSelectVisit?: (visit: LocationVisitPayload) => void }) {
+function TimelineRows({ timeline, onTimelineTagged }: { timeline: LocationTimelinePayload[]; onTimelineTagged?: () => void }) {
+  const [savingRow, setSavingRow] = useState<string | null>(null);
+  const [renamingRow, setRenamingRow] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
+  async function tagRow(row: LocationTimelinePayload, value: string) {
+    setSavingRow(row.rowId);
+    try {
+      await api.tagLocationTimelineRow(
+        row.rowId,
+        row.kind === 'visit' ? { category: value } : { movementType: value },
+      );
+      onTimelineTagged?.();
+    } finally {
+      setSavingRow(null);
+    }
+  }
+
+  async function saveRename(row: LocationTimelinePayload) {
+    const label = renameValue.trim();
+    if (!label) return;
+    setSavingRow(row.rowId);
+    try {
+      await api.tagLocationTimelineRow(row.rowId, { label });
+      setRenamingRow(null);
+      setRenameValue('');
+      onTimelineTagged?.();
+    } finally {
+      setSavingRow(null);
+    }
+  }
+
   return (
     <div className="rounded-[30px] p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-      <SectionLabel label="Your day's story" action={visits.length ? 'Full log' : undefined} />
+      <SectionLabel label="Your day's story" action={timeline.length ? 'Full log' : undefined} />
       <div className="space-y-3">
-        {visits.length ? visits.map((visit, index) => {
-          const meta = getMeta(visit.category);
+        {timeline.length ? timeline.map((row, index) => {
+          const isMovement = row.kind === 'movement';
+          const meta = isMovement ? getMovementMeta(row.movementType) : getMeta(row.category ?? 'misc');
           const Icon = meta.icon;
           return (
-            <motion.button
-              key={visit.id}
-              type="button"
-              onClick={() => onSelectVisit?.(visit)}
+            <motion.div
+              key={row.rowId}
               className="flex w-full gap-3 text-left"
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
@@ -205,28 +276,102 @@ function VisitTimeline({ visits, onSelectVisit }: { visits: LocationVisitPayload
                 <div className="flex h-9 w-9 items-center justify-center rounded-2xl" style={{ backgroundColor: meta.bg, color: meta.color }}>
                   <Icon size={16} />
                 </div>
-                {index < visits.length - 1 && <div className="mt-2 w-px flex-1" style={{ minHeight: 18, backgroundColor: 'var(--color-border)' }} />}
+                {index < timeline.length - 1 && <div className="mt-2 w-px flex-1" style={{ minHeight: 18, backgroundColor: 'var(--color-border)' }} />}
               </div>
-              <div className="min-w-0 flex-1 rounded-[24px] p-4" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+              <div className="min-w-0 flex-1 rounded-[24px] p-4" style={{ backgroundColor: 'var(--color-surface)', border: row.isLowConfidence ? '1px solid rgba(244, 162, 97, 0.48)' : '1px solid var(--color-border)' }}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>{visit.placeLabel}</p>
-                    <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: meta.color }}>{meta.label}</p>
+                    <p className="truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>{row.label}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: meta.color }}>{meta.label}</p>
+                      {row.isLowConfidence && (
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ backgroundColor: 'rgba(244, 162, 97, 0.14)', color: '#f4a261' }}>
+                          Unsure
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <span className="rounded-full px-3 py-1 text-xs font-semibold" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
-                    {formatMinutes(visit.dwellMinutes)}
+                    {formatMinutes(row.durationMinutes)}
                   </span>
                 </div>
                 <p className="mt-2 truncate text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                  {formatTime(visit.startTimestamp)} - {formatTime(visit.endTimestamp)} · {visit.highlight}
+                  {formatTime(row.startTimestamp)} - {formatTime(row.endTimestamp)} · {isMovement ? `${Math.round(row.distanceMetres ?? 0)}m travelled` : row.highlight}
                 </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(isMovement
+                    ? [
+                      ['walking', 'Walk'],
+                      ['cycling', 'Cycle'],
+                      ['transit', 'Transit'],
+                      ['unknown_movement', 'Other movement'],
+                    ]
+                    : [
+                      ['home', 'Home'],
+                      ['work', 'Work'],
+                      ['social', 'Social'],
+                      ['gym', 'Fitness'],
+                      ['errands', 'Errand'],
+                      ['misc', 'Other'],
+                    ]
+                  ).map(([value, label]) => {
+                    const active = isMovement ? row.movementType === value : row.category === value;
+                    return (
+                      <button
+                        key={`${row.rowId}-${value}`}
+                        type="button"
+                        disabled={savingRow === row.rowId}
+                        onClick={() => tagRow(row, value)}
+                        className="min-h-8 rounded-full px-3 text-[11px] font-semibold transition active:scale-95 disabled:opacity-60"
+                        style={{
+                          backgroundColor: active ? meta.bg : 'var(--color-surface-2)',
+                          border: `1px solid ${active ? meta.color : 'var(--color-border)'}`,
+                          color: active ? meta.color : 'var(--color-text-muted)',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                  {!isMovement && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRenamingRow(row.rowId);
+                        setRenameValue(row.label);
+                      }}
+                      className="min-h-8 rounded-full px-3 text-[11px] font-semibold"
+                      style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
+                    >
+                      Rename
+                    </button>
+                  )}
+                </div>
+                {renamingRow === row.rowId && (
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      value={renameValue}
+                      onChange={(event) => setRenameValue(event.target.value)}
+                      className="min-h-11 min-w-0 flex-1 rounded-2xl px-3 text-sm outline-none"
+                      style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => saveRename(row)}
+                      className="min-h-11 rounded-2xl px-4 text-xs font-semibold"
+                      style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}
+                    >
+                      Save
+                    </button>
+                  </div>
+                )}
               </div>
-            </motion.button>
+            </motion.div>
           );
         }) : (
           <div className="rounded-[24px] p-4" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
             <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-              No derived visits for this day yet. The same section will populate from the app’s OwnTracks/Postgres pipeline when points become visits.
+              No derived timeline for this day yet. The same section will populate from OwnTracks/Postgres when points become places and movement.
             </p>
           </div>
         )}
@@ -235,9 +380,14 @@ function VisitTimeline({ visits, onSelectVisit }: { visits: LocationVisitPayload
   );
 }
 
-function MovementSummary({ visits, points }: { visits: LocationVisitPayload[]; points: LocationPointPayload[] }) {
+function MovementSummary({ visits, points, timeline }: { visits: LocationVisitPayload[]; points: LocationPointPayload[]; timeline: LocationTimelinePayload[] }) {
   const path = buildPointPath(points.length ? points : visits);
   const places = visits.filter((visit, index, all) => all.findIndex((entry) => entry.placeKey === visit.placeKey) === index).slice(0, 4);
+  const movementTotals = timeline.filter((row) => row.kind === 'movement').reduce<Record<string, number>>((acc, row) => {
+    const key = row.movementType ?? 'unknown_movement';
+    acc[key] = (acc[key] ?? 0) + row.durationMinutes;
+    return acc;
+  }, {});
 
   return (
     <div className="overflow-hidden rounded-[30px] p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
@@ -272,6 +422,17 @@ function MovementSummary({ visits, points }: { visits: LocationVisitPayload[]; p
             {points.length} points today
           </text>
         </svg>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {(['walking', 'cycling', 'transit'] as const).map((type) => {
+          const meta = getMovementMeta(type);
+          return (
+            <div key={type} className="rounded-2xl px-3 py-2" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+              <p className="text-[11px] font-semibold" style={{ color: meta.color }}>{meta.label}</p>
+              <p className="mt-0.5 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{formatMinutes(movementTotals[type] ?? 0)}</p>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -409,13 +570,14 @@ function InsightsAndStatus({
 
 export function LocationStoryIntelligence({
   selectedDay,
+  timeline,
   visits,
   places,
   selectedDayPoints,
   rangeLabel,
   lastPointTimestamp,
-  onSelectVisit,
   onSelectPlace,
+  onTimelineTagged,
 }: LocationStoryIntelligenceProps) {
   return (
     <motion.section
@@ -424,9 +586,9 @@ export function LocationStoryIntelligence({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
     >
-      <TimeBreakdown visits={visits} />
-      <VisitTimeline visits={visits} onSelectVisit={onSelectVisit} />
-      <MovementSummary visits={visits} points={selectedDayPoints} />
+      <TimeBreakdown timeline={timeline} visits={visits} />
+      <TimelineRows timeline={timeline} onTimelineTagged={onTimelineTagged} />
+      <MovementSummary visits={visits} points={selectedDayPoints} timeline={timeline} />
       <InsightsAndStatus
         selectedDay={selectedDay}
         visits={visits}

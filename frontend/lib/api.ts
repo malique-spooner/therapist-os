@@ -136,6 +136,12 @@ export interface LocationPointPayload {
   longitude: number;
   accuracy?: number | null;
   batteryLevel?: number | null;
+  velocity?: number | null;
+  motionActivities?: string[];
+  inRegions?: string[];
+  inRegionIds?: string[];
+  connection?: string | null;
+  course?: number | null;
 }
 
 export interface LocationCompanionPayload {
@@ -188,6 +194,43 @@ export interface LocationVisitPayload {
   longitude: number;
   highlight: string;
   tone: 'positive' | 'neutral' | 'draining';
+  confidenceScore?: number | null;
+  correction?: Record<string, unknown> | null;
+}
+
+export interface LocationTimelinePayload {
+  id: string;
+  rowId: string;
+  kind: 'visit' | 'movement';
+  label: string;
+  startTimestamp: string;
+  endTimestamp: string;
+  durationMinutes: number;
+  confidenceScore?: number | null;
+  isLowConfidence?: boolean;
+  correction?: Record<string, unknown> | null;
+  placeKey?: string | null;
+  placeLabel?: string | null;
+  category?: string | null;
+  movementType?: 'walking' | 'cycling' | 'transit' | 'unknown_movement' | string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  startLatitude?: number | null;
+  startLongitude?: number | null;
+  endLatitude?: number | null;
+  endLongitude?: number | null;
+  distanceMetres?: number | null;
+  averageSpeedKmh?: number | null;
+  highlight?: string | null;
+  tone?: 'positive' | 'neutral' | 'draining' | string | null;
+}
+
+export interface LocationTimelineTagPayload {
+  label?: string | null;
+  category?: string | null;
+  movementType?: string | null;
+  tone?: string | null;
+  note?: string | null;
 }
 
 export interface LocationRecapScenePayload {
@@ -218,6 +261,7 @@ export interface LocationIntelligencePayload {
   selectedDay?: LocationSummaryPayload | null;
   points: LocationPointPayload[];
   selectedDayPoints: LocationPointPayload[];
+  timeline: LocationTimelinePayload[];
   visits: LocationVisitPayload[];
   places: LocationPlaceMemoryPayload[];
   recapScenes: LocationRecapScenePayload[];
@@ -574,6 +618,11 @@ export const api = {
     if (query.endDate) params.set('endDate', query.endDate);
     return request<LocationIntelligencePayload>(withDataMode(`/api/location/intelligence?${params.toString()}`));
   },
+  tagLocationTimelineRow: (rowId: string, payload: LocationTimelineTagPayload) =>
+    request<{ detail: string; row: LocationTimelinePayload }>(`/api/location/timeline/${encodeURIComponent(rowId)}/tag`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
   getLocationPlaces: () => request<LocationPlaceMemoryPayload[]>(withDataMode('/api/location/places')),
   saveLocationPlace: (placeKey: string, payload: Omit<LocationPlaceMemoryPayload, 'placeKey'>) =>
     request<LocationPlaceMemoryPayload>(`/api/location/places/${encodeURIComponent(placeKey)}`, { method: 'PUT', body: JSON.stringify(payload) }),

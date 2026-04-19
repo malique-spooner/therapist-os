@@ -259,6 +259,12 @@ class _LocationDataMixin:
     longitude: Mapped[float] = mapped_column(Float)
     accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
     battery_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    velocity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    motion_activities: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    in_regions: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    in_region_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    connection: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    course: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -352,6 +358,87 @@ class LocationPlaceHistoryReal(_LocationPlaceHistoryMixin, Base):
 
 class LocationPlaceHistoryDemo(_LocationPlaceHistoryMixin, Base):
     __tablename__ = "location_place_history_demo"
+
+
+class _LocationVisitMixin:
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    row_id: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    place_key: Mapped[str] = mapped_column(String(120), index=True)
+    place_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    category: Mapped[str] = mapped_column(String(40), index=True)
+    start_timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
+    end_timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    latitude: Mapped[float] = mapped_column(Float)
+    longitude: Mapped[float] = mapped_column(Float)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    source: Mapped[str] = mapped_column(String(30), default="inferred", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LocationVisitReal(_LocationVisitMixin, Base):
+    __tablename__ = "location_visits_real"
+
+
+class LocationVisitDemo(_LocationVisitMixin, Base):
+    __tablename__ = "location_visits_demo"
+
+
+class _LocationMovementMixin:
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    row_id: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    movement_type: Mapped[str] = mapped_column(String(40), index=True)
+    label: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    start_timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
+    end_timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    start_latitude: Mapped[float] = mapped_column(Float)
+    start_longitude: Mapped[float] = mapped_column(Float)
+    end_latitude: Mapped[float] = mapped_column(Float)
+    end_longitude: Mapped[float] = mapped_column(Float)
+    distance_metres: Mapped[float | None] = mapped_column(Float, nullable=True)
+    average_speed_kmh: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    source: Mapped[str] = mapped_column(String(30), default="inferred", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LocationMovementReal(_LocationMovementMixin, Base):
+    __tablename__ = "location_movements_real"
+
+
+class LocationMovementDemo(_LocationMovementMixin, Base):
+    __tablename__ = "location_movements_demo"
+
+
+class _LocationTagOverrideMixin:
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    row_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    target_kind: Mapped[str] = mapped_column(String(20), index=True)
+    target_key: Mapped[str] = mapped_column(String(160), index=True)
+    label: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    movement_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    tone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    radius_metres: Mapped[float | None] = mapped_column(Float, nullable=True)
+    signature_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LocationTagOverrideReal(_LocationTagOverrideMixin, Base):
+    __tablename__ = "location_tag_overrides_real"
+
+
+class LocationTagOverrideDemo(_LocationTagOverrideMixin, Base):
+    __tablename__ = "location_tag_overrides_demo"
 
 
 class _LocationEventMixin:
