@@ -843,7 +843,8 @@ class LocationIntelligenceService:
             if 0 < gap_minutes <= 25:
                 distance = self._distance_metres(previous["latitude"], previous["longitude"], point["latitude"], point["longitude"])
                 inferred_speed_kmh = (distance / 1000) / (gap_minutes / 60)
-                return distance > 120 and inferred_speed_kmh > 1.5
+                accuracy_floor = max(30, (point.get("accuracy") or 0) + (previous.get("accuracy") or 0) + 12)
+                return distance > accuracy_floor and inferred_speed_kmh > 3.5
         return False
 
     def _classify_movement(self, group: list[dict], average_speed_kmh: float) -> tuple[str, float]:
