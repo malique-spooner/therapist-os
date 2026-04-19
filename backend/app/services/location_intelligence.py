@@ -347,6 +347,9 @@ class LocationIntelligenceService:
                 continue
 
             visit = self._visit_from_group(group, grouped[index + 1]["points"] if index + 1 < len(grouped) else None, len(visits), persisted_places, companion, overrides)
+            if self._is_micro_transition_visit(visit, group):
+                movements.append(self._movement_from_micro_visit(visit, group))
+                continue
             visits.append(visit)
         return visits, movements
 
@@ -436,6 +439,31 @@ class LocationIntelligenceService:
             average_speed_kmh=average_speed_kmh,
             confidence_score=confidence,
             correction=self._serialize_override(override) if override else None,
+        )
+
+    @staticmethod
+    def _is_micro_transition_visit(visit: Visit, group: list[dict]) -> bool:
+        if visit.place_key == "home" or visit.correction:
+            return False
+        return visit.category in {"errands", "misc"} and visit.dwell_minutes <= 5 and len(group) <= 2 and visit.confidence_score < 0.6
+
+    def _movement_from_micro_visit(self, visit: Visit, group: list[dict]) -> Movement:
+        first = group[0]
+        last = group[-1]
+        return Movement(
+            id=self._timeline_row_id("movement", visit.start_timestamp, visit.end_timestamp, f"micro:{visit.place_key}"),
+            movement_type="unknown_movement",
+            label="Unknown movement",
+            start_timestamp=visit.start_timestamp,
+            end_timestamp=visit.end_timestamp,
+            duration_minutes=max(1, visit.dwell_minutes),
+            start_latitude=first["latitude"],
+            start_longitude=first["longitude"],
+            end_latitude=last["latitude"],
+            end_longitude=last["longitude"],
+            distance_metres=self._path_distance_metres(group),
+            average_speed_kmh=0,
+            confidence_score=0.42,
         )
 
     def _derive_visits(self, points: list[dict], persisted_places: dict[str, object], companion) -> list[Visit]:
