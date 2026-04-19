@@ -377,7 +377,7 @@ class LocationIntelligenceService:
             confidence = 0.96
         elif getattr(place, "category", None):
             category = place.category
-            confidence = 0.88
+            confidence = getattr(place, "confidence_score", None) or 0.88
         elif region_name:
             category = self._category_from_region(region_name)
             confidence = 0.78
