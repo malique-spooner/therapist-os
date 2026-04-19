@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, Sparkles, X } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { DashboardPage } from './dashboard/DashboardPage';
 import { TherapistPage } from './therapist/TherapistPage';
@@ -56,9 +56,10 @@ function withTimeout<T>(promise: Promise<T>, ms = 5000): Promise<T> {
 }
 
 export function AppShell() {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
-  const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
+  const [currentPage, setCurrentPage] = useState<PageId>(() => (pathname === '/location' ? 'location' : 'dashboard'));
   const [direction, setDirection] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [therapistContext, setTherapistContext] = useState<string | null>(null);
@@ -104,6 +105,12 @@ export function AppShell() {
       setSettingsSourceId(sourceId);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (pathname === '/location') {
+      setCurrentPage('location');
+    }
+  }, [pathname]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
