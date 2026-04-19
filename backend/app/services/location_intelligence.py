@@ -85,10 +85,11 @@ class LocationIntelligenceService:
         place_history_counts = self._history_counts(db)
         recap_scenes = self._build_recap_scenes(selected_day, places, visits, event_rows)
 
-        total_minutes = sum(visit.dwell_minutes for visit in visits)
+        total_minutes = self._clamp_day_minutes(sum(visit.dwell_minutes for visit in visits))
         outside_minutes = selected_day["timeOutdoorsMinutes"] if selected_day else sum(
             visit.dwell_minutes for visit in visits if visit.category != "home"
         )
+        outside_minutes = self._clamp_day_minutes(outside_minutes)
         waypoint_events = [row for row in event_rows if (row.event_type or "").lower() in {"transition", "waypoint", "region"}]
         hero_title = (
             "Movement and people are shaping the story"
@@ -217,7 +218,7 @@ class LocationIntelligenceService:
         for index, group in enumerate(grouped):
             first = group[0]
             last = group[-1]
-            dwell_minutes = max(20 if len(group) == 1 else 15, int((datetime.fromisoformat(last["timestamp"]) - datetime.fromisoformat(first["timestamp"])).total_seconds() // 60))
+            dwell_minutes = self._estimate_visit_dwell_minutes(group, grouped[index + 1] if index + 1 < len(grouped) else None)
             latitude = sum(point["latitude"] for point in group) / len(group)
             longitude = sum(point["longitude"] for point in group) / len(group)
             place = persisted_places.get(first["placeKey"])
@@ -399,7 +400,7 @@ class LocationIntelligenceService:
             "socialVenueVisits": row.social_venue_visits,
             "newPlacesVisited": row.new_places_visited,
             "commuteDetected": row.commute_detected,
-            "timeOutdoorsMinutes": row.time_outdoors_minutes or 0,
+            "timeOutdoorsMinutes": LocationIntelligenceService._clamp_day_minutes(row.time_outdoors_minutes or 0),
         }
 
     @staticmethod
@@ -551,6 +552,30 @@ class LocationIntelligenceService:
         if rows:
             return rows[-1].timestamp.date().isoformat()
         return end.isoformat()
+
+    @classmethod
+    def _estimate_visit_dwell_minutes(cls, group: list[dict], next_group: list[dict] | None) -> int:
+        first_at = datetime.fromisoformat(group[0]["timestamp"])
+        last_at = datetime.fromisoformat(group[-1]["timestamp"])
+        observed_minutes = max(0, int((last_at - first_at).total_seconds() // 60))
+
+        if next_group:
+            next_at = datetime.fromisoformat(next_group[0]["timestamp"])
+            transition_minutes = max(0, int((next_at - first_at).total_seconds() // 60))
+            return cls._clamp_visit_minutes(max(observed_minutes, transition_minutes))
+
+        if observed_minutes:
+            return cls._clamp_visit_minutes(observed_minutes)
+
+        return 0
+
+    @staticmethod
+    def _clamp_visit_minutes(minutes: int) -> int:
+        return max(0, min(minutes, LocationIntelligenceService.VISIT_BREAK_GAP_MINUTES))
+
+    @staticmethod
+    def _clamp_day_minutes(minutes: int) -> int:
+        return max(0, min(minutes, 24 * 60))
 
     @staticmethod
     def _format_minutes(total_minutes: int) -> str:
