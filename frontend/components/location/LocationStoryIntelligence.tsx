@@ -56,9 +56,6 @@ const categoryMeta: Record<string, { label: string; color: string; bg: string; i
 const movementMeta: Record<string, { label: string; color: string; bg: string; icon: LucideIcon }> = {
   walking: { label: 'Walk', color: 'var(--color-primary)', bg: 'rgba(45, 106, 79, 0.12)', icon: MapPin },
   travel: { label: 'Travel', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
-  cycling: { label: 'Travel', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
-  transit: { label: 'Travel', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
-  unknown_movement: { label: 'Travel', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
 };
 
 function getMeta(category: string) {
@@ -231,9 +228,12 @@ function TimelineRows({ timeline, onTimelineTagged }: { timeline: LocationTimeli
   async function tagRow(row: LocationTimelinePayload, value: string) {
     setSavingRow(row.rowId);
     try {
+      const payload = row.kind === 'visit'
+        ? { category: value === 'custom_place' ? 'unknown_place' : value }
+        : { movementType: value };
       await api.tagLocationTimelineRow(
         row.rowId,
-        row.kind === 'visit' ? { category: value } : { movementType: value },
+        payload,
       );
       onTimelineTagged?.();
     } finally {
@@ -306,15 +306,12 @@ function TimelineRows({ timeline, onTimelineTagged }: { timeline: LocationTimeli
                     : [
                       ['home', 'Home'],
                       ['work', 'Work'],
-                      ['social', 'Social'],
-                      ['gym', 'Fitness'],
-                      ['unknown_place', 'Unknown place'],
-                      ['misc', 'Other'],
+                      ['custom_place', 'Custom place'],
                     ]
                   ).map(([value, label]) => {
                     const active = isMovement
-                      ? row.movementType === value || (value === 'travel' && ['cycling', 'transit', 'unknown_movement'].includes(String(row.movementType)))
-                      : row.category === value;
+                      ? row.movementType === value || (value === 'travel' && row.movementType !== 'walking')
+                      : (value === 'custom_place' ? row.category === 'unknown_place' : row.category === value);
                     return (
                       <button
                         key={`${row.rowId}-${value}`}

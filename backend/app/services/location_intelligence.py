@@ -241,13 +241,19 @@ class LocationIntelligenceService:
     def tag_timeline_row(self, row_id: str, payload: dict, mode: str | None, db: Session) -> dict:
         visit = db.scalar(select(LocationVisitReal).where(LocationVisitReal.row_id == row_id))
         if visit:
+            category = self._normalize_visit_category(payload.get("category") or visit.category)
+            label = payload.get("label") or visit.place_label
+            if not payload.get("label") and category == "home":
+                label = "Home"
+            elif not payload.get("label") and category == "work":
+                label = "Work"
             override = self._upsert_override(
                 db,
                 target_kind="visit",
                 target_key=visit.place_key,
                 row_id=row_id,
-                label=payload.get("label") or visit.place_label,
-                category=payload.get("category") or visit.category,
+                label=label,
+                category=category,
                 movement_type=None,
                 tone=payload.get("tone"),
                 note=payload.get("note"),
@@ -263,9 +269,11 @@ class LocationIntelligenceService:
             if payload.get("label"):
                 place.label = payload["label"]
                 visit.place_label = payload["label"]
-            if payload.get("category"):
-                place.category = payload["category"]
-                visit.category = payload["category"]
+            elif category in {"home", "work"}:
+                place.label = label
+                visit.place_label = label
+            place.category = category
+            visit.category = category
             if payload.get("tone"):
                 place.tone = payload["tone"]
             if payload.get("note"):
@@ -280,18 +288,21 @@ class LocationIntelligenceService:
 
         movement = db.scalar(select(LocationMovementReal).where(LocationMovementReal.row_id == row_id))
         if movement:
-            if payload.get("movementType"):
-                movement.movement_type = payload["movementType"]
+            movement_type = self._normalize_movement_type(payload.get("movementType") or movement.movement_type)
+            movement_label = self._movement_label(movement_type)
             if payload.get("label"):
                 movement.label = payload["label"]
+            else:
+                movement.label = movement_label
+            movement.movement_type = movement_type
             override = self._upsert_override(
                 db,
                 target_kind="movement",
                 target_key=row_id,
                 row_id=row_id,
-                label=payload.get("label") or movement.label,
+                label=movement.label,
                 category=None,
-                movement_type=payload.get("movementType") or movement.movement_type,
+                movement_type=movement_type,
                 tone=payload.get("tone"),
                 note=payload.get("note"),
                 latitude=movement.start_latitude,
@@ -383,16 +394,16 @@ class LocationIntelligenceService:
         region_name = self._region_name(group)
 
         if override and getattr(override, "category", None):
-            category = override.category
+            category = self._normalize_visit_category(override.category)
             confidence = 0.96
         elif getattr(place, "category", None):
-            category = place.category
+            category = self._normalize_visit_category(place.category)
             confidence = getattr(place, "confidence_score", None) or 0.88
         elif region_name:
-            category = self._category_from_region(region_name)
+            category = self._normalize_visit_category(self._category_from_region(region_name))
             confidence = 0.78
         else:
-            category = self._derive_category(place_key, dwell_minutes, last["timestamp"])
+            category = self._normalize_visit_category(self._derive_category(place_key, dwell_minutes, last["timestamp"]))
             confidence = 0.52 if category in {"unknown_place", "misc"} else 0.66
 
         place_label = (
@@ -538,7 +549,7 @@ class LocationIntelligenceService:
                     id=f"event-{waypoint_event.id}",
                     place_key=key,
                     place_label=waypoint_event.waypoint_name,
-                    category="social" if "foot" in (waypoint_event.waypoint_name or "").lower() else "misc",
+                    category="unknown_place",
                     start_timestamp=waypoint_event.timestamp.isoformat(),
                     end_timestamp=waypoint_event.timestamp.isoformat(),
                     dwell_minutes=15,
@@ -557,11 +568,9 @@ class LocationIntelligenceService:
                 row = place_model(place_key=key, status="active")
                 db.add(row)
             row.label = row.label or key_visits[0].place_label
-            row.category = row.category or key_visits[0].category
+            row.category = self._normalize_visit_category(row.category or key_visits[0].category)
             row.tone = row.tone or key_visits[0].tone
-            if row.category == "errands":
-                row.category = "unknown_place"
-            if row.label == "Errand Loop":
+            if row.category == "unknown_place" and row.label in {"Errand Loop", "Errands", "Errand Loop "}:
                 row.label = "Unknown place"
             row.latitude = sum(visit.latitude for visit in key_visits) / len(key_visits)
             row.longitude = sum(visit.longitude for visit in key_visits) / len(key_visits)
@@ -662,7 +671,7 @@ class LocationIntelligenceService:
             "id": movement.id,
             "rowId": movement.id,
             "kind": "movement",
-            "label": movement.label,
+            "label": movement.label or LocationIntelligenceService._movement_label(movement.movement_type),
             "movementType": movement.movement_type,
             "startTimestamp": movement.start_timestamp,
             "endTimestamp": movement.end_timestamp,
@@ -931,12 +940,6 @@ class LocationIntelligenceService:
             return "home"
         if "work" in value or "office" in value or "uni" in value or "university" in value:
             return "work"
-        if "gym" in value or "fitness" in value:
-            return "gym"
-        if "park" in value or "green" in value:
-            return "green_space"
-        if "cafe" in value or "coffee" in value:
-            return "cafe"
         return "unknown_place"
 
     @staticmethod
@@ -948,6 +951,19 @@ class LocationIntelligenceService:
             "unknown_movement": "Travel",
             "travel": "Travel",
         }.get(movement_type, "Movement")
+
+    @staticmethod
+    def _normalize_visit_category(category: str | None) -> str:
+        if category in {"home", "work"}:
+            return category
+        return "unknown_place"
+
+    @staticmethod
+    def _normalize_movement_type(movement_type: str | None) -> str:
+        value = (movement_type or "travel").lower()
+        if value in {"walk", "walking", "run", "running", "on_foot"}:
+            return "walking"
+        return "travel"
 
     @staticmethod
     def _timeline_row_id(kind: str, start_timestamp: str, end_timestamp: str, key: str) -> str:
@@ -1072,23 +1088,13 @@ class LocationIntelligenceService:
         hour = datetime.fromisoformat(last_timestamp).hour
         if dwell_minutes >= 180 and 8 <= hour <= 18:
             return "work"
-        if 45 <= dwell_minutes <= 110:
-            return "gym"
-        if dwell_minutes <= 35:
-            return "unknown_place"
-        if 17 <= hour <= 23:
-            return "social"
         return "unknown_place"
 
     def _place_label(self, place_key: str, category: str, index: int) -> str:
         if place_key == "home":
             return "Home"
         if category == "work":
-            return "Work Base"
-        if category == "social":
-            return f"Social Spot {index + 1}"
-        if category == "gym":
-            return f"Movement Spot {index + 1}"
+            return "Work"
         if category == "unknown_place":
             return f"Unknown place {index + 1}"
         return f"Place {index + 1}"
@@ -1098,20 +1104,16 @@ class LocationIntelligenceService:
         if place_key == "home":
             return "Home"
         if category == "work":
-            return "Work Base"
-        if category == "social":
-            return "Social Spot"
-        if category == "gym":
-            return "Movement Spot"
+            return "Work"
         if category == "unknown_place":
             return "Unknown place"
         return "Place"
 
     @staticmethod
     def _default_tone(category: str, has_companion_context: bool) -> str:
-        if category in {"social", "gym"} or has_companion_context:
+        if has_companion_context:
             return "positive"
-        if category in {"work", "errands", "transit"}:
+        if category == "work":
             return "draining"
         return "neutral"
 
@@ -1124,8 +1126,8 @@ class LocationIntelligenceService:
             return f"{count} companion{'s' if count != 1 else ''} tagged"
         if category == "home":
             return "Base camp for the day"
-        if category == "social":
-            return "Likely shared energy"
+        if category == "work":
+            return "Likely structured place"
         if dwell_minutes >= 90:
             return "Longer high-presence stop"
         return "Short transition or unknown place"

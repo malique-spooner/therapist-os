@@ -474,12 +474,9 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
                           className="w-full rounded-2xl border bg-transparent px-3 py-2.5 text-sm outline-none"
                           style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                         >
-                          <option value="unknown_place">Custom / unknown place</option>
+                          <option value="unknown_place">Custom place</option>
                           <option value="home">Home</option>
                           <option value="work">Work</option>
-                          <option value="social">Social</option>
-                          <option value="gym">Fitness</option>
-                          <option value="errands">Errand</option>
                         </select>
                       </label>
 
