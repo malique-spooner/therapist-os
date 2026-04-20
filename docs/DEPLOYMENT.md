@@ -85,14 +85,30 @@ TRUSTED_HOSTS=app.example.com,www.app.example.com,localhost,127.0.0.1
 
 ## Deploy
 
+Recommended one-step deploy:
+
+```bash
+bash tools/deployment/deploy.sh
+```
+
+Or via npm:
+
+```bash
+npm run deploy:vps
+```
+
+If you prefer the raw compose flow, make sure you restart nginx after the rebuild:
+
 ```bash
 docker compose up --build -d
+docker compose restart nginx
 ```
 
 If you are on the VPS and want to avoid local-only overrides explicitly:
 
 ```bash
 docker compose -f docker-compose.yml up --build -d
+docker compose restart nginx
 ```
 
 ## Post-deploy Checks

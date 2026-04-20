@@ -15,7 +15,8 @@
     "test:all": "npm run test:frontend",
     "test:e2e": "cd frontend && playwright test -c playwright.config.ts",
     "test:e2e:update": "cd frontend && playwright test -c playwright.config.ts --update-snapshots",
-    "smoke:deploy": "bash tools/deployment/smoke-test.sh"
+    "smoke:deploy": "bash tools/deployment/smoke-test.sh",
+    "deploy:vps": "bash tools/deployment/deploy.sh"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
