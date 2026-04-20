@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..core.logging import get_logger
-from ..models.life_data import HabitLogReal, MonthlyBudgetReal, UserProfileReal
+from ..models.life_data import HabitLogDemo, MonthlyBudgetDemo, UserProfileDemo
 
 logger = get_logger(__name__)
 
@@ -36,7 +36,7 @@ class NotificationService:
 
     async def send_daily_checkin_reminder(self, db: Session) -> None:
         today = date.today()
-        mood_log = db.scalar(select(HabitLogReal).where(HabitLogReal.habit_id == "mood", HabitLogReal.date == today))
+        mood_log = db.scalar(select(HabitLogDemo).where(HabitLogDemo.habit_id == "mood", HabitLogDemo.date == today))
         if mood_log and mood_log.scale_value is not None:
             return
         await self.send(
@@ -46,7 +46,7 @@ class NotificationService:
         )
 
     async def send_weekly_summary(self, db: Session) -> None:
-        profile = db.scalar(select(UserProfileReal).limit(1))
+        profile = db.scalar(select(UserProfileDemo).limit(1))
         if profile and profile.notable_patterns:
             summary = (
                 f"This week, the clearest pattern remained {profile.notable_patterns[0].lower()} "
@@ -61,7 +61,7 @@ class NotificationService:
         )
 
     async def send_budget_warning(self, db: Session) -> None:
-        budget = db.scalar(select(MonthlyBudgetReal).where(MonthlyBudgetReal.month == date.today().replace(day=1)))
+        budget = db.scalar(select(MonthlyBudgetDemo).where(MonthlyBudgetDemo.month == date.today().replace(day=1)))
         if not budget or budget.limit_pence <= 0:
             return
         if budget.spent_pence < int(budget.limit_pence * 0.8):

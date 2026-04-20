@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Bike,
   Briefcase,
   Bus,
   Clock3,
@@ -13,6 +12,7 @@ import {
   Sparkles,
   TreePine,
   Users,
+  Search,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -48,18 +48,17 @@ const categoryMeta: Record<string, { label: string; color: string; bg: string; i
   green_space: { label: 'Green space', color: '#52B788', bg: 'rgba(82, 183, 136, 0.14)', icon: TreePine },
   cafe: { label: 'Cafe', color: '#b7791f', bg: 'rgba(183, 121, 31, 0.12)', icon: MapPin },
   social: { label: 'Social', color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.12)', icon: Users },
-  errands: { label: 'Errands', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)', icon: Bike },
-  errand: { label: 'Errand', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)', icon: Bike },
-  transit: { label: 'Transit', color: '#f4a261', bg: 'rgba(244, 162, 97, 0.14)', icon: Bus },
+  unknown_place: { label: 'Unknown place', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)', icon: Search },
   misc: { label: 'Other', color: 'var(--color-text-muted)', bg: 'var(--color-surface-2)', icon: MapPin },
   other: { label: 'Other', color: 'var(--color-text-muted)', bg: 'var(--color-surface-2)', icon: MapPin },
 };
 
 const movementMeta: Record<string, { label: string; color: string; bg: string; icon: LucideIcon }> = {
   walking: { label: 'Walk', color: 'var(--color-primary)', bg: 'rgba(45, 106, 79, 0.12)', icon: MapPin },
-  cycling: { label: 'Cycle', color: '#f4a261', bg: 'rgba(244, 162, 97, 0.14)', icon: Bike },
-  transit: { label: 'Transit', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
-  unknown_movement: { label: 'Unsure movement', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)', icon: MapPin },
+  travel: { label: 'Travel', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
+  cycling: { label: 'Travel', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
+  transit: { label: 'Travel', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
+  unknown_movement: { label: 'Travel', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
 };
 
 function getMeta(category: string) {
@@ -67,7 +66,7 @@ function getMeta(category: string) {
 }
 
 function getMovementMeta(movementType: string | null | undefined) {
-  return movementMeta[movementType ?? 'unknown_movement'] ?? movementMeta.unknown_movement;
+  return movementMeta[movementType ?? 'travel'] ?? movementMeta.travel;
 }
 
 function formatMinutes(totalMinutes: number) {
@@ -164,7 +163,7 @@ function TimeBreakdown({ timeline, visits }: { timeline: LocationTimelinePayload
   return (
     <div className="rounded-[30px] p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
       <SectionLabel label="Time breakdown" action={trackedMinutes ? formatMinutes(trackedMinutes) : undefined} />
-      <div className="flex items-center gap-5">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
         <div className="relative h-[112px] w-[112px] flex-shrink-0">
           <svg viewBox="0 0 110 110" className="h-full w-full">
             <circle cx="55" cy="55" r="42" stroke="var(--color-border)" strokeWidth="12" fill="none" />
@@ -215,7 +214,7 @@ function TimeBreakdown({ timeline, visits }: { timeline: LocationTimelinePayload
             </div>
           )) : (
             <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-              Once visits are derived, this will show how the selected day split across home, transit, social, work, and restorative places.
+              Once visits are derived, this will show how the selected day split across home, work, social, movement, and unknown places.
             </p>
           )}
         </div>
@@ -302,20 +301,20 @@ function TimelineRows({ timeline, onTimelineTagged }: { timeline: LocationTimeli
                   {(isMovement
                     ? [
                       ['walking', 'Walk'],
-                      ['cycling', 'Cycle'],
-                      ['transit', 'Transit'],
-                      ['unknown_movement', 'Other movement'],
+                      ['travel', 'Travel'],
                     ]
                     : [
                       ['home', 'Home'],
                       ['work', 'Work'],
                       ['social', 'Social'],
                       ['gym', 'Fitness'],
-                      ['errands', 'Errand'],
+                      ['unknown_place', 'Unknown place'],
                       ['misc', 'Other'],
                     ]
                   ).map(([value, label]) => {
-                    const active = isMovement ? row.movementType === value : row.category === value;
+                    const active = isMovement
+                      ? row.movementType === value || (value === 'travel' && ['cycling', 'transit', 'unknown_movement'].includes(String(row.movementType)))
+                      : row.category === value;
                     return (
                       <button
                         key={`${row.rowId}-${value}`}
@@ -384,7 +383,7 @@ function MovementSummary({ visits, points, timeline }: { visits: LocationVisitPa
   const path = buildPointPath(points.length ? points : visits);
   const places = visits.filter((visit, index, all) => all.findIndex((entry) => entry.placeKey === visit.placeKey) === index).slice(0, 4);
   const movementTotals = timeline.filter((row) => row.kind === 'movement').reduce<Record<string, number>>((acc, row) => {
-    const key = row.movementType ?? 'unknown_movement';
+    const key = ['cycling', 'transit', 'unknown_movement'].includes(String(row.movementType)) ? 'travel' : (row.movementType ?? 'travel');
     acc[key] = (acc[key] ?? 0) + row.durationMinutes;
     return acc;
   }, {});
@@ -423,8 +422,8 @@ function MovementSummary({ visits, points, timeline }: { visits: LocationVisitPa
           </text>
         </svg>
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        {(['walking', 'cycling', 'transit'] as const).map((type) => {
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {(['walking', 'travel'] as const).map((type) => {
           const meta = getMovementMeta(type);
           return (
             <div key={type} className="rounded-2xl px-3 py-2" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
@@ -521,7 +520,7 @@ function InsightsAndStatus({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <div className="rounded-[30px] p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+      <div className="rounded-[30px] p-4 sm:p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
         <SectionLabel label="Insights" />
         <div className="space-y-3">
           {insights.map((insight) => {
@@ -542,7 +541,7 @@ function InsightsAndStatus({
         </div>
       </div>
 
-      <div className="rounded-[30px] p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+      <div className="rounded-[30px] p-4 sm:p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
         <SectionLabel label="Tracking status" />
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Location feed</p>

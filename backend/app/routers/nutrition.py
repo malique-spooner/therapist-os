@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models.life_data import NutritionLogReal
+from ..models.life_data import NutritionLogDemo, NutritionLogReal
 from ..schemas.nutrition import NutritionCreateSchema
+from ..services.data_mode import read_dataset_model, write_dataset_model
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/nutrition", tags=["nutrition"], dependencies=[Depends(verify_api_key)])
@@ -32,9 +33,10 @@ def _serialize(row) -> dict:
 
 
 def _upsert(target_date: date_type, payload: NutritionCreateSchema, db: Session, mode: str | None) -> NutritionLogReal:
-    row = db.scalar(select(NutritionLogReal).where(NutritionLogReal.date == target_date))
+    nutrition_model = write_dataset_model(mode, NutritionLogReal, NutritionLogDemo)
+    row = db.scalar(select(nutrition_model).where(nutrition_model.date == target_date))
     if not row:
-        row = NutritionLogReal(date=target_date)
+        row = nutrition_model(date=target_date)
         db.add(row)
 
     row.breakfast = bool(payload.meals.get("breakfast"))
@@ -53,17 +55,19 @@ def _upsert(target_date: date_type, payload: NutritionCreateSchema, db: Session,
 @router.get("")
 def get_nutrition(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
+    nutrition_model = read_dataset_model(mode, NutritionLogReal, NutritionLogDemo)
     rows = db.scalars(
-        select(NutritionLogReal)
-        .where(NutritionLogReal.date.between(start, end))
-        .order_by(NutritionLogReal.date)
+        select(nutrition_model)
+        .where(nutrition_model.date.between(start, end))
+        .order_by(nutrition_model.date)
     ).all()
     return [_serialize(row) for row in rows]
 
 
 @router.get("/today")
 def get_nutrition_today(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
-    row = db.scalar(select(NutritionLogReal).order_by(NutritionLogReal.date.desc()))
+    nutrition_model = read_dataset_model(mode, NutritionLogReal, NutritionLogDemo)
+    row = db.scalar(select(nutrition_model).order_by(nutrition_model.date.desc()))
     if row:
         return _serialize(row)
     return {
@@ -78,7 +82,8 @@ def get_nutrition_today(mode: str | None = None, db: Session = Depends(get_db)) 
 @router.get("/day")
 def get_nutrition_for_date(date: str, mode: str | None = None, db: Session = Depends(get_db)) -> dict:
     target_date = date_type.fromisoformat(date)
-    row = db.scalar(select(NutritionLogReal).where(NutritionLogReal.date == target_date))
+    nutrition_model = read_dataset_model(mode, NutritionLogReal, NutritionLogDemo)
+    row = db.scalar(select(nutrition_model).where(nutrition_model.date == target_date))
     if row:
         return _serialize(row)
     return {

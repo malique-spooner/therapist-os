@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models.life_data import FinanceDataReal, MonthlyBudgetReal
+from ..models.life_data import FinanceDataDemo, FinanceDataReal, MonthlyBudgetDemo, MonthlyBudgetReal
 from ..schemas.profile import BudgetSchema, BudgetUpdateSchema, ProfileSchema
 from ..services.profile_service import ProfileService
+from ..services.data_mode import read_dataset_model, write_dataset_model
 
 router = APIRouter(tags=["profile"], dependencies=[Depends(verify_api_key)])
 profile_service = ProfileService()
@@ -56,9 +57,10 @@ async def refresh_profile(mode: str | None = None, db: Session = Depends(get_db)
 
 def _current_budget(db: Session, mode: str | None = None):
     month = date.today().replace(day=1)
-    budget = db.scalar(select(MonthlyBudgetReal).where(MonthlyBudgetReal.month == month))
+    budget_model = read_dataset_model(mode, MonthlyBudgetReal, MonthlyBudgetDemo)
+    budget = db.scalar(select(budget_model).where(budget_model.month == month))
     if not budget:
-        budget = MonthlyBudgetReal(month=month)
+        budget = budget_model(month=month)
         db.add(budget)
         db.commit()
         db.refresh(budget)
@@ -69,11 +71,12 @@ def _current_budget(db: Session, mode: str | None = None):
 def get_budget(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
     budget = _current_budget(db, mode)
     month_end = date(budget.month.year + (1 if budget.month.month == 12 else 0), 1 if budget.month.month == 12 else budget.month.month + 1, 1)
+    finance_model = read_dataset_model(mode, FinanceDataReal, FinanceDataDemo)
     spent_pence = (
         db.scalar(
             select(func.coalesce(func.sum(finance_model.amount_pence), 0)).where(
-                FinanceDataReal.date >= budget.month,
-                FinanceDataReal.date < month_end,
+                finance_model.date >= budget.month,
+                finance_model.date < month_end,
             )
         )
         or 0

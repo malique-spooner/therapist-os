@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Compass } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 
 import { TopBar } from '@/components/navigation/TopBar';
 import { DateRangeControl, type DateRangeValue } from '@/components/ui/date-range-control';
@@ -12,6 +12,7 @@ import { useApiQuery } from '@/hooks/useApiQuery';
 import { useSettingsStore } from '@/state/settings';
 
 import { LocationStoryIntelligence } from './LocationStoryIntelligence';
+import { LocationSettingsDrawer } from './LocationSettingsDrawer';
 
 interface LocationPageProps {
   onBack: () => void;
@@ -40,7 +41,9 @@ function fallbackExperience(mode: 'real-only'): LocationIntelligencePayload {
 }
 
 export function LocationPage({ onBack, onSettings }: LocationPageProps) {
+  void onSettings;
   const dataMode = useSettingsStore((state) => state.dataMode);
+  const [showLocationSettings, setShowLocationSettings] = useState(false);
   const [range, setRange] = useState<DateRangeValue>(() => ({
     startDate: APP_TODAY,
     endDate: APP_TODAY,
@@ -118,11 +121,10 @@ export function LocationPage({ onBack, onSettings }: LocationPageProps) {
       <TopBar
         showBack
         onBack={onBack}
-        onSettings={onSettings}
         title="Location"
         rightElement={(
-          <button onClick={onSettings} className="p-2 rounded-xl active:scale-95 transition-transform" aria-label="Settings">
-            <Compass size={18} style={{ color: 'var(--color-text-muted)' }} />
+          <button onClick={() => setShowLocationSettings(true)} className="rounded-xl p-2 active:scale-95 transition-transform" aria-label="Location settings">
+            <Settings2 size={18} style={{ color: 'var(--color-text-muted)' }} />
           </button>
         )}
       />
@@ -142,7 +144,7 @@ export function LocationPage({ onBack, onSettings }: LocationPageProps) {
 
         {showEmptyRealState && (
           <RetryNotice
-            message="Not enough real location data yet. Finish the OwnTracks phone publish flow and this page will turn it into visits, places, and a daily movement story."
+            message="Not enough real location data yet. Finish the OwnTracks phone publish flow, then teach Home and Work in Location settings."
             onRetry={refetch}
             className="mx-4 mb-4 w-[calc(100%-2rem)]"
           />
@@ -161,6 +163,13 @@ export function LocationPage({ onBack, onSettings }: LocationPageProps) {
           />
         </div>
       </div>
+
+      <LocationSettingsDrawer
+        open={showLocationSettings}
+        onClose={() => setShowLocationSettings(false)}
+        places={experience.places}
+        onSaved={refetch}
+      />
     </div>
   );
 }

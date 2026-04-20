@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models.life_data import MusicDataReal
+from ..models.life_data import MusicDataDemo, MusicDataReal
 from ..models.source_data import ChromeBookmark, ChromeHistoryEvent, YoutubeSearchEvent, YoutubeSubscription, YoutubeWatchEvent
 from ..services.data_sources import DataSourceService
 from ..services.ingestion.spotify import SpotifyIngestionService
+from ..services.data_mode import read_dataset_model
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/consumption", tags=["consumption"], dependencies=[Depends(verify_api_key)])
@@ -49,9 +50,10 @@ def _serialize_music(row) -> dict:
 
 def _media_days(start: date, end: date, db: Session) -> list[dict]:
     days: dict[date, dict] = {}
+    music_model = read_dataset_model(None, MusicDataReal, MusicDataDemo)
 
     for row in db.scalars(
-        select(MusicDataReal).where(MusicDataReal.date.between(start, end)).order_by(MusicDataReal.date)
+        select(music_model).where(music_model.date.between(start, end)).order_by(music_model.date)
     ).all():
         days[row.date] = _serialize_music(row)
 
@@ -254,7 +256,8 @@ def get_consumption(period: str = "this-week", mode: str | None = None, db: Sess
 
 @router.get("/today")
 def get_consumption_today(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
-    row = db.scalar(select(MusicDataReal).order_by(MusicDataReal.date.desc()))
+    music_model = read_dataset_model(mode, MusicDataReal, MusicDataDemo)
+    row = db.scalar(select(music_model).order_by(music_model.date.desc()))
     if not row:
         raise HTTPException(status_code=404, detail="Media data not available")
     return _serialize_music(row)
@@ -284,7 +287,7 @@ async def sync_consumption(db: Session = Depends(get_db)) -> dict:
         rows_synced=result.get("rows_synced"),
     )
     return {
-        "detail": "Media synced",
+        "detail": "Consumption synced",
         "daysSynced": result.get("days_synced", 0),
         "latestDate": result.get("latest_date"),
         "playsSynced": result.get("rows_synced", 0),

@@ -16,10 +16,12 @@ def validate_settings() -> ValidationResult:
     errors: list[str] = []
     warnings: list[str] = []
 
-    if not settings.API_SECRET_KEY or settings.API_SECRET_KEY == "dev-secret-key":
-        warnings.append("API_SECRET_KEY is using a development value.")
-    if settings.DATABASE_URL.startswith("sqlite"):
+    if not settings.API_SECRET_KEY or settings.API_SECRET_KEY in {"dev-secret-key", "change-me"}:
+        warnings.append("API_SECRET_KEY is using a placeholder value.")
+    if settings.DATABASE_URL.startswith("sqlite") or "change-me" in settings.DATABASE_URL:
         warnings.append("DATABASE_URL is using SQLite; production should use PostgreSQL.")
+    if settings.FRONTEND_URL.startswith("http://localhost"):
+        warnings.append("FRONTEND_URL is using a local development address.")
     if not settings.FRONTEND_URL:
         errors.append("FRONTEND_URL must be set.")
     if settings.ENVIRONMENT == "production" and (not settings.ADMIN_EMAIL or not settings.ADMIN_PASSWORD):

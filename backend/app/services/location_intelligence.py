@@ -3,8 +3,11 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+import json
 from math import atan2, cos, radians, sin, sqrt
 import hashlib
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,6 +25,7 @@ from ..models.life_data import (
     LocationVisitReal,
 )
 from .periods import date_window
+from .data_sources import DataSourceService
 
 
 @dataclass
@@ -104,7 +108,8 @@ class LocationIntelligenceService:
             for row in db.scalars(select(LocationPlaceMemoryReal)).all()
         }
         overrides = db.scalars(select(LocationTagOverrideReal)).all()
-        visits, movements = self._derive_timeline(selected_day_points, persisted_places, companion, overrides)
+        google_maps_api_key = self._google_maps_api_key(db)
+        visits, movements = self._derive_timeline(selected_day_points, persisted_places, companion, overrides, google_maps_api_key)
         self._synchronise_timeline_records(visits, movements, db)
         places = self._synchronise_places(visits, event_rows, persisted_places, LocationPlaceMemoryReal, db)
         place_history_counts = self._history_counts(db)
@@ -148,7 +153,7 @@ class LocationIntelligenceService:
             "rangeStats": [
                 {"label": "Tracked time", "value": self._format_minutes(total_minutes), "detail": f"{len(visits)} visits and {len(movements)} movement segments"},
                 {"label": "Smart places", "value": str(len(places)), "detail": "Backend clustering, confidence states, and memory"},
-                {"label": "Movement", "value": self._format_minutes(derived_movement_minutes), "detail": "Walking, cycling, transit, and uncertain motion separated from places"},
+                {"label": "Movement", "value": self._format_minutes(derived_movement_minutes), "detail": "Walking and travel separated from places"},
                 {"label": "OwnTracks events", "value": str(len(waypoint_events)), "detail": "Waypoint and geofence transitions carried into inference"},
             ],
         }
@@ -164,6 +169,10 @@ class LocationIntelligenceService:
         row.category = payload.get("category")
         row.tone = payload.get("tone")
         row.note = payload.get("note")
+        if payload.get("latitude") is not None:
+            row.latitude = payload["latitude"]
+        if payload.get("longitude") is not None:
+            row.longitude = payload["longitude"]
         db.flush()
         db.add(
             LocationPlaceHistoryReal(
@@ -303,7 +312,7 @@ class LocationIntelligenceService:
 
         raise KeyError("Timeline row not found")
 
-    def _derive_timeline(self, points: list[dict], persisted_places: dict[str, object], companion, overrides: list[object]) -> tuple[list[Visit], list[Movement]]:
+    def _derive_timeline(self, points: list[dict], persisted_places: dict[str, object], companion, overrides: list[object], google_maps_api_key: str | None = None) -> tuple[list[Visit], list[Movement]]:
         if not points:
             return [], []
 
@@ -346,7 +355,7 @@ class LocationIntelligenceService:
                     movements.append(movement)
                 continue
 
-            visit = self._visit_from_group(group, grouped[index + 1]["points"] if index + 1 < len(grouped) else None, len(visits), persisted_places, companion, overrides)
+            visit = self._visit_from_group(group, grouped[index + 1]["points"] if index + 1 < len(grouped) else None, len(visits), persisted_places, companion, overrides, google_maps_api_key)
             if self._is_micro_transition_visit(visit, group):
                 movements.append(self._movement_from_micro_visit(visit, group))
                 continue
@@ -361,6 +370,7 @@ class LocationIntelligenceService:
         persisted_places: dict[str, object],
         companion,
         overrides: list[object],
+        google_maps_api_key: str | None = None,
     ) -> Visit:
         first = group[0]
         last = group[-1]
@@ -383,12 +393,13 @@ class LocationIntelligenceService:
             confidence = 0.78
         else:
             category = self._derive_category(place_key, dwell_minutes, last["timestamp"])
-            confidence = 0.52 if category in {"errands", "misc"} else 0.66
+            confidence = 0.52 if category in {"unknown_place", "misc"} else 0.66
 
         place_label = (
             getattr(override, "label", None)
             or getattr(place, "label", None)
             or region_name
+            or self._reverse_geocode_label(latitude, longitude, google_maps_api_key)
             or self._place_label(place_key, category, index)
         )
         tone = getattr(override, "tone", None) or getattr(place, "tone", None) or self._default_tone(category, companion is not None and bool(getattr(companion, "person_ids", [])))
@@ -445,15 +456,15 @@ class LocationIntelligenceService:
     def _is_micro_transition_visit(visit: Visit, group: list[dict]) -> bool:
         if visit.place_key == "home" or visit.correction:
             return False
-        return visit.category in {"errands", "misc"} and visit.dwell_minutes <= 5 and visit.confidence_score < 0.6
+        return visit.category in {"unknown_place", "misc"} and visit.dwell_minutes <= 5 and visit.confidence_score < 0.6
 
     def _movement_from_micro_visit(self, visit: Visit, group: list[dict]) -> Movement:
         first = group[0]
         last = group[-1]
         return Movement(
             id=self._timeline_row_id("movement", visit.start_timestamp, visit.end_timestamp, f"micro:{visit.place_key}"),
-            movement_type="unknown_movement",
-            label="Unknown movement",
+            movement_type="travel",
+            label="Travel",
             start_timestamp=visit.start_timestamp,
             end_timestamp=visit.end_timestamp,
             duration_minutes=max(1, visit.dwell_minutes),
@@ -548,6 +559,10 @@ class LocationIntelligenceService:
             row.label = row.label or key_visits[0].place_label
             row.category = row.category or key_visits[0].category
             row.tone = row.tone or key_visits[0].tone
+            if row.category == "errands":
+                row.category = "unknown_place"
+            if row.label == "Errand Loop":
+                row.label = "Unknown place"
             row.latitude = sum(visit.latitude for visit in key_visits) / len(key_visits)
             row.longitude = sum(visit.longitude for visit in key_visits) / len(key_visits)
             visit_count = len(key_visits)
@@ -922,15 +937,16 @@ class LocationIntelligenceService:
             return "green_space"
         if "cafe" in value or "coffee" in value:
             return "cafe"
-        return "misc"
+        return "unknown_place"
 
     @staticmethod
     def _movement_label(movement_type: str) -> str:
         return {
             "walking": "Walk",
-            "cycling": "Cycle",
-            "transit": "Transit",
-            "unknown_movement": "Unknown movement",
+            "cycling": "Travel",
+            "transit": "Travel",
+            "unknown_movement": "Travel",
+            "travel": "Travel",
         }.get(movement_type, "Movement")
 
     @staticmethod
@@ -977,6 +993,39 @@ class LocationIntelligenceService:
             end_match = self._distance_metres(last["latitude"], last["longitude"], float(end[0]), float(end[1])) <= (override.radius_metres or 260)
             if start_match and end_match:
                 return override
+        return None
+
+    @staticmethod
+    def _google_maps_api_key(db: Session) -> str | None:
+        config = DataSourceService().get_runtime_config("google_maps", db)
+        api_key = config.get("api_key") or settings.GOOGLE_MAPS_API_KEY
+        return api_key or None
+
+    @staticmethod
+    def _reverse_geocode_label(latitude: float, longitude: float, api_key: str | None) -> str | None:
+        if not api_key:
+            return None
+        params = urlencode({"latlng": f"{latitude},{longitude}", "key": api_key})
+        url = f"https://maps.googleapis.com/maps/api/geocode/json?{params}"
+        try:
+            with urlopen(url, timeout=4) as response:
+                payload = json.load(response)
+        except Exception:  # noqa: BLE001
+            return None
+        if payload.get("status") != "OK":
+            return None
+        results = payload.get("results") or []
+        if not results:
+            return None
+        result = results[0] or {}
+        formatted = result.get("formatted_address")
+        if isinstance(formatted, str) and formatted.strip():
+            return formatted.split(",")[0].strip()
+        address_components = result.get("address_components") or []
+        if address_components and isinstance(address_components[0], dict):
+            candidate = address_components[0].get("long_name")
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
         return None
 
     def _upsert_override(self, db: Session, **values):
@@ -1026,10 +1075,10 @@ class LocationIntelligenceService:
         if 45 <= dwell_minutes <= 110:
             return "gym"
         if dwell_minutes <= 35:
-            return "errands"
+            return "unknown_place"
         if 17 <= hour <= 23:
             return "social"
-        return "misc"
+        return "unknown_place"
 
     def _place_label(self, place_key: str, category: str, index: int) -> str:
         if place_key == "home":
@@ -1040,8 +1089,8 @@ class LocationIntelligenceService:
             return f"Social Spot {index + 1}"
         if category == "gym":
             return f"Movement Spot {index + 1}"
-        if category == "errands":
-            return f"Errand Loop {index + 1}"
+        if category == "unknown_place":
+            return f"Unknown place {index + 1}"
         return f"Place {index + 1}"
 
     @staticmethod
@@ -1054,8 +1103,8 @@ class LocationIntelligenceService:
             return "Social Spot"
         if category == "gym":
             return "Movement Spot"
-        if category == "errands":
-            return "Errand Loop"
+        if category == "unknown_place":
+            return "Unknown place"
         return "Place"
 
     @staticmethod
@@ -1079,7 +1128,7 @@ class LocationIntelligenceService:
             return "Likely shared energy"
         if dwell_minutes >= 90:
             return "Longer high-presence stop"
-        return "Short transition or errand"
+        return "Short transition or unknown place"
 
     @staticmethod
     def _confidence_for_place(visit_count: int, total_minutes: int) -> float:

@@ -35,6 +35,8 @@ class LocationPlaceMemoryUpdateSchema(BaseModel):
     category: str | None = None
     tone: str | None = None
     note: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class LocationPlaceMergeSchema(BaseModel):

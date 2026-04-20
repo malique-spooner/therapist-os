@@ -24,6 +24,9 @@ class FinanceImportService:
     def __init__(self) -> None:
         self._drive_imports = GoogleDriveImportService()
 
+    async def sync_last_30_days(self, db: Session) -> list[Any]:
+        raise RuntimeError("Finance sync now uses Revolut and NatWest file imports.")
+
     def import_csv_text(self, source_id: str, file_ref: DriveFileRef, csv_text: str, db: Session) -> dict[str, int]:
         if source_id not in {"revolut", "natwest"}:
             raise RuntimeError("Unsupported finance source")

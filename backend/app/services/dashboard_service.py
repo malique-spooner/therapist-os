@@ -8,13 +8,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models.life_data import (
+    FinanceDataDemo,
     FinanceDataReal,
+    HabitLogDemo,
     HabitLogReal,
+    HealthDataDemo,
     HealthDataReal,
+    LocationDailySummaryDemo,
     LocationDailySummaryReal,
+    MusicDataDemo,
     MusicDataReal,
+    WeatherDataDemo,
     WeatherDataReal,
 )
+from .data_mode import read_dataset_model
 from .insights_service import InsightsService
 from .periods import date_window
 
@@ -25,27 +32,33 @@ class DashboardService:
 
     def _load_health(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        return db.scalars(select(HealthDataReal).where(HealthDataReal.date.between(start, end)).order_by(HealthDataReal.date)).all()
+        model = read_dataset_model(mode, HealthDataReal, HealthDataDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
 
     def _load_finance(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        return db.scalars(select(FinanceDataReal).where(FinanceDataReal.date.between(start, end)).order_by(FinanceDataReal.date)).all()
+        model = read_dataset_model(mode, FinanceDataReal, FinanceDataDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
 
     def _load_habits(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        return db.scalars(select(HabitLogReal).where(HabitLogReal.date.between(start, end)).order_by(HabitLogReal.date)).all()
+        model = read_dataset_model(mode, HabitLogReal, HabitLogDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
 
     def _load_weather(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        return db.scalars(select(WeatherDataReal).where(WeatherDataReal.date.between(start, end)).order_by(WeatherDataReal.date)).all()
+        model = read_dataset_model(mode, WeatherDataReal, WeatherDataDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
 
     def _load_music(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        return db.scalars(select(MusicDataReal).where(MusicDataReal.date.between(start, end)).order_by(MusicDataReal.date)).all()
+        model = read_dataset_model(mode, MusicDataReal, MusicDataDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
 
     def _load_location(self, db: Session, period: str, mode: str | None) -> list:
         start, end = date_window(period)
-        return db.scalars(select(LocationDailySummaryReal).where(LocationDailySummaryReal.date.between(start, end)).order_by(LocationDailySummaryReal.date)).all()
+        model = read_dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
+        return db.scalars(select(model).where(model.date.between(start, end)).order_by(model.date)).all()
 
     def build_dashboard(self, db: Session, period: str, mode: str | None = None) -> dict:
         health = self._load_health(db, period, mode)

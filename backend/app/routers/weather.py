@@ -4,9 +4,10 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models.life_data import WeatherDataReal
+from ..models.life_data import WeatherDataDemo, WeatherDataReal
 from ..services.data_sources import DataSourceService
 from ..services.ingestion.weather import WeatherIngestionService
+from ..services.data_mode import read_dataset_model
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/weather", tags=["weather"], dependencies=[Depends(verify_api_key)])
@@ -28,7 +29,8 @@ def _serialize(record) -> dict:
 
 @router.get("/today")
 def get_weather_today(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
-    record = db.scalar(select(WeatherDataReal).order_by(WeatherDataReal.date.desc()))
+    weather_model = read_dataset_model(mode, WeatherDataReal, WeatherDataDemo)
+    record = db.scalar(select(weather_model).order_by(weather_model.date.desc()))
     if not record:
         raise HTTPException(status_code=404, detail="Weather data not available")
     return _serialize(record)
@@ -37,7 +39,8 @@ def get_weather_today(mode: str | None = None, db: Session = Depends(get_db)) ->
 @router.get("")
 def get_weather(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
-    records = db.scalars(select(WeatherDataReal).where(WeatherDataReal.date.between(start, end)).order_by(WeatherDataReal.date)).all()
+    weather_model = read_dataset_model(mode, WeatherDataReal, WeatherDataDemo)
+    records = db.scalars(select(weather_model).where(weather_model.date.between(start, end)).order_by(weather_model.date)).all()
     return [_serialize(record) for record in records]
 
 

@@ -7,14 +7,21 @@ from statistics import mean
 from sqlalchemy.orm import Session
 
 from ..models.life_data import (
+    FinanceDataDemo,
     FinanceDataReal,
+    HabitLogDemo,
     HabitLogReal,
+    HealthDataDemo,
     HealthDataReal,
+    LocationDailySummaryDemo,
     LocationDailySummaryReal,
+    MusicDataDemo,
     MusicDataReal,
     UserProfileReal,
+    WeatherDataDemo,
     WeatherDataReal,
 )
+from .data_mode import read_dataset_model
 from .periods import date_window
 
 
@@ -34,13 +41,19 @@ class InsightsService:
 
     def load_period_data(self, db: Session, period: str, mode: str | None = None) -> dict:
         start, end = date_window(period)
+        health_model = read_dataset_model(mode, HealthDataReal, HealthDataDemo)
+        finance_model = read_dataset_model(mode, FinanceDataReal, FinanceDataDemo)
+        habit_model = read_dataset_model(mode, HabitLogReal, HabitLogDemo)
+        weather_model = read_dataset_model(mode, WeatherDataReal, WeatherDataDemo)
+        music_model = read_dataset_model(mode, MusicDataReal, MusicDataDemo)
+        location_model = read_dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
         return {
-            "health": db.query(HealthDataReal).filter(HealthDataReal.date.between(start, end)).order_by(HealthDataReal.date).all(),
-            "finance": db.query(FinanceDataReal).filter(FinanceDataReal.date.between(start, end)).order_by(FinanceDataReal.date).all(),
-            "habits": db.query(HabitLogReal).filter(HabitLogReal.date.between(start, end)).order_by(HabitLogReal.date).all(),
-            "weather": db.query(WeatherDataReal).filter(WeatherDataReal.date.between(start, end)).order_by(WeatherDataReal.date).all(),
-            "music": db.query(MusicDataReal).filter(MusicDataReal.date.between(start, end)).order_by(MusicDataReal.date).all(),
-            "location": db.query(LocationDailySummaryReal).filter(LocationDailySummaryReal.date.between(start, end)).order_by(LocationDailySummaryReal.date).all(),
+            "health": db.query(health_model).filter(health_model.date.between(start, end)).order_by(health_model.date).all(),
+            "finance": db.query(finance_model).filter(finance_model.date.between(start, end)).order_by(finance_model.date).all(),
+            "habits": db.query(habit_model).filter(habit_model.date.between(start, end)).order_by(habit_model.date).all(),
+            "weather": db.query(weather_model).filter(weather_model.date.between(start, end)).order_by(weather_model.date).all(),
+            "music": db.query(music_model).filter(music_model.date.between(start, end)).order_by(music_model.date).all(),
+            "location": db.query(location_model).filter(location_model.date.between(start, end)).order_by(location_model.date).all(),
             "profile": db.query(UserProfileReal).limit(1).one_or_none(),
         }
 

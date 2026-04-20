@@ -6,10 +6,13 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.auth import verify_api_key
-from ..models.life_data import FinanceDataReal
+from ..models.life_data import FinanceDataDemo, FinanceDataReal
+from ..services.ingestion.finance_imports import FinanceImportService
+from ..services.data_mode import read_dataset_model
 from ..services.periods import date_window
 
 router = APIRouter(prefix="/finance", tags=["finance"], dependencies=[Depends(verify_api_key)])
+service = FinanceImportService()
 
 
 def _serialize_day(day: str, categories: dict[str, int], bank_breakdown: dict[str, dict[str, int]]) -> dict:
@@ -41,10 +44,11 @@ def _serialize_day(day: str, categories: dict[str, int], bank_breakdown: dict[st
 @router.get("")
 def get_finance(period: str = "this-week", mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     start, end = date_window(period)
+    finance_model = read_dataset_model(mode, FinanceDataReal, FinanceDataDemo)
     rows = db.scalars(
-        select(FinanceDataReal)
-        .where(FinanceDataReal.date.between(start, end))
-        .order_by(FinanceDataReal.date)
+        select(finance_model)
+        .where(finance_model.date.between(start, end))
+        .order_by(finance_model.date)
     ).all()
     by_date: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     by_date_bank: dict[str, dict[str, dict[str, int]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
@@ -61,10 +65,11 @@ def get_finance(period: str = "this-week", mode: str | None = None, db: Session 
 
 @router.get("/today")
 def get_finance_today(mode: str | None = None, db: Session = Depends(get_db)) -> dict:
-    latest = db.scalar(select(FinanceDataReal.date).order_by(FinanceDataReal.date.desc()))
+    finance_model = read_dataset_model(mode, FinanceDataReal, FinanceDataDemo)
+    latest = db.scalar(select(finance_model.date).order_by(finance_model.date.desc()))
     if latest is None:
         raise HTTPException(status_code=404, detail="Finance data not available")
-    rows = db.scalars(select(FinanceDataReal).where(FinanceDataReal.date == latest)).all()
+    rows = db.scalars(select(finance_model).where(finance_model.date == latest)).all()
     categories: dict[str, int] = defaultdict(int)
     bank_breakdown: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for row in rows:
@@ -76,4 +81,13 @@ def get_finance_today(mode: str | None = None, db: Session = Depends(get_db)) ->
 
 @router.post("/sync")
 async def sync_finance(db: Session = Depends(get_db)) -> dict:
-    raise HTTPException(status_code=400, detail="Finance sync now uses Revolut and NatWest file imports.")
+    try:
+        result = await service.sync_last_30_days(db)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if isinstance(result, list):
+        result = {"transactions_synced": len(result)}
+    return {
+        "detail": "Finance synced",
+        "transactionsSynced": result.get("transactions_synced", 0),
+    }

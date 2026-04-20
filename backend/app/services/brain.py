@@ -6,18 +6,27 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..models.life_data import (
+    DailyCheckInDemo,
     AIConversationReal,
     DailyCheckInReal,
+    FinanceDataDemo,
     FinanceDataReal,
+    HabitLogDemo,
     HabitLogReal,
+    HealthDataDemo,
     HealthDataReal,
+    LocationDailySummaryDemo,
     LocationDailySummaryReal,
+    MusicDataDemo,
     MusicDataReal,
+    RelationshipDemo,
     RelationshipInteractionReal,
     RelationshipReal,
     UserProfileReal,
+    WeatherDataDemo,
     WeatherDataReal,
 )
+from .data_mode import read_dataset_model
 
 
 DEFAULT_LAYERS = [
@@ -208,9 +217,16 @@ DEFAULT_VERSIONS = [
 
 class BrainService:
     def get_payload(self, db: Session, mode: str | None = None) -> dict:
+        health_model = read_dataset_model(mode, HealthDataReal, HealthDataDemo)
+        finance_model = read_dataset_model(mode, FinanceDataReal, FinanceDataDemo)
+        music_model = read_dataset_model(mode, MusicDataReal, MusicDataDemo)
+        location_model = read_dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
+        weather_model = read_dataset_model(mode, WeatherDataReal, WeatherDataDemo)
+        habit_model = read_dataset_model(mode, HabitLogReal, HabitLogDemo)
+        checkin_model = read_dataset_model(mode, DailyCheckInReal, DailyCheckInDemo)
         source_coverage = self._source_coverage(db)
         tracked_habits = (
-            db.scalar(select(func.count(func.distinct(HabitLogReal.habit_id))).select_from(HabitLogReal)) or 0
+            db.scalar(select(func.count(func.distinct(habit_model.habit_id))).select_from(habit_model)) or 0
         )
         conversations = db.scalar(select(func.count()).select_from(AIConversationReal)) or 0
         relationship_count = db.scalar(
@@ -219,7 +235,7 @@ class BrainService:
         interaction_count = db.scalar(
             select(func.count()).select_from(RelationshipInteractionReal)
         ) or 0
-        checkin_count = db.scalar(select(func.count()).select_from(DailyCheckInReal)) or 0
+        checkin_count = db.scalar(select(func.count()).select_from(checkin_model)) or 0
         profile = db.scalar(select(UserProfileReal).limit(1))
 
         active_systems = sum(len(layer.get("detectors", [])) + len(layer.get("models", [])) for layer in DEFAULT_LAYERS)

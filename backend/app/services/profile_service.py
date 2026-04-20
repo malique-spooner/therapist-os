@@ -7,26 +7,40 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..models.life_data import (
+    AIConversationDemo,
     AIConversationReal,
+    DailyCheckInDemo,
     DailyCheckInReal,
+    FinanceDataDemo,
     FinanceDataReal,
+    HabitLogDemo,
     HabitLogReal,
+    HealthDataDemo,
     HealthDataReal,
+    LocationDailySummaryDemo,
     LocationDailySummaryReal,
+    MusicDataDemo,
     MusicDataReal,
     UserProfileReal,
 )
+from .data_mode import read_dataset_model
 
 
 class ProfileService:
     def has_profile_inputs(self, db: Session, mode: str | None = None) -> bool:
+        health_model = read_dataset_model(mode, HealthDataReal, HealthDataDemo)
+        finance_model = read_dataset_model(mode, FinanceDataReal, FinanceDataDemo)
+        habit_model = read_dataset_model(mode, HabitLogReal, HabitLogDemo)
+        music_model = read_dataset_model(mode, MusicDataReal, MusicDataDemo)
+        location_model = read_dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
+        checkin_model = read_dataset_model(mode, DailyCheckInReal, DailyCheckInDemo)
         counts = [
-            db.scalar(select(func.count()).select_from(HealthDataReal)) or 0,
-            db.scalar(select(func.count()).select_from(FinanceDataReal)) or 0,
-            db.scalar(select(func.count()).select_from(HabitLogReal)) or 0,
-            db.scalar(select(func.count()).select_from(MusicDataReal)) or 0,
-            db.scalar(select(func.count()).select_from(LocationDailySummaryReal)) or 0,
-            db.scalar(select(func.count()).select_from(DailyCheckInReal)) or 0,
+            db.scalar(select(func.count()).select_from(health_model)) or 0,
+            db.scalar(select(func.count()).select_from(finance_model)) or 0,
+            db.scalar(select(func.count()).select_from(habit_model)) or 0,
+            db.scalar(select(func.count()).select_from(music_model)) or 0,
+            db.scalar(select(func.count()).select_from(location_model)) or 0,
+            db.scalar(select(func.count()).select_from(checkin_model)) or 0,
         ]
         return sum(counts) > 0
 
@@ -56,18 +70,24 @@ class ProfileService:
         profile = self._profile(db, mode)
         today = date.today()
         start = today - timedelta(days=29)
+        health_model = read_dataset_model(mode, HealthDataReal, HealthDataDemo)
+        finance_model = read_dataset_model(mode, FinanceDataReal, FinanceDataDemo)
+        habit_model = read_dataset_model(mode, HabitLogReal, HabitLogDemo)
+        music_model = read_dataset_model(mode, MusicDataReal, MusicDataDemo)
+        location_model = read_dataset_model(mode, LocationDailySummaryReal, LocationDailySummaryDemo)
+        conversation_model = read_dataset_model(mode, AIConversationReal, AIConversationDemo)
 
         health = db.scalars(
-            select(HealthDataReal).where(HealthDataReal.date >= start).order_by(HealthDataReal.date)
+            select(health_model).where(health_model.date >= start).order_by(health_model.date)
         ).all()
-        finance = db.scalars(select(FinanceDataReal).where(FinanceDataReal.date >= start)).all()
-        habits = db.scalars(select(HabitLogReal).where(HabitLogReal.date >= start)).all()
-        music = db.scalars(select(MusicDataReal).where(MusicDataReal.date >= start)).all()
+        finance = db.scalars(select(finance_model).where(finance_model.date >= start)).all()
+        habits = db.scalars(select(habit_model).where(habit_model.date >= start)).all()
+        music = db.scalars(select(music_model).where(music_model.date >= start)).all()
         location = db.scalars(
-            select(LocationDailySummaryReal).where(LocationDailySummaryReal.date >= start)
+            select(location_model).where(location_model.date >= start)
         ).all()
         sessions = db.scalars(
-            select(AIConversationReal).order_by(AIConversationReal.started_at.desc()).limit(10)
+            select(conversation_model).order_by(conversation_model.started_at.desc()).limit(10)
         ).all()
 
         avg_sleep_hours = round(mean(item.sleep_duration_hours or 0 for item in health), 1) if health else 0

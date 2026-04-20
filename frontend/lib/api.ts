@@ -212,7 +212,7 @@ export interface LocationTimelinePayload {
   placeKey?: string | null;
   placeLabel?: string | null;
   category?: string | null;
-  movementType?: 'walking' | 'cycling' | 'transit' | 'unknown_movement' | string | null;
+  movementType?: 'walking' | 'travel' | 'transit' | string | null;
   latitude?: number | null;
   longitude?: number | null;
   startLatitude?: number | null;

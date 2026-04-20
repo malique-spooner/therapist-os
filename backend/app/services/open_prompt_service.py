@@ -10,14 +10,14 @@ from ..models import (
     AppOpenPromptState,
 )
 from ..models.life_data import (
-    DailyCheckInReal as DailyCheckIn,
-    FinanceDataReal as FinanceData,
-    HealthDataReal as HealthData,
-    LocationCompanionLogReal as LocationCompanionLog,
-    LocationDailySummaryReal as LocationDailySummary,
-    MusicDataReal as MusicData,
-    RelationshipReal as Relationship,
-    RelationshipInteractionReal as RelationshipInteraction,
+    DailyCheckInDemo as DailyCheckIn,
+    FinanceDataDemo as FinanceData,
+    HealthDataDemo as HealthData,
+    LocationCompanionLogDemo as LocationCompanionLog,
+    LocationDailySummaryDemo as LocationDailySummary,
+    MusicDataDemo as MusicData,
+    RelationshipDemo as Relationship,
+    RelationshipInteractionDemo as RelationshipInteraction,
 )
 
 
