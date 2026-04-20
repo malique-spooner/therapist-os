@@ -83,9 +83,21 @@ def _serialize_place_memory(row) -> dict:
     return {
         "placeKey": row.place_key,
         "label": row.label,
+        "suggestedLabel": row.label,
         "category": row.category,
         "tone": row.tone,
         "note": row.note,
+        "confidenceScore": row.confidence_score,
+        "status": row.status,
+        "mergedIntoKey": row.merged_into_key,
+        "splitFromKey": row.split_from_key,
+        "latitude": row.latitude,
+        "longitude": row.longitude,
+        "visitCount": row.visit_count,
+        "totalMinutes": row.total_minutes,
+        "averageDwellMinutes": round((row.total_minutes or 0) / max(row.visit_count or 1, 1)) if row.total_minutes else 0,
+        "firstSeenAt": row.first_seen_at.isoformat() if row.first_seen_at else None,
+        "lastSeenAt": row.last_seen_at.isoformat() if row.last_seen_at else None,
     }
 
 

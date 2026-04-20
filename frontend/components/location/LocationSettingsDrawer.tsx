@@ -94,10 +94,20 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [memoryPlaces, setMemoryPlaces] = useState<LocationPlaceMemoryPayload[]>([]);
+
+  async function refreshMemoryPlaces() {
+    try {
+      setMemoryPlaces(await api.getLocationPlaces());
+    } catch {
+      setMemoryPlaces([]);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    void refreshMemoryPlaces();
     void api.getAiRuntimeOptions()
       .then((payload) => {
         if (!cancelled) setApiKey(payload.googleMapsApiKey ?? null);
@@ -111,8 +121,13 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
   }, [open]);
 
   const knownPlaces = useMemo(() => {
-    return [...places].sort((a, b) => (a.placeKey === 'home' ? -1 : b.placeKey === 'home' ? 1 : (a.placeKey === 'work' ? -1 : b.placeKey === 'work' ? 1 : (b.confidenceScore ?? 0) - (a.confidenceScore ?? 0))));
-  }, [places]);
+    const sourcePlaces = memoryPlaces.length ? memoryPlaces : places;
+    return [...sourcePlaces].sort((a, b) => (
+      a.placeKey === 'home' ? -1 : b.placeKey === 'home' ? 1 : (
+        a.placeKey === 'work' ? -1 : b.placeKey === 'work' ? 1 : (b.confidenceScore ?? 0) - (a.confidenceScore ?? 0)
+      )
+    ));
+  }, [memoryPlaces, places]);
 
   if (!open) return null;
 
@@ -154,6 +169,7 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
       });
       setResults([]);
       setQuery('');
+      await refreshMemoryPlaces();
       onSaved?.();
     } finally {
       setSavingKey(null);
@@ -172,6 +188,7 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
         latitude: place.latitude,
         longitude: place.longitude,
       });
+      await refreshMemoryPlaces();
       onSaved?.();
     } finally {
       setSavingKey(null);
