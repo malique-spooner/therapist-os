@@ -229,7 +229,7 @@ function TimelineRows({ timeline, onTimelineTagged }: { timeline: LocationTimeli
     setSavingRow(row.rowId);
     try {
       const payload = row.kind === 'visit'
-        ? { category: value === 'custom_place' ? 'unknown_place' : value }
+        ? { category: value }
         : { movementType: value };
       await api.tagLocationTimelineRow(
         row.rowId,
@@ -306,12 +306,12 @@ function TimelineRows({ timeline, onTimelineTagged }: { timeline: LocationTimeli
                     : [
                       ['home', 'Home'],
                       ['work', 'Work'],
-                      ['custom_place', 'Custom place'],
+                      ['unknown_place', 'Unknown place'],
                     ]
                   ).map(([value, label]) => {
                     const active = isMovement
                       ? row.movementType === value || (value === 'travel' && row.movementType !== 'walking')
-                      : (value === 'custom_place' ? row.category === 'unknown_place' : row.category === value);
+                      : row.category === value;
                     return (
                       <button
                         key={`${row.rowId}-${value}`}

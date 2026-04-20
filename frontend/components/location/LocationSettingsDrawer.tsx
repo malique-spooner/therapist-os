@@ -32,14 +32,6 @@ interface LocationSettingsDrawerProps {
   onSaved?: () => void;
 }
 
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 36) || 'place';
-}
-
 function loadGoogleMaps(apiKey: string): Promise<GoogleMapsNamespace | null> {
   if (typeof window === 'undefined') return Promise.resolve(null);
   const googleWindow = window as Window & { google?: { maps?: GoogleMapsNamespace } };
@@ -97,7 +89,6 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
   const [memoryPlaces, setMemoryPlaces] = useState<LocationPlaceMemoryPayload[]>([]);
   const [selectedUnknownKey, setSelectedUnknownKey] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState('');
-  const [draftCategory, setDraftCategory] = useState('unknown_place');
   const [draftTone, setDraftTone] = useState<'positive' | 'neutral' | 'draining'>('neutral');
   const [draftNote, setDraftNote] = useState('');
   const [mergeTargetKey, setMergeTargetKey] = useState('');
@@ -149,7 +140,6 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
     if (!selectedUnknown) {
       setSelectedUnknownKey(null);
       setDraftLabel('');
-      setDraftCategory('unknown_place');
       setDraftTone('neutral');
       setDraftNote('');
       setMergeTargetKey('');
@@ -158,10 +148,9 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
 
     setSelectedUnknownKey(selectedUnknown.placeKey);
     setDraftLabel(selectedUnknown.label ?? selectedUnknown.suggestedLabel ?? '');
-    setDraftCategory(selectedUnknown.category ?? 'unknown_place');
     setDraftTone((selectedUnknown.tone as 'positive' | 'neutral' | 'draining' | null) ?? 'neutral');
     setDraftNote(selectedUnknown.note ?? '');
-    setMergeTargetKey(knownPlaces.find((place) => place.placeKey !== selectedUnknown.placeKey)?.placeKey ?? '');
+    setMergeTargetKey(knownPlaces.find((place) => place.placeKey === 'home')?.placeKey ?? knownPlaces.find((place) => place.placeKey === 'work')?.placeKey ?? '');
   }, [knownPlaces, selectedUnknown]);
 
   if (!open) return null;
@@ -184,19 +173,15 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
     }
   }
 
-  async function savePlace(result: SearchResult, role: 'home' | 'work' | 'custom') {
-    const label = role === 'home' ? 'Home' : role === 'work' ? 'Work' : result.label;
-    const placeKey = role === 'home'
-      ? 'home'
-      : role === 'work'
-        ? 'work'
-        : `place-${slugify(label)}-${Math.round(result.latitude * 10000)}-${Math.round(result.longitude * 10000)}`;
+  async function savePlace(result: SearchResult, role: 'home' | 'work') {
+    const label = role === 'home' ? 'Home' : 'Work';
+    const placeKey = role;
 
     setSavingKey(`save-${placeKey}`);
     try {
       await api.saveLocationPlace(placeKey, {
         label,
-        category: role === 'home' ? 'home' : role === 'work' ? 'work' : 'unknown_place',
+        category: role,
         tone: role === 'home' ? 'positive' : 'neutral',
         note: result.address,
         latitude: result.latitude,
@@ -258,7 +243,7 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
               Location settings
             </p>
             <p className="mt-1 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-              Teach home, work, and custom places
+              Teach home and work
             </p>
           </div>
           <button type="button" onClick={onClose} className="rounded-xl p-2" style={{ color: 'var(--color-text-muted)' }} aria-label="Close location settings">
@@ -271,7 +256,7 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
             <div className="rounded-[26px] p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Search a place</p>
               <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                Search an address, then save it as Home, Work, or a new custom place.
+                Search an address, then save it as Home or Work.
               </p>
               <div className="mt-3 flex gap-2">
                 <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border px-3" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
@@ -344,16 +329,6 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
                         <Briefcase size={12} className="mr-1 inline-block" />
                         Set Work
                       </button>
-                      <button
-                        type="button"
-                        disabled={savingKey?.startsWith('save-place-') ?? false}
-                        onClick={() => void savePlace(result, 'custom')}
-                        className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
-                        style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}
-                      >
-                        <Plus size={12} className="mr-1 inline-block" />
-                        Add as place
-                      </button>
                     </div>
                   </div>
                 )) : (
@@ -367,7 +342,7 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
             <div className="rounded-[26px] p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Saved anchors</p>
               <div className="mt-3 space-y-2">
-                {knownPlaces.filter((place) => place.placeKey === 'home' || place.placeKey === 'work' || place.category !== 'unknown_place').slice(0, 8).map((place) => (
+                {knownPlaces.filter((place) => place.placeKey === 'home' || place.placeKey === 'work').map((place) => (
                   <div key={place.placeKey} className="rounded-[20px] p-3" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
@@ -402,13 +377,14 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
                   </div>
                 ))}
                 {!knownPlaces.length && <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No places saved yet.</p>}
+                {!knownPlaces.some((place) => place.placeKey === 'home' || place.placeKey === 'work') && <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No home or work saved yet.</p>}
               </div>
             </div>
 
             <div className="rounded-[26px] p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Unknown places to teach</p>
               <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                Tap a place to edit it, then save it as Home, Work, or a custom place.
+                Tap a place to edit it, then save it as Home or Work.
               </p>
               <div className="mt-3 grid gap-3 md:grid-cols-[0.95fr_1.05fr]">
                 <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
@@ -467,20 +443,6 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
                       </label>
 
                       <label className="block text-sm">
-                        <span className="mb-1 block font-medium" style={{ color: 'var(--color-text)' }}>Category</span>
-                        <select
-                          value={draftCategory}
-                          onChange={(event) => setDraftCategory(event.target.value)}
-                          className="w-full rounded-2xl border bg-transparent px-3 py-2.5 text-sm outline-none"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                        >
-                          <option value="unknown_place">Custom place</option>
-                          <option value="home">Home</option>
-                          <option value="work">Work</option>
-                        </select>
-                      </label>
-
-                      <label className="block text-sm">
                         <span className="mb-1 block font-medium" style={{ color: 'var(--color-text)' }}>Note</span>
                         <textarea
                           value={draftNote}
@@ -501,8 +463,8 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
                             className="min-w-0 flex-1 rounded-2xl border bg-transparent px-3 py-2.5 text-sm outline-none"
                             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                           >
-                            <option value="">Choose a saved place</option>
-                            {knownPlaces.filter((place) => place.placeKey !== selectedUnknown.placeKey).slice(0, 20).map((place) => (
+                            <option value="">Choose Home or Work</option>
+                            {knownPlaces.filter((place) => ['home', 'work'].includes(place.placeKey)).map((place) => (
                               <option key={place.placeKey} value={place.placeKey}>
                                 {place.label ?? place.suggestedLabel ?? place.placeKey}
                               </option>
@@ -545,8 +507,8 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
                           type="button"
                           disabled={savingKey === `save-${selectedUnknown.placeKey}`}
                           onClick={() => void saveKnownPlace(selectedUnknown, {
-                            label: draftLabel.trim() || selectedUnknown.label || selectedUnknown.suggestedLabel || 'Custom place',
-                            category: draftCategory,
+                            label: draftLabel.trim() || selectedUnknown.label || selectedUnknown.suggestedLabel || 'Unknown place',
+                            category: 'unknown_place',
                             tone: draftTone,
                             note: draftNote.trim() || null,
                           })}
@@ -554,7 +516,7 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
                           style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}
                         >
                           <Plus size={12} className="mr-1 inline-block" />
-                          Save changes
+                          Save note
                         </button>
                       </div>
                     </div>
