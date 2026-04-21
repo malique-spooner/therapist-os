@@ -49,6 +49,11 @@ export function LocationPage({ onBack, onSettings }: LocationPageProps) {
     endDate: APP_TODAY,
   }));
 
+  const { data: summaryData } = useApiQuery(
+    () => api.getLocationSummary('12months'),
+    [dataMode],
+  );
+
   const { data: intelligenceData, isLoading, error, refetch } = useApiQuery(
     () => api.getLocationIntelligence({ startDate: range.startDate, endDate: range.endDate, date: range.endDate }),
     [dataMode, range.startDate, range.endDate],
@@ -56,9 +61,10 @@ export function LocationPage({ onBack, onSettings }: LocationPageProps) {
 
   useEffect(() => {
     const intelligence = intelligenceData ?? fallbackExperience(dataMode);
+    const summaries = summaryData ?? intelligence.summaries;
     const availableDates = Array.from(
       new Set([
-        ...intelligence.summaries.map((day) => day.date),
+        ...summaries.map((day) => day.date),
         ...intelligence.points.map((point) => point.timestamp.slice(0, 10)),
       ]),
     ).sort();
@@ -69,17 +75,17 @@ export function LocationPage({ onBack, onSettings }: LocationPageProps) {
       endDate: clampIsoDate(current.endDate, earliestDate, latestDate),
       startDate: clampIsoDate(current.startDate, earliestDate, clampIsoDate(current.endDate, earliestDate, latestDate)),
     }));
-  }, [dataMode, intelligenceData]);
+  }, [dataMode, intelligenceData, summaryData]);
 
   const availableDates = useMemo(
     () =>
       Array.from(
         new Set([
-          ...((intelligenceData ?? fallbackExperience(dataMode)).summaries).map((day) => day.date),
+          ...(summaryData ?? (intelligenceData ?? fallbackExperience(dataMode)).summaries).map((day) => day.date),
           ...((intelligenceData ?? fallbackExperience(dataMode)).points).map((point) => point.timestamp.slice(0, 10)),
         ]),
       ).sort(),
-    [dataMode, intelligenceData],
+    [dataMode, intelligenceData, summaryData],
   );
 
   const latestDate = availableDates[availableDates.length - 1] ?? APP_TODAY;
@@ -167,7 +173,6 @@ export function LocationPage({ onBack, onSettings }: LocationPageProps) {
       <LocationSettingsDrawer
         open={showLocationSettings}
         onClose={() => setShowLocationSettings(false)}
-        places={experience.places}
         onSaved={refetch}
       />
     </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Briefcase, Home, Plus, Search, X } from 'lucide-react';
+import { Briefcase, Home, Search, X } from 'lucide-react';
 
 import { api, type LocationPlaceMemoryPayload } from '@/lib/api';
 
@@ -28,7 +28,6 @@ interface GoogleMapsNamespace {
 interface LocationSettingsDrawerProps {
   open: boolean;
   onClose: () => void;
-  places: LocationPlaceMemoryPayload[];
   onSaved?: () => void;
 }
 
@@ -79,7 +78,7 @@ async function geocodeQuery(apiKey: string, query: string): Promise<SearchResult
   });
 }
 
-export function LocationSettingsDrawer({ open, onClose, places, onSaved }: LocationSettingsDrawerProps) {
+export function LocationSettingsDrawer({ open, onClose, onSaved }: LocationSettingsDrawerProps) {
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -89,7 +88,6 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
   const [memoryPlaces, setMemoryPlaces] = useState<LocationPlaceMemoryPayload[]>([]);
   const [selectedUnknownKey, setSelectedUnknownKey] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState('');
-  const [draftTone, setDraftTone] = useState<'positive' | 'neutral' | 'draining'>('neutral');
   const [draftNote, setDraftNote] = useState('');
   const [mergeTargetKey, setMergeTargetKey] = useState('');
 
@@ -118,13 +116,12 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
   }, [open]);
 
   const knownPlaces = useMemo(() => {
-    const sourcePlaces = memoryPlaces.length ? memoryPlaces : places;
-    return [...sourcePlaces].sort((a, b) => (
+    return [...memoryPlaces].sort((a, b) => (
       a.placeKey === 'home' ? -1 : b.placeKey === 'home' ? 1 : (
         a.placeKey === 'work' ? -1 : b.placeKey === 'work' ? 1 : (b.confidenceScore ?? 0) - (a.confidenceScore ?? 0)
       )
     ));
-  }, [memoryPlaces, places]);
+  }, [memoryPlaces]);
 
   const unknownPlaces = useMemo(
     () => knownPlaces.filter((place) => place.category === 'unknown_place' || (place.confidenceScore ?? 0) < 0.65),
@@ -140,7 +137,6 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
     if (!selectedUnknown) {
       setSelectedUnknownKey(null);
       setDraftLabel('');
-      setDraftTone('neutral');
       setDraftNote('');
       setMergeTargetKey('');
       return;
@@ -148,7 +144,6 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
 
     setSelectedUnknownKey(selectedUnknown.placeKey);
     setDraftLabel(selectedUnknown.label ?? selectedUnknown.suggestedLabel ?? '');
-    setDraftTone((selectedUnknown.tone as 'positive' | 'neutral' | 'draining' | null) ?? 'neutral');
     setDraftNote(selectedUnknown.note ?? '');
     setMergeTargetKey(knownPlaces.find((place) => place.placeKey === 'home')?.placeKey ?? knownPlaces.find((place) => place.placeKey === 'work')?.placeKey ?? '');
   }, [knownPlaces, selectedUnknown]);
@@ -254,7 +249,7 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
         <div className="grid max-h-[calc(92vh-68px)] gap-4 overflow-y-auto p-4 md:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-4">
             <div className="rounded-[26px] p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Search a place</p>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Search and save anchors</p>
               <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
                 Search an address, then save it as Home or Work.
               </p>
@@ -502,21 +497,6 @@ export function LocationSettingsDrawer({ open, onClose, places, onSaved }: Locat
                         >
                           <Briefcase size={12} className="mr-1 inline-block" />
                           Save as Work
-                        </button>
-                        <button
-                          type="button"
-                          disabled={savingKey === `save-${selectedUnknown.placeKey}`}
-                          onClick={() => void saveKnownPlace(selectedUnknown, {
-                            label: draftLabel.trim() || selectedUnknown.label || selectedUnknown.suggestedLabel || 'Unknown place',
-                            category: 'unknown_place',
-                            tone: draftTone,
-                            note: draftNote.trim() || null,
-                          })}
-                          className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
-                          style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}
-                        >
-                          <Plus size={12} className="mr-1 inline-block" />
-                          Save note
                         </button>
                       </div>
                     </div>
