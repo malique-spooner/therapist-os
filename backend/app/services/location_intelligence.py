@@ -66,6 +66,11 @@ class Movement:
 class LocationIntelligenceService:
     HOME_RADIUS_METRES = 180
     VISIT_BREAK_GAP_MINUTES = 90
+    MOVEMENT_BREAK_GAP_MINUTES = 20
+    NOISE_SEGMENT_MAX_MINUTES = 3
+    NOISE_DISTANCE_METRES = 320
+    MOVE_MERGE_GAP_MINUTES = 8
+    VISIT_MERGE_GAP_MINUTES = 12
 
     def get_intelligence(
         self,
@@ -347,7 +352,7 @@ class LocationIntelligenceService:
             gap_minutes = self._minutes_between(last_point["timestamp"], point["timestamp"])
             same_place = point["placeKey"] == last_point["placeKey"]
             should_break = gap_minutes > self.VISIT_BREAK_GAP_MINUTES or point["timelineKind"] != current["kind"]
-            if current["kind"] == "movement" and point["timelineKind"] == "movement" and point.get("movementHint") != last_point.get("movementHint"):
+            if current["kind"] == "movement" and gap_minutes > self.MOVEMENT_BREAK_GAP_MINUTES:
                 should_break = True
             if current["kind"] == "visit" and point["timelineKind"] == "visit" and not same_place:
                 should_break = True
@@ -371,7 +376,122 @@ class LocationIntelligenceService:
                 movements.append(self._movement_from_micro_visit(visit, group))
                 continue
             visits.append(visit)
-        return visits, movements
+        return self._merge_noise_segments(visits, movements)
+
+    def _merge_noise_segments(self, visits: list[Visit], movements: list[Movement]) -> tuple[list[Visit], list[Movement]]:
+        combined: list[tuple[str, object]] = [("visit", visit) for visit in visits] + [("movement", movement) for movement in movements]
+        combined.sort(key=lambda item: getattr(item[1], "start_timestamp"))
+
+        merged: list[tuple[str, object]] = []
+        for kind, row in combined:
+            if not merged:
+                merged.append((kind, row))
+                continue
+
+            prev_kind, prev = merged[-1]
+            if kind == "movement" and prev_kind == "movement" and self._should_merge_movement(prev, row):
+                merged[-1] = ("movement", self._merge_movement_rows(prev, row))
+                continue
+            if kind == "visit" and prev_kind == "visit" and self._should_merge_visit(prev, row):
+                merged[-1] = ("visit", self._merge_visit_rows(prev, row))
+                continue
+
+            if self._should_absorb_noise(prev_kind, prev, kind, row):
+                merged[-1] = (prev_kind, self._extend_row(prev, row))
+                continue
+
+            merged.append((kind, row))
+
+        out_visits = [row for kind, row in merged if kind == "visit"]
+        out_movements = [row for kind, row in merged if kind == "movement"]
+        return out_visits, out_movements
+
+    def _should_merge_movement(self, previous: Movement, current: Movement) -> bool:
+        gap_minutes = self._minutes_between(previous.end_timestamp, current.start_timestamp)
+        if gap_minutes > self.MOVE_MERGE_GAP_MINUTES:
+            return False
+        if previous.movement_type == current.movement_type:
+            return True
+        if current.duration_minutes <= self.NOISE_SEGMENT_MAX_MINUTES and current.distance_metres <= self.NOISE_DISTANCE_METRES:
+            return True
+        if previous.duration_minutes <= self.NOISE_SEGMENT_MAX_MINUTES and previous.distance_metres <= self.NOISE_DISTANCE_METRES:
+            return True
+        return False
+
+    def _should_merge_visit(self, previous: Visit, current: Visit) -> bool:
+        gap_minutes = self._minutes_between(previous.end_timestamp, current.start_timestamp)
+        if gap_minutes > self.VISIT_MERGE_GAP_MINUTES:
+            return False
+        if previous.place_key == current.place_key:
+            return True
+        if previous.category == "unknown_place" and current.category == "unknown_place":
+            distance = self._distance_metres(previous.latitude, previous.longitude, current.latitude, current.longitude)
+            return distance <= self.NOISE_DISTANCE_METRES
+        return False
+
+    def _should_absorb_noise(self, prev_kind: str, prev: Visit | Movement, kind: str, row: Visit | Movement) -> bool:
+        if prev_kind == kind:
+            return False
+        gap_minutes = self._minutes_between(getattr(prev, "end_timestamp"), getattr(row, "start_timestamp"))
+        if gap_minutes > 3:
+            return False
+        if kind == "movement":
+            return getattr(row, "duration_minutes", 0) <= self.NOISE_SEGMENT_MAX_MINUTES and getattr(row, "distance_metres", 0) <= self.NOISE_DISTANCE_METRES
+        if kind == "visit":
+            return getattr(row, "dwell_minutes", 0) <= self.NOISE_SEGMENT_MAX_MINUTES and getattr(row, "category", "") == "unknown_place"
+        return False
+
+    def _extend_row(self, previous: Visit | Movement, current: Visit | Movement) -> Visit | Movement:
+        if isinstance(previous, Movement) and isinstance(current, Movement):
+            return self._merge_movement_rows(previous, current)
+        if isinstance(previous, Visit) and isinstance(current, Visit):
+            return self._merge_visit_rows(previous, current)
+        return previous
+
+    def _merge_movement_rows(self, first: Movement, second: Movement) -> Movement:
+        return Movement(
+            id=first.id,
+            movement_type=first.movement_type if first.movement_type == second.movement_type else "travel",
+            label=first.label if first.label == second.label else "Travel",
+            start_timestamp=first.start_timestamp,
+            end_timestamp=second.end_timestamp,
+            duration_minutes=self._minutes_between(first.start_timestamp, second.end_timestamp) or max(first.duration_minutes, second.duration_minutes),
+            start_latitude=first.start_latitude,
+            start_longitude=first.start_longitude,
+            end_latitude=second.end_latitude,
+            end_longitude=second.end_longitude,
+            distance_metres=round(first.distance_metres + second.distance_metres, 1),
+            average_speed_kmh=max(first.average_speed_kmh, second.average_speed_kmh),
+            confidence_score=max(first.confidence_score, second.confidence_score),
+            correction=first.correction or second.correction,
+        )
+
+    def _merge_visit_rows(self, first: Visit, second: Visit) -> Visit:
+        dwell_minutes = self._minutes_between(first.start_timestamp, second.end_timestamp) or max(first.dwell_minutes, second.dwell_minutes)
+        category = first.category if first.category == second.category else ("home" if "home" in {first.category, second.category} else "work" if "work" in {first.category, second.category} else "unknown_place")
+        if first.place_label == second.place_label:
+            label = first.place_label
+        elif first.category in {"home", "work"}:
+            label = first.place_label
+        elif second.category in {"home", "work"}:
+            label = second.place_label
+        else:
+            label = first.place_label or second.place_label or "Unknown place"
+        return Visit(
+            id=first.id,
+            place_key=first.place_key if first.place_key == second.place_key else first.place_key,
+            place_label=label,
+            category=category,
+            start_timestamp=first.start_timestamp,
+            end_timestamp=second.end_timestamp,
+            dwell_minutes=dwell_minutes,
+            latitude=(first.latitude + second.latitude) / 2,
+            longitude=(first.longitude + second.longitude) / 2,
+            highlight=first.highlight if first.highlight == second.highlight else first.highlight,
+            tone=first.tone if first.tone == second.tone else "neutral",
+            confidence_score=max(first.confidence_score, second.confidence_score),
+            correction=first.correction or second.correction,
+        )
 
     def _visit_from_group(
         self,
@@ -570,7 +690,7 @@ class LocationIntelligenceService:
             row.label = row.label or key_visits[0].place_label
             row.category = self._normalize_visit_category(row.category or key_visits[0].category)
             row.tone = row.tone or key_visits[0].tone
-            if row.category == "unknown_place" and row.label in {"Errand Loop", "Errands", "Errand Loop "}:
+            if row.category == "unknown_place" and not row.label:
                 row.label = "Unknown place"
             row.latitude = sum(visit.latitude for visit in key_visits) / len(key_visits)
             row.longitude = sum(visit.longitude for visit in key_visits) / len(key_visits)
@@ -883,12 +1003,18 @@ class LocationIntelligenceService:
 
     def _point_is_moving(self, point: dict, previous: dict | None) -> bool:
         activities = self._activities(point)
-        if activities & {"walking", "running", "cycling", "automotive", "in_vehicle", "vehicle", "train", "bus", "bicycle"}:
-            return True
         if activities & {"stationary"}:
             return False
+        if activities & {"walking", "running", "cycling", "automotive", "in_vehicle", "vehicle", "train", "bus", "bicycle"}:
+            if previous:
+                gap_minutes = self._minutes_between(previous["timestamp"], point["timestamp"])
+                if gap_minutes <= 3:
+                    distance = self._distance_metres(previous["latitude"], previous["longitude"], point["latitude"], point["longitude"])
+                    if distance <= max(35, (point.get("accuracy") or 0) + (previous.get("accuracy") or 0) + 20):
+                        return False
+            return True
         speed = point.get("velocity")
-        if isinstance(speed, int | float) and speed >= 1.2:
+        if isinstance(speed, int | float) and speed >= 1.0:
             return True
         if previous:
             gap_minutes = self._minutes_between(previous["timestamp"], point["timestamp"])
@@ -896,7 +1022,9 @@ class LocationIntelligenceService:
                 distance = self._distance_metres(previous["latitude"], previous["longitude"], point["latitude"], point["longitude"])
                 inferred_speed_kmh = (distance / 1000) / (gap_minutes / 60)
                 accuracy_floor = max(30, (point.get("accuracy") or 0) + (previous.get("accuracy") or 0) + 12)
-                return distance > accuracy_floor and inferred_speed_kmh > 3.5
+                if distance <= accuracy_floor:
+                    return False
+                return inferred_speed_kmh > 2.5
         return False
 
     def _classify_movement(self, group: list[dict], average_speed_kmh: float) -> tuple[str, float]:
@@ -1085,8 +1213,7 @@ class LocationIntelligenceService:
     def _derive_category(self, place_key: str, dwell_minutes: int, last_timestamp: str) -> str:
         if place_key == "home":
             return "home"
-        hour = datetime.fromisoformat(last_timestamp).hour
-        if dwell_minutes >= 180 and 8 <= hour <= 18:
+        if place_key == "work":
             return "work"
         return "unknown_place"
 
