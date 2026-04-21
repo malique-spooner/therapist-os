@@ -69,7 +69,7 @@ class LocationIntelligenceService:
     MOVEMENT_BREAK_GAP_MINUTES = 20
     NOISE_SEGMENT_MAX_MINUTES = 3
     NOISE_DISTANCE_METRES = 320
-    MOVE_MERGE_GAP_MINUTES = 8
+    MOVE_MERGE_GAP_MINUTES = 15
     VISIT_MERGE_GAP_MINUTES = 12
 
     def get_intelligence(
@@ -399,9 +399,67 @@ class LocationIntelligenceService:
 
             merged.append((kind, row))
 
+        merged = self._collapse_movement_bridges(merged)
+
         out_visits = [row for kind, row in merged if kind == "visit"]
         out_movements = [row for kind, row in merged if kind == "movement"]
         return out_visits, out_movements
+
+    def _collapse_movement_bridges(self, rows: list[tuple[str, object]]) -> list[tuple[str, object]]:
+        if len(rows) < 3:
+            return rows
+
+        collapsed: list[tuple[str, object]] = []
+        index = 0
+        while index < len(rows):
+            if index + 2 < len(rows):
+                first_kind, first = rows[index]
+                middle_kind, middle = rows[index + 1]
+                third_kind, third = rows[index + 2]
+                if first_kind == "movement" and middle_kind == "visit" and third_kind == "movement":
+                    if self._should_collapse_movement_bridge(first, middle, third):
+                        collapsed.append(("movement", self._merge_movement_bridge(first, middle, third)))
+                        index += 3
+                        continue
+            collapsed.append(rows[index])
+            index += 1
+
+        if len(collapsed) != len(rows):
+            return self._collapse_movement_bridges(collapsed)
+        return collapsed
+
+    def _should_collapse_movement_bridge(self, first: Movement, middle: Visit, third: Movement) -> bool:
+        if middle.category != "unknown_place":
+            return False
+        if middle.dwell_minutes > self.NOISE_SEGMENT_MAX_MINUTES * 2:
+            return False
+        if self._minutes_between(first.end_timestamp, middle.start_timestamp) > self.MOVE_MERGE_GAP_MINUTES:
+            return False
+        if self._minutes_between(middle.end_timestamp, third.start_timestamp) > self.MOVE_MERGE_GAP_MINUTES:
+            return False
+        if self._distance_metres(first.end_latitude, first.end_longitude, middle.latitude, middle.longitude) > self.NOISE_DISTANCE_METRES * 1.2:
+            return False
+        if self._distance_metres(middle.latitude, middle.longitude, third.start_latitude, third.start_longitude) > self.NOISE_DISTANCE_METRES * 1.2:
+            return False
+        return True
+
+    def _merge_movement_bridge(self, first: Movement, middle: Visit, third: Movement) -> Movement:
+        return Movement(
+            id=first.id,
+            movement_type=first.movement_type if first.movement_type == third.movement_type else "travel",
+            label=self._movement_label(first.movement_type if first.movement_type == third.movement_type else "travel"),
+            start_timestamp=first.start_timestamp,
+            end_timestamp=third.end_timestamp,
+            duration_minutes=self._minutes_between(first.start_timestamp, third.end_timestamp) or (first.duration_minutes + middle.dwell_minutes + third.duration_minutes),
+            start_latitude=first.start_latitude,
+            start_longitude=first.start_longitude,
+            end_latitude=third.end_latitude,
+            end_longitude=third.end_longitude,
+            distance_metres=round(first.distance_metres + third.distance_metres, 1),
+            average_speed_kmh=max(first.average_speed_kmh, third.average_speed_kmh),
+            confidence_score=max(first.confidence_score, third.confidence_score),
+            correction=first.correction or third.correction,
+        )
 
     def _should_merge_movement(self, previous: Movement, current: Movement) -> bool:
         gap_minutes = self._minutes_between(previous.end_timestamp, current.start_timestamp)
