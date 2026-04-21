@@ -1032,12 +1032,14 @@ class LocationIntelligenceService:
     @staticmethod
     def _serialize_place_memory(row, history_count: int = 0) -> dict:
         average_dwell_minutes = int(round((row.total_minutes or 0) / max(row.visit_count or 1, 1))) if row.total_minutes else 0
-        label = row.label if row.category != "unknown_place" else "Unknown place"
+        is_legacy_noise = (row.category or "").lower() == "errands" or (row.label or "").lower().startswith("errand loop")
+        label = row.label if row.category not in {"unknown_place", "errands"} and not is_legacy_noise else "Unknown place"
+        category = "unknown_place" if row.category in {"unknown_place", "errands"} or is_legacy_noise else row.category
         return {
             "placeKey": row.place_key,
             "label": label,
             "suggestedLabel": label or LocationIntelligenceService._suggested_label(row.place_key, row.category),
-            "category": row.category,
+            "category": category,
             "tone": row.tone,
             "note": row.note,
             "confidenceScore": row.confidence_score,

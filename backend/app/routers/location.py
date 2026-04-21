@@ -80,12 +80,14 @@ def _serialize_companion_log(row) -> dict:
 
 
 def _serialize_place_memory(row) -> dict:
-    label = row.label if row.category != "unknown_place" else "Unknown place"
+    is_legacy_noise = (row.category or "").lower() == "errands" or (row.label or "").lower().startswith("errand loop")
+    label = row.label if row.category not in {"unknown_place", "errands"} and not is_legacy_noise else "Unknown place"
+    category = "unknown_place" if row.category in {"unknown_place", "errands"} or is_legacy_noise else row.category
     return {
         "placeKey": row.place_key,
         "label": label,
         "suggestedLabel": label,
-        "category": row.category,
+        "category": category,
         "tone": row.tone,
         "note": row.note,
         "confidenceScore": row.confidence_score,
