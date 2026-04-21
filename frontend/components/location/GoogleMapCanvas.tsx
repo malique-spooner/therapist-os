@@ -10,6 +10,7 @@ interface GoogleMapCanvasProps {
   apiKey?: string | null;
   points: LocationPointPayload[];
   places: Array<LocationPlaceMemoryPayload & { key?: string; averageDwellMinutes?: number | null }>;
+  focusPoint?: { latitude: number; longitude: number; label?: string | null } | null;
   highlightedPlaceKey?: string | null;
   activeScene?: LocationRecapScenePayload | null;
   onPlaceSelect?: (placeKey: string) => void;
@@ -18,6 +19,7 @@ interface GoogleMapCanvasProps {
 
 interface GoogleMapsNamespace {
   Map: new (element: HTMLElement, options: Record<string, unknown>) => GoogleMapInstance;
+  Marker: new (options: Record<string, unknown>) => GoogleMapOverlay;
   Polyline: new (options: Record<string, unknown>) => GoogleMapOverlay;
   Circle: new (options: Record<string, unknown>) => GoogleMapOverlay;
   LatLngBounds: new () => GoogleLatLngBounds;
@@ -94,17 +96,20 @@ function loadGoogleMaps(apiKey: string) {
 function MapFallback({
   points,
   places,
+  focusPoint,
   highlightedPlaceKey,
   onPlaceSelect,
 }: {
   points: LocationPointPayload[];
   places: Array<LocationPlaceMemoryPayload & { key?: string }>;
+  focusPoint?: { latitude: number; longitude: number; label?: string | null } | null;
   highlightedPlaceKey?: string | null;
   onPlaceSelect?: (placeKey: string) => void;
 }) {
   const coordinates = [
     ...points.map((point) => ({ lat: point.latitude, lng: point.longitude })),
     ...places.map((place) => ({ lat: place.latitude ?? 51.5074, lng: place.longitude ?? -0.1278 })),
+    ...(focusPoint ? [{ lat: focusPoint.latitude, lng: focusPoint.longitude }] : []),
   ];
   const minLat = Math.min(...coordinates.map((point) => point.lat), 51.5);
   const maxLat = Math.max(...coordinates.map((point) => point.lat), 51.52);
@@ -149,10 +154,10 @@ function MapFallback({
             }).join(' ')}
           />
         )}
-        {places.map((place) => {
-          const mapped = mapPoint(place.latitude ?? 51.5074, place.longitude ?? -0.1278);
-          const isHighlighted = (place.key ?? place.placeKey) === highlightedPlaceKey;
-          return (
+      {places.map((place) => {
+        const mapped = mapPoint(place.latitude ?? 51.5074, place.longitude ?? -0.1278);
+        const isHighlighted = (place.key ?? place.placeKey) === highlightedPlaceKey;
+        return (
             <g
               key={place.key ?? place.placeKey}
               onClick={() => onPlaceSelect?.(place.key ?? place.placeKey)}
@@ -168,9 +173,17 @@ function MapFallback({
               {isHighlighted && (
                 <circle cx={mapped.x} cy={mapped.y} r="8" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1" />
               )}
-            </g>
-          );
-        })}
+          </g>
+        );
+      })}
+      {focusPoint && (
+        <g>
+          <path
+            d={`M${mapPoint(focusPoint.latitude, focusPoint.longitude).x} ${mapPoint(focusPoint.latitude, focusPoint.longitude).y - 8}c-2.6 0-4.7 2.1-4.7 4.7 0 3.6 4.7 8.7 4.7 8.7s4.7-5.1 4.7-8.7c0-2.6-2.1-4.7-4.7-4.7zm0 7.1a2.4 2.4 0 1 1 0-4.8 2.4 2.4 0 0 1 0 4.8z`}
+            fill="#f4a261"
+          />
+        </g>
+      )}
       </svg>
       <div className="absolute left-4 top-4 rounded-2xl border px-3 py-2 text-xs" style={{ backgroundColor: 'rgba(15, 23, 42, 0.72)', borderColor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.88)' }}>
         {points.length ? 'Fallback story map' : 'Save a Google Maps key to unlock the live map canvas'}
@@ -183,6 +196,7 @@ export function GoogleMapCanvas({
   apiKey,
   points,
   places,
+  focusPoint,
   highlightedPlaceKey,
   activeScene,
   onPlaceSelect,
@@ -199,6 +213,9 @@ export function GoogleMapCanvas({
     if (activeScene) {
       return { lat: activeScene.latitude, lng: activeScene.longitude };
     }
+    if (focusPoint) {
+      return { lat: focusPoint.latitude, lng: focusPoint.longitude };
+    }
     const home = places.find((place) => (place.key ?? place.placeKey) === 'home') ?? places[0];
     if (home) {
       return { lat: home.latitude ?? 51.5074, lng: home.longitude ?? -0.1278 };
@@ -207,7 +224,7 @@ export function GoogleMapCanvas({
     return firstPoint
       ? { lat: firstPoint.latitude, lng: firstPoint.longitude }
       : { lat: 51.5074, lng: -0.1278 };
-  }, [activeScene, places, points]);
+  }, [activeScene, focusPoint, places, points]);
 
   useEffect(() => {
     if (!apiKey || !containerRef.current) {
@@ -280,6 +297,15 @@ export function GoogleMapCanvas({
       });
       polyline.setMap(map);
       overlaysRef.current.push(polyline);
+    }
+
+    if (focusPoint) {
+      const marker = new maps.Marker({
+        map,
+        position: { lat: focusPoint.latitude, lng: focusPoint.longitude },
+        title: focusPoint.label ?? undefined,
+      });
+      overlaysRef.current.push(marker);
     }
 
     places.forEach((place) => {
@@ -358,16 +384,23 @@ export function GoogleMapCanvas({
     const bounds = new maps.LatLngBounds();
     points.forEach((point) => bounds.extend({ lat: point.latitude, lng: point.longitude }));
     places.forEach((place) => bounds.extend({ lat: place.latitude ?? 51.5074, lng: place.longitude ?? -0.1278 }));
+    if (focusPoint) bounds.extend({ lat: focusPoint.latitude, lng: focusPoint.longitude });
     if (!bounds.isEmpty()) {
-      map.fitBounds(bounds, 64);
+      const boundaryCount = (points.length ? 1 : 0) + (places.length ? 1 : 0) + (focusPoint ? 1 : 0);
+      if (boundaryCount <= 1) {
+        map.panTo(focusPoint ? { lat: focusPoint.latitude, lng: focusPoint.longitude } : defaultCenter);
+        map.setZoom(16);
+      } else {
+        map.fitBounds(bounds, 64);
+      }
     } else {
       map.panTo(defaultCenter);
       map.setZoom(13);
     }
-  }, [activeScene, defaultCenter, highlightedPlaceKey, mapReady, onPlaceSelect, places, points]);
+  }, [activeScene, defaultCenter, focusPoint, highlightedPlaceKey, mapReady, onPlaceSelect, places, points]);
 
   if (!apiKey || loadError) {
-    return <MapFallback points={points} places={places} highlightedPlaceKey={highlightedPlaceKey} onPlaceSelect={onPlaceSelect} />;
+    return <MapFallback points={points} places={places} focusPoint={focusPoint} highlightedPlaceKey={highlightedPlaceKey} onPlaceSelect={onPlaceSelect} />;
   }
 
   return (

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
+  ChevronDown,
   Briefcase,
   Bus,
   Clock3,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import { api, type LocationPlaceMemoryPayload, type LocationPointPayload, type LocationSummaryPayload, type LocationTimelinePayload, type LocationVisitPayload } from '@/lib/api';
+import { GoogleMapCanvas } from './GoogleMapCanvas';
 
 interface NormalizedPlace extends LocationPlaceMemoryPayload {
   key: string;
@@ -36,6 +38,7 @@ interface LocationStoryIntelligenceProps {
   selectedDayPoints: LocationPointPayload[];
   rangeLabel: string;
   lastPointTimestamp: string | null;
+  googleMapsApiKey?: string | null;
   onSelectVisit?: (visit: LocationVisitPayload) => void;
   onSelectPlace?: (placeKey: string) => void;
   onTimelineTagged?: () => void;
@@ -98,27 +101,6 @@ function buildCategoryBreakdown(visits: LocationVisitPayload[]) {
       meta: getMeta(category),
     }))
     .sort((a, b) => b.minutes - a.minutes);
-}
-
-function buildPointPath(points: Array<{ latitude: number; longitude: number }>) {
-  if (points.length < 2) return '';
-  const sampled = points.length > 10 ? points.filter((_, index) => index % Math.ceil(points.length / 10) === 0) : points;
-  const latitudes = sampled.map((point) => point.latitude);
-  const longitudes = sampled.map((point) => point.longitude);
-  const minLat = Math.min(...latitudes);
-  const maxLat = Math.max(...latitudes);
-  const minLng = Math.min(...longitudes);
-  const maxLng = Math.max(...longitudes);
-  const latRange = maxLat - minLat || 0.001;
-  const lngRange = maxLng - minLng || 0.001;
-
-  return sampled
-    .map((point, index) => {
-      const x = 28 + ((point.longitude - minLng) / lngRange) * 279;
-      const y = 132 - ((point.latitude - minLat) / latRange) * 104;
-      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(' ');
 }
 
 function SectionLabel({ label, action }: { label: string; action?: string }) {
@@ -220,10 +202,19 @@ function TimeBreakdown({ timeline, visits }: { timeline: LocationTimelinePayload
   );
 }
 
-function TimelineRows({ timeline, onTimelineTagged }: { timeline: LocationTimelinePayload[]; onTimelineTagged?: () => void }) {
+function TimelineRows({
+  timeline,
+  googleMapsApiKey,
+  onTimelineTagged,
+}: {
+  timeline: LocationTimelinePayload[];
+  googleMapsApiKey?: string | null;
+  onTimelineTagged?: () => void;
+}) {
   const [savingRow, setSavingRow] = useState<string | null>(null);
   const [renamingRow, setRenamingRow] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
   async function tagRow(row: LocationTimelinePayload, value: string) {
     setSavingRow(row.rowId);
@@ -324,11 +315,20 @@ function TimelineRows({ timeline, onTimelineTagged }: { timeline: LocationTimeli
                           border: `1px solid ${active ? meta.color : 'var(--color-border)'}`,
                           color: active ? meta.color : 'var(--color-text-muted)',
                         }}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRowId((current) => (current === row.rowId ? null : row.rowId))}
+                    className="ml-auto inline-flex min-h-8 items-center gap-1 rounded-full px-3 text-[11px] font-semibold"
+                    style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
+                  >
+                    Map
+                    <ChevronDown size={12} style={{ transform: expandedRowId === row.rowId ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+                  </button>
                   {!isMovement && (
                     <button
                       type="button"
@@ -338,11 +338,16 @@ function TimelineRows({ timeline, onTimelineTagged }: { timeline: LocationTimeli
                       }}
                       className="min-h-8 rounded-full px-3 text-[11px] font-semibold"
                       style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
-                    >
-                      Rename
-                    </button>
-                  )}
+                      >
+                        Rename
+                      </button>
+                    )}
                 </div>
+                {expandedRowId === row.rowId && (
+                  <div className="mt-4 overflow-hidden rounded-[24px] border" style={{ borderColor: 'var(--color-border)' }}>
+                    <TimelineRowMap row={row} apiKey={googleMapsApiKey ?? null} />
+                  </div>
+                )}
                 {renamingRow === row.rowId && (
                   <div className="mt-3 flex gap-2">
                     <input
@@ -376,9 +381,38 @@ function TimelineRows({ timeline, onTimelineTagged }: { timeline: LocationTimeli
   );
 }
 
-function MovementSummary({ visits, points, timeline }: { visits: LocationVisitPayload[]; points: LocationPointPayload[]; timeline: LocationTimelinePayload[] }) {
-  const path = buildPointPath(points.length ? points : visits);
-  const places = visits.filter((visit, index, all) => all.findIndex((entry) => entry.placeKey === visit.placeKey) === index).slice(0, 4);
+function TimelineRowMap({ row, apiKey }: { row: LocationTimelinePayload; apiKey?: string | null }) {
+  const focusPoint = row.kind === 'movement'
+    ? {
+        latitude: row.startLatitude ?? row.endLatitude ?? row.latitude ?? 51.5074,
+        longitude: row.startLongitude ?? row.endLongitude ?? row.longitude ?? -0.1278,
+        label: row.label,
+      }
+    : {
+        latitude: row.latitude ?? 51.5074,
+        longitude: row.longitude ?? -0.1278,
+        label: row.placeLabel ?? row.label,
+      };
+  const points = row.kind === 'movement' && row.startLatitude != null && row.startLongitude != null && row.endLatitude != null && row.endLongitude != null
+    ? [
+        { latitude: row.startLatitude, longitude: row.startLongitude },
+        { latitude: row.endLatitude, longitude: row.endLongitude },
+      ] as LocationPointPayload[]
+    : [];
+
+  return (
+    <div className="h-56">
+      <GoogleMapCanvas
+        apiKey={apiKey}
+        points={points}
+        places={[]}
+        focusPoint={focusPoint}
+      />
+    </div>
+  );
+}
+
+function MovementSummary({ timeline }: { timeline: LocationTimelinePayload[] }) {
   const movementTotals = timeline.filter((row) => row.kind === 'movement').reduce<Record<string, number>>((acc, row) => {
     const key = ['cycling', 'transit', 'unknown_movement'].includes(String(row.movementType)) ? 'travel' : (row.movementType ?? 'travel');
     acc[key] = (acc[key] ?? 0) + row.durationMinutes;
@@ -386,39 +420,8 @@ function MovementSummary({ visits, points, timeline }: { visits: LocationVisitPa
   }, {});
 
   return (
-    <div className="overflow-hidden rounded-[30px] p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-      <SectionLabel label="Movement map" action="Live data" />
-      <div className="h-40 overflow-hidden rounded-[26px]" style={{ backgroundColor: 'rgba(8,17,31,0.94)' }}>
-        <svg viewBox="0 0 335 160" className="h-full w-full">
-          {[24, 66, 108, 150, 192, 234, 276, 318].map((x) => (
-            <line key={`x-${x}`} x1={x} y1="0" x2={x} y2="160" stroke="rgba(255,255,255,0.08)" strokeWidth="0.8" />
-          ))}
-          {[28, 62, 96, 130].map((y) => (
-            <line key={`y-${y}`} x1="0" y1={y} x2="335" y2={y} stroke="rgba(255,255,255,0.08)" strokeWidth="0.8" />
-          ))}
-          <path d="M-8 118 C42 94 78 104 124 72 C172 38 210 62 270 34 C292 24 318 24 348 18" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="9" strokeLinecap="round" />
-          <path d="M42 -10 C54 30 76 66 124 94 C174 124 230 118 308 168" fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="8" strokeLinecap="round" />
-          {path && <path d={path} fill="none" stroke="var(--color-accent)" strokeWidth="2.4" strokeDasharray="7 7" strokeLinecap="round" />}
-          {places.map((visit, index) => {
-            const meta = getMeta(visit.category);
-            const x = 50 + index * 76;
-            const y = index % 2 ? 62 : 108;
-            return (
-              <g key={visit.placeKey}>
-                <circle cx={x} cy={y} r="13" fill={meta.color} opacity="0.24" />
-                <circle cx={x} cy={y} r="5" fill={meta.color} />
-                <text x={x} y={y - 18} textAnchor="middle" fill="#fff" fontSize="10" fontWeight="700">
-                  {visit.placeLabel.slice(0, 12)}
-                </text>
-              </g>
-            );
-          })}
-          <rect x="14" y="122" width="112" height="24" rx="12" fill="rgba(255,255,255,0.10)" />
-          <text x="28" y="138" fill="rgba(255,255,255,0.72)" fontSize="11" fontWeight="700">
-            {points.length} points today
-          </text>
-        </svg>
-      </div>
+    <div className="rounded-[30px] p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+      <SectionLabel label="Movement summary" action="Live data" />
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
         {(['walking', 'travel'] as const).map((type) => {
           const meta = getMovementMeta(type);
@@ -572,6 +575,7 @@ export function LocationStoryIntelligence({
   selectedDayPoints,
   rangeLabel,
   lastPointTimestamp,
+  googleMapsApiKey,
   onSelectPlace,
   onTimelineTagged,
 }: LocationStoryIntelligenceProps) {
@@ -583,8 +587,8 @@ export function LocationStoryIntelligence({
       transition={{ duration: 0.35, ease: 'easeOut' }}
     >
       <TimeBreakdown timeline={timeline} visits={visits} />
-      <TimelineRows timeline={timeline} onTimelineTagged={onTimelineTagged} />
-      <MovementSummary visits={visits} points={selectedDayPoints} timeline={timeline} />
+      <TimelineRows timeline={timeline} googleMapsApiKey={googleMapsApiKey} onTimelineTagged={onTimelineTagged} />
+      <MovementSummary timeline={timeline} />
       <InsightsAndStatus
         selectedDay={selectedDay}
         visits={visits}

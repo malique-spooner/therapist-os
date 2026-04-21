@@ -54,6 +54,11 @@ export function LocationPage({ onBack, onSettings }: LocationPageProps) {
     [dataMode],
   );
 
+  const { data: runtimeOptions } = useApiQuery(
+    () => api.getAiRuntimeOptions(),
+    [dataMode],
+  );
+
   const { data: intelligenceData, isLoading, error, refetch } = useApiQuery(
     () => api.getLocationIntelligence({ startDate: range.startDate, endDate: range.endDate, date: range.endDate }),
     [dataMode, range.startDate, range.endDate],
@@ -165,6 +170,7 @@ export function LocationPage({ onBack, onSettings }: LocationPageProps) {
             selectedDayPoints={experience.selectedDayPoints}
             rangeLabel={rangeLabel}
             lastPointTimestamp={lastPointTimestamp}
+            googleMapsApiKey={runtimeOptions?.googleMapsApiKey ?? null}
             onTimelineTagged={refetch}
           />
         </div>
