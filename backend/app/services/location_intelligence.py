@@ -111,6 +111,7 @@ class LocationIntelligenceService:
         persisted_places = {
             row.place_key: row
             for row in db.scalars(select(LocationPlaceMemoryReal)).all()
+            if self._is_cluster_anchor(row)
         }
         overrides = db.scalars(select(LocationTagOverrideReal)).all()
         google_maps_api_key = self._google_maps_api_key(db)
@@ -153,7 +154,11 @@ class LocationIntelligenceService:
             "selectedDayPoints": selected_day_points,
             "timeline": timeline,
             "visits": [self._serialize_visit(visit) for visit in visits],
-            "places": [self._serialize_place_memory(place, history_count=place_history_counts.get(place.place_key, 0)) for place in places],
+            "places": [
+                item
+                for place in places
+                if (item := self._serialize_place_memory(place, history_count=place_history_counts.get(place.place_key, 0))) is not None
+            ],
             "recapScenes": recap_scenes,
             "rangeStats": [
                 {"label": "Tracked time", "value": self._format_minutes(total_minutes), "detail": f"{len(visits)} visits and {len(movements)} movement segments"},
@@ -1031,10 +1036,11 @@ class LocationIntelligenceService:
 
     @staticmethod
     def _serialize_place_memory(row, history_count: int = 0) -> dict:
+        if LocationIntelligenceService._is_legacy_noise_place(row):
+            return None
         average_dwell_minutes = int(round((row.total_minutes or 0) / max(row.visit_count or 1, 1))) if row.total_minutes else 0
-        is_legacy_noise = (row.category or "").lower() == "errands" or (row.label or "").lower().startswith("errand loop")
-        label = row.label if row.category not in {"unknown_place", "errands"} and not is_legacy_noise else "Unknown place"
-        category = "unknown_place" if row.category in {"unknown_place", "errands"} or is_legacy_noise else row.category
+        label = row.label if row.category not in {"unknown_place", "errands"} else "Unknown place"
+        category = "unknown_place" if row.category in {"unknown_place", "errands"} else row.category
         return {
             "placeKey": row.place_key,
             "label": label,
@@ -1373,6 +1379,18 @@ class LocationIntelligenceService:
             end = datetime.fromisoformat(end_date).date()
             return end - timedelta(days=6), end
         return date_window(period or "this-week")
+
+    @staticmethod
+    def _is_legacy_noise_place(row) -> bool:
+        category = (getattr(row, "category", None) or "").lower()
+        label = (getattr(row, "label", None) or "").lower()
+        return category == "errands" or label.startswith("errand loop")
+
+    @staticmethod
+    def _is_cluster_anchor(row) -> bool:
+        if LocationIntelligenceService._is_legacy_noise_place(row):
+            return False
+        return (getattr(row, "category", None) or "").lower() in {"home", "work"}
 
     @staticmethod
     def _default_selected_date(summaries: list[object], rows: list[object], end: date) -> str:

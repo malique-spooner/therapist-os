@@ -79,10 +79,17 @@ def _serialize_companion_log(row) -> dict:
     }
 
 
+def _is_legacy_noise_place(row) -> bool:
+    category = (getattr(row, "category", None) or "").lower()
+    label = (getattr(row, "label", None) or "").lower()
+    return category == "errands" or label.startswith("errand loop")
+
+
 def _serialize_place_memory(row) -> dict:
-    is_legacy_noise = (row.category or "").lower() == "errands" or (row.label or "").lower().startswith("errand loop")
-    label = row.label if row.category not in {"unknown_place", "errands"} and not is_legacy_noise else "Unknown place"
-    category = "unknown_place" if row.category in {"unknown_place", "errands"} or is_legacy_noise else row.category
+    if _is_legacy_noise_place(row):
+        return None
+    label = row.label if row.category not in {"unknown_place", "errands"} else "Unknown place"
+    category = "unknown_place" if row.category in {"unknown_place", "errands"} else row.category
     return {
         "placeKey": row.place_key,
         "label": label,
@@ -186,7 +193,7 @@ def upsert_location_companions(date: str, payload: LocationCompanionUpdateSchema
 @router.get("/places", dependencies=[Depends(verify_api_key)])
 def get_location_places(mode: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     rows = db.scalars(select(LocationPlaceMemoryReal).order_by(LocationPlaceMemoryReal.updated_at.desc())).all()
-    return [_serialize_place_memory(row) for row in rows]
+    return [item for row in rows if (item := _serialize_place_memory(row)) is not None]
 
 
 @router.put("/places/{place_key}", dependencies=[Depends(verify_api_key)])
