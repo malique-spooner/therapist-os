@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Briefcase, Home, Search, X } from 'lucide-react';
 
+import { GoogleMapCanvas } from './GoogleMapCanvas';
+
 import { api, type LocationPlaceMemoryPayload } from '@/lib/api';
 
 interface SearchResult {
@@ -87,9 +89,6 @@ export function LocationSettingsDrawer({ open, onClose, onSaved }: LocationSetti
   const [results, setResults] = useState<SearchResult[]>([]);
   const [memoryPlaces, setMemoryPlaces] = useState<LocationPlaceMemoryPayload[]>([]);
   const [selectedUnknownKey, setSelectedUnknownKey] = useState<string | null>(null);
-  const [draftLabel, setDraftLabel] = useState('');
-  const [draftNote, setDraftNote] = useState('');
-  const [mergeTargetKey, setMergeTargetKey] = useState('');
 
   async function refreshMemoryPlaces() {
     try {
@@ -124,7 +123,7 @@ export function LocationSettingsDrawer({ open, onClose, onSaved }: LocationSetti
   }, [memoryPlaces]);
 
   const unknownPlaces = useMemo(
-    () => knownPlaces.filter((place) => place.category === 'unknown_place' || (place.confidenceScore ?? 0) < 0.65),
+    () => knownPlaces.filter((place) => place.category === 'unknown_place'),
     [knownPlaces],
   );
 
@@ -136,16 +135,10 @@ export function LocationSettingsDrawer({ open, onClose, onSaved }: LocationSetti
   useEffect(() => {
     if (!selectedUnknown) {
       setSelectedUnknownKey(null);
-      setDraftLabel('');
-      setDraftNote('');
-      setMergeTargetKey('');
       return;
     }
 
     setSelectedUnknownKey(selectedUnknown.placeKey);
-    setDraftLabel(selectedUnknown.label ?? selectedUnknown.suggestedLabel ?? '');
-    setDraftNote(selectedUnknown.note ?? '');
-    setMergeTargetKey(knownPlaces.find((place) => place.placeKey === 'home')?.placeKey ?? knownPlaces.find((place) => place.placeKey === 'work')?.placeKey ?? '');
   }, [knownPlaces, selectedUnknown]);
 
   if (!open) return null;
@@ -202,18 +195,6 @@ export function LocationSettingsDrawer({ open, onClose, onSaved }: LocationSetti
         latitude: overrides?.latitude ?? place.latitude ?? null,
         longitude: overrides?.longitude ?? place.longitude ?? null,
       });
-      await refreshMemoryPlaces();
-      onSaved?.();
-    } finally {
-      setSavingKey(null);
-    }
-  }
-
-  async function mergeUnknownPlace(placeKey: string, targetPlaceKey: string) {
-    if (!targetPlaceKey || targetPlaceKey === placeKey) return;
-    setSavingKey(`merge-${placeKey}`);
-    try {
-      await api.mergeLocationPlace(placeKey, targetPlaceKey);
       await refreshMemoryPlaces();
       onSaved?.();
     } finally {
@@ -379,131 +360,84 @@ export function LocationSettingsDrawer({ open, onClose, onSaved }: LocationSetti
             <div className="rounded-[26px] p-4" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Unknown places to teach</p>
               <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                Tap a place to edit it, then save it as Home or Work.
+                Each item shows when it was seen, how long it lasted, and where it sits on the map. You can only turn these into Home or Work.
               </p>
-              <div className="mt-3 grid gap-3 md:grid-cols-[0.95fr_1.05fr]">
-                <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
-                  {unknownPlaces.map((place) => {
-                    const isSelected = place.placeKey === selectedUnknown?.placeKey;
-                    return (
+              <div className="mt-3 max-h-[520px] space-y-3 overflow-y-auto pr-1">
+                {unknownPlaces.map((place) => {
+                  const isSelected = place.placeKey === selectedUnknown?.placeKey;
+                  const firstSeen = place.firstSeenAt ? new Date(place.firstSeenAt) : null;
+                  const lastSeen = place.lastSeenAt ? new Date(place.lastSeenAt) : null;
+                  return (
+                    <div
+                      key={place.placeKey}
+                      className="rounded-[22px] p-3"
+                      style={{
+                        backgroundColor: isSelected ? 'rgba(82,183,136,0.10)' : 'var(--color-surface)',
+                        border: `1px solid ${isSelected ? 'rgba(82,183,136,0.42)' : 'var(--color-border)'}`,
+                      }}
+                    >
                       <button
-                        key={place.placeKey}
                         type="button"
                         onClick={() => setSelectedUnknownKey(place.placeKey)}
-                        className="w-full rounded-[20px] p-3 text-left transition"
-                        style={{
-                          backgroundColor: isSelected ? 'rgba(82,183,136,0.12)' : 'var(--color-surface)',
-                          border: `1px solid ${isSelected ? 'rgba(82,183,136,0.42)' : 'var(--color-border)'}`,
-                        }}
+                        className="flex w-full items-start justify-between gap-3 text-left"
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{place.label ?? place.suggestedLabel ?? 'Unknown place'}</p>
-                            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                              {place.category ?? 'unknown place'} · {place.latitude?.toFixed(4)}, {place.longitude?.toFixed(4)}
-                            </p>
-                          </div>
-                          <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ backgroundColor: 'rgba(15,23,42,0.06)', color: 'var(--color-text-muted)' }}>
-                            {Math.round((place.confidenceScore ?? 0) * 100)}%
-                          </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                            {place.label ?? place.suggestedLabel ?? 'Unknown place'}
+                          </p>
+                          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                            {firstSeen ? firstSeen.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'Unknown time'}
+                            {' · '}
+                            {lastSeen ? lastSeen.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'Unknown time'}
+                          </p>
+                          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                            {Math.max(1, place.totalMinutes ?? 0)}m · {place.visitCount ?? 0} visits
+                          </p>
                         </div>
+                        <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ backgroundColor: 'rgba(15,23,42,0.06)', color: 'var(--color-text-muted)' }}>
+                          {Math.round((place.confidenceScore ?? 0) * 100)}%
+                        </span>
                       </button>
-                    );
-                  })}
-                  {!unknownPlaces.length && <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No unknown places right now.</p>}
-                </div>
 
-                <div className="rounded-[20px] p-3" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                  {selectedUnknown ? (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--color-text-muted)' }}>Edit unknown place</p>
-                        <p className="mt-1 text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-                          {selectedUnknown.label ?? selectedUnknown.suggestedLabel ?? 'Unknown place'}
-                        </p>
-                        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                          {selectedUnknown.placeKey} · {selectedUnknown.latitude?.toFixed(4)}, {selectedUnknown.longitude?.toFixed(4)}
-                        </p>
+                      <div className="mt-3 h-40 overflow-hidden rounded-[18px] border" style={{ borderColor: 'var(--color-border)' }}>
+                        <GoogleMapCanvas
+                          apiKey={apiKey}
+                          points={[]}
+                          places={[]}
+                          focusPoint={{
+                            latitude: place.latitude ?? 51.5074,
+                            longitude: place.longitude ?? -0.1278,
+                            label: place.label ?? place.suggestedLabel ?? 'Unknown place',
+                          }}
+                        />
                       </div>
 
-                      <label className="block text-sm">
-                        <span className="mb-1 block font-medium" style={{ color: 'var(--color-text)' }}>Label</span>
-                        <input
-                          value={draftLabel}
-                          onChange={(event) => setDraftLabel(event.target.value)}
-                          className="w-full rounded-2xl border bg-transparent px-3 py-2.5 text-sm outline-none"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                          placeholder="Name this place"
-                        />
-                      </label>
-
-                      <label className="block text-sm">
-                        <span className="mb-1 block font-medium" style={{ color: 'var(--color-text)' }}>Note</span>
-                        <textarea
-                          value={draftNote}
-                          onChange={(event) => setDraftNote(event.target.value)}
-                          rows={3}
-                          className="w-full rounded-2xl border bg-transparent px-3 py-2.5 text-sm outline-none"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                          placeholder="Optional note"
-                        />
-                      </label>
-
-                      <div className="rounded-2xl p-3" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--color-text-muted)' }}>Merge into existing place</p>
-                        <div className="mt-2 flex gap-2">
-                          <select
-                            value={mergeTargetKey}
-                            onChange={(event) => setMergeTargetKey(event.target.value)}
-                            className="min-w-0 flex-1 rounded-2xl border bg-transparent px-3 py-2.5 text-sm outline-none"
-                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                          >
-                            <option value="">Choose Home or Work</option>
-                            {knownPlaces.filter((place) => ['home', 'work'].includes(place.placeKey)).map((place) => (
-                              <option key={place.placeKey} value={place.placeKey}>
-                                {place.label ?? place.suggestedLabel ?? place.placeKey}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            disabled={!mergeTargetKey || savingKey === `merge-${selectedUnknown.placeKey}`}
-                            onClick={() => void mergeUnknownPlace(selectedUnknown.placeKey, mergeTargetKey)}
-                            className="rounded-2xl px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
-                            style={{ backgroundColor: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6' }}
-                          >
-                            Merge
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
-                          disabled={savingKey === `save-${selectedUnknown.placeKey}`}
-                          onClick={() => void applyPreset(selectedUnknown, 'home')}
+                          disabled={savingKey === `save-${place.placeKey}`}
+                          onClick={() => void applyPreset(place, 'home')}
                           className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
                           style={{ backgroundColor: 'rgba(45, 106, 79, 0.12)', color: 'var(--color-primary)' }}
                         >
                           <Home size={12} className="mr-1 inline-block" />
-                          Save as Home
+                          Add Home anchor
                         </button>
                         <button
                           type="button"
-                          disabled={savingKey === `save-${selectedUnknown.placeKey}`}
-                          onClick={() => void applyPreset(selectedUnknown, 'work')}
+                          disabled={savingKey === `save-${place.placeKey}`}
+                          onClick={() => void applyPreset(place, 'work')}
                           className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
                           style={{ backgroundColor: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6' }}
                         >
                           <Briefcase size={12} className="mr-1 inline-block" />
-                          Save as Work
+                          Add Work anchor
                         </button>
                       </div>
                     </div>
-                  ) : (
-                    <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No unknown places right now.</p>
-                  )}
-                </div>
+                  );
+                })}
+                {!unknownPlaces.length && <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No unknown places right now.</p>}
               </div>
             </div>
           </div>

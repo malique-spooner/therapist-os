@@ -212,8 +212,6 @@ function TimelineRows({
   onTimelineTagged?: () => void;
 }) {
   const [savingRow, setSavingRow] = useState<string | null>(null);
-  const [renamingRow, setRenamingRow] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
   async function tagRow(row: LocationTimelinePayload, value: string) {
@@ -226,20 +224,6 @@ function TimelineRows({
         row.rowId,
         payload,
       );
-      onTimelineTagged?.();
-    } finally {
-      setSavingRow(null);
-    }
-  }
-
-  async function saveRename(row: LocationTimelinePayload) {
-    const label = renameValue.trim();
-    if (!label) return;
-    setSavingRow(row.rowId);
-    try {
-      await api.tagLocationTimelineRow(row.rowId, { label });
-      setRenamingRow(null);
-      setRenameValue('');
       onTimelineTagged?.();
     } finally {
       setSavingRow(null);
@@ -329,41 +313,10 @@ function TimelineRows({
                     Map
                     <ChevronDown size={12} style={{ transform: expandedRowId === row.rowId ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
                   </button>
-                  {!isMovement && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRenamingRow(row.rowId);
-                        setRenameValue(row.label);
-                      }}
-                      className="min-h-8 rounded-full px-3 text-[11px] font-semibold"
-                      style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
-                      >
-                        Rename
-                      </button>
-                    )}
                 </div>
                 {expandedRowId === row.rowId && (
                   <div className="mt-4 overflow-hidden rounded-[24px] border" style={{ borderColor: 'var(--color-border)' }}>
                     <TimelineRowMap row={row} apiKey={googleMapsApiKey ?? null} />
-                  </div>
-                )}
-                {renamingRow === row.rowId && (
-                  <div className="mt-3 flex gap-2">
-                    <input
-                      value={renameValue}
-                      onChange={(event) => setRenameValue(event.target.value)}
-                      className="min-h-11 min-w-0 flex-1 rounded-2xl px-3 text-sm outline-none"
-                      style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => saveRename(row)}
-                      className="min-h-11 rounded-2xl px-4 text-xs font-semibold"
-                      style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}
-                    >
-                      Save
-                    </button>
                   </div>
                 )}
               </div>
