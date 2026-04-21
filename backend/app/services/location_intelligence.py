@@ -170,8 +170,8 @@ class LocationIntelligenceService:
             db.add(row)
 
         before = self._serialize_place_memory(row)
-        row.label = payload.get("label")
         row.category = payload.get("category")
+        row.label = self._unknown_place_label(payload.get("label"), row.category)
         row.tone = payload.get("tone")
         row.note = payload.get("note")
         if payload.get("latitude") is not None:
@@ -272,11 +272,14 @@ class LocationIntelligenceService:
                 place = LocationPlaceMemoryReal(place_key=visit.place_key, status="active")
                 db.add(place)
             if payload.get("label"):
-                place.label = payload["label"]
-                visit.place_label = payload["label"]
+                place.label = self._unknown_place_label(payload["label"], category)
+                visit.place_label = place.label
             elif category in {"home", "work"}:
                 place.label = label
                 visit.place_label = label
+            else:
+                place.label = self._unknown_place_label(place.label, category)
+                visit.place_label = place.label
             place.category = category
             visit.category = category
             if payload.get("tone"):
@@ -745,13 +748,13 @@ class LocationIntelligenceService:
                 row = place_model(place_key=key, status="active")
                 db.add(row)
             if key_visits[0].category == "unknown_place":
-                row.label = self._place_label(key, key_visits[0].category, len(places))
+                row.label = "Unknown place"
             else:
                 row.label = row.label or key_visits[0].place_label
             row.category = self._normalize_visit_category(row.category or key_visits[0].category)
             row.tone = row.tone or key_visits[0].tone
             if row.category == "unknown_place":
-                row.label = self._place_label(key, row.category, len(places))
+                row.label = "Unknown place"
             row.latitude = sum(visit.latitude for visit in key_visits) / len(key_visits)
             row.longitude = sum(visit.longitude for visit in key_visits) / len(key_visits)
             visit_count = len(key_visits)
@@ -1029,9 +1032,7 @@ class LocationIntelligenceService:
     @staticmethod
     def _serialize_place_memory(row, history_count: int = 0) -> dict:
         average_dwell_minutes = int(round((row.total_minutes or 0) / max(row.visit_count or 1, 1))) if row.total_minutes else 0
-        label = row.label
-        if row.category == "unknown_place":
-            label = label if isinstance(label, str) and label.lower().startswith("unknown place") else LocationIntelligenceService._suggested_label(row.place_key, row.category)
+        label = row.label if row.category != "unknown_place" else "Unknown place"
         return {
             "placeKey": row.place_key,
             "label": label,
@@ -1301,6 +1302,16 @@ class LocationIntelligenceService:
         if category == "unknown_place":
             return "Unknown place"
         return "Place"
+
+    @staticmethod
+    def _unknown_place_label(label: str | None, category: str | None) -> str | None:
+        if category == "home":
+            return "Home"
+        if category == "work":
+            return "Work"
+        if category == "unknown_place":
+            return "Unknown place"
+        return label
 
     @staticmethod
     def _default_tone(category: str, has_companion_context: bool) -> str:

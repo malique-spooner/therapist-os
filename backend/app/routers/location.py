@@ -80,10 +80,11 @@ def _serialize_companion_log(row) -> dict:
 
 
 def _serialize_place_memory(row) -> dict:
+    label = row.label if row.category != "unknown_place" else "Unknown place"
     return {
         "placeKey": row.place_key,
-        "label": row.label,
-        "suggestedLabel": row.label,
+        "label": label,
+        "suggestedLabel": label,
         "category": row.category,
         "tone": row.tone,
         "note": row.note,
