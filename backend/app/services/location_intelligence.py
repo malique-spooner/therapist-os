@@ -747,9 +747,10 @@ class LocationIntelligenceService:
 
         places: list[object] = []
         for key, key_visits in grouped.items():
-            if key in persisted_places:
-                row = persisted_places[key]
-            else:
+            row = persisted_places.get(key)
+            if not row:
+                row = db.scalar(select(place_model).where(place_model.place_key == key))
+            if not row:
                 row = place_model(place_key=key, status="active")
                 db.add(row)
             if key_visits[0].category == "unknown_place":
