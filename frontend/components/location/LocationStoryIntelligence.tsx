@@ -9,7 +9,9 @@ import {
   Clock3,
   Dumbbell,
   Home,
+  Bike,
   MapPin,
+  Pencil,
   Sparkles,
   TreePine,
   Users,
@@ -17,7 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import { api, type LocationPlaceMemoryPayload, type LocationPointPayload, type LocationSummaryPayload, type LocationTimelinePayload, type LocationVisitPayload } from '@/lib/api';
+import { type LocationPlaceMemoryPayload, type LocationPointPayload, type LocationSummaryPayload, type LocationTimelinePayload, type LocationVisitPayload } from '@/lib/api';
 import { GoogleMapCanvas } from './GoogleMapCanvas';
 
 interface NormalizedPlace extends LocationPlaceMemoryPayload {
@@ -41,7 +43,7 @@ interface LocationStoryIntelligenceProps {
   googleMapsApiKey?: string | null;
   onSelectVisit?: (visit: LocationVisitPayload) => void;
   onSelectPlace?: (placeKey: string) => void;
-  onTimelineTagged?: () => void;
+  onEditAnchors?: () => void;
 }
 
 const categoryMeta: Record<string, { label: string; color: string; bg: string; icon: LucideIcon }> = {
@@ -58,8 +60,15 @@ const categoryMeta: Record<string, { label: string; color: string; bg: string; i
 
 const movementMeta: Record<string, { label: string; color: string; bg: string; icon: LucideIcon }> = {
   walking: { label: 'Walk', color: 'var(--color-primary)', bg: 'rgba(45, 106, 79, 0.12)', icon: MapPin },
+  cycling: { label: 'Cycle', color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.12)', icon: Bike },
+  transit: { label: 'Transit', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
   travel: { label: 'Travel', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', icon: Bus },
+  unknown_movement: { label: 'Travel', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)', icon: Bus },
 };
+
+function getMovementModeLabel(movementType: string | null | undefined) {
+  return movementMeta[movementType ?? 'travel']?.label ?? 'Travel';
+}
 
 function getMeta(category: string) {
   return categoryMeta[category] ?? categoryMeta.misc;
@@ -205,30 +214,13 @@ function TimeBreakdown({ timeline, visits }: { timeline: LocationTimelinePayload
 function TimelineRows({
   timeline,
   googleMapsApiKey,
-  onTimelineTagged,
+  onEditAnchors,
 }: {
   timeline: LocationTimelinePayload[];
   googleMapsApiKey?: string | null;
-  onTimelineTagged?: () => void;
+  onEditAnchors?: () => void;
 }) {
-  const [savingRow, setSavingRow] = useState<string | null>(null);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
-
-  async function tagRow(row: LocationTimelinePayload, value: string) {
-    setSavingRow(row.rowId);
-    try {
-      const payload = row.kind === 'visit'
-        ? { category: value }
-        : { movementType: value };
-      await api.tagLocationTimelineRow(
-        row.rowId,
-        payload,
-      );
-      onTimelineTagged?.();
-    } finally {
-      setSavingRow(null);
-    }
-  }
 
   return (
     <div className="rounded-[30px] p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
@@ -237,6 +229,8 @@ function TimelineRows({
         {timeline.length ? timeline.map((row, index) => {
           const isMovement = row.kind === 'movement';
           const meta = isMovement ? getMovementMeta(row.movementType) : getMeta(row.category ?? 'misc');
+          const movementMode = isMovement ? getMovementModeLabel(row.movementType) : null;
+          const title = isMovement ? 'Travel' : row.label;
           const Icon = meta.icon;
           return (
             <motion.div
@@ -255,9 +249,16 @@ function TimelineRows({
               <div className="min-w-0 flex-1 rounded-[24px] p-4" style={{ backgroundColor: 'var(--color-surface)', border: row.isLowConfidence ? '1px solid rgba(244, 162, 97, 0.48)' : '1px solid var(--color-border)' }}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>{row.label}</p>
+                    <p className="truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: meta.color }}>{meta.label}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: meta.color }}>
+                        {isMovement ? 'Travel' : meta.label}
+                      </p>
+                      {isMovement && movementMode && (
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ backgroundColor: meta.bg, color: meta.color }}>
+                          {movementMode}
+                        </span>
+                      )}
                       {row.isLowConfidence && (
                         <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ backgroundColor: 'rgba(244, 162, 97, 0.14)', color: '#f4a261' }}>
                           Unsure
@@ -273,37 +274,15 @@ function TimelineRows({
                   {formatTime(row.startTimestamp)} - {formatTime(row.endTimestamp)} · {isMovement ? `${Math.round(row.distanceMetres ?? 0)}m travelled` : row.highlight}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {(isMovement
-                    ? [
-                      ['walking', 'Walk'],
-                      ['travel', 'Travel'],
-                    ]
-                    : [
-                      ['home', 'Home'],
-                      ['work', 'Work'],
-                      ['unknown_place', 'Unknown place'],
-                    ]
-                  ).map(([value, label]) => {
-                    const active = isMovement
-                      ? row.movementType === value || (value === 'travel' && row.movementType !== 'walking')
-                      : row.category === value;
-                    return (
-                      <button
-                        key={`${row.rowId}-${value}`}
-                        type="button"
-                        disabled={savingRow === row.rowId}
-                        onClick={() => tagRow(row, value)}
-                        className="min-h-8 rounded-full px-3 text-[11px] font-semibold transition active:scale-95 disabled:opacity-60"
-                        style={{
-                          backgroundColor: active ? meta.bg : 'var(--color-surface-2)',
-                          border: `1px solid ${active ? meta.color : 'var(--color-border)'}`,
-                          color: active ? meta.color : 'var(--color-text-muted)',
-                        }}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+                  <button
+                    type="button"
+                    onClick={() => onEditAnchors?.()}
+                    className="inline-flex min-h-8 items-center gap-1 rounded-full px-3 text-[11px] font-semibold transition active:scale-95"
+                    style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
+                  >
+                    <Pencil size={12} />
+                    Edit / anchor
+                  </button>
                   <button
                     type="button"
                     onClick={() => setExpandedRowId((current) => (current === row.rowId ? null : row.rowId))}
@@ -367,7 +346,7 @@ function TimelineRowMap({ row, apiKey }: { row: LocationTimelinePayload; apiKey?
 
 function MovementSummary({ timeline }: { timeline: LocationTimelinePayload[] }) {
   const movementTotals = timeline.filter((row) => row.kind === 'movement').reduce<Record<string, number>>((acc, row) => {
-    const key = ['cycling', 'transit', 'unknown_movement'].includes(String(row.movementType)) ? 'travel' : (row.movementType ?? 'travel');
+    const key = row.movementType ?? 'travel';
     acc[key] = (acc[key] ?? 0) + row.durationMinutes;
     return acc;
   }, {});
@@ -375,8 +354,8 @@ function MovementSummary({ timeline }: { timeline: LocationTimelinePayload[] }) 
   return (
     <div className="rounded-[30px] p-5" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
       <SectionLabel label="Movement summary" action="Live data" />
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        {(['walking', 'travel'] as const).map((type) => {
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-4">
+        {(['walking', 'cycling', 'transit', 'travel'] as const).map((type) => {
           const meta = getMovementMeta(type);
           return (
             <div key={type} className="rounded-2xl px-3 py-2" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
@@ -530,7 +509,7 @@ export function LocationStoryIntelligence({
   lastPointTimestamp,
   googleMapsApiKey,
   onSelectPlace,
-  onTimelineTagged,
+  onEditAnchors,
 }: LocationStoryIntelligenceProps) {
   return (
     <motion.section
@@ -540,7 +519,7 @@ export function LocationStoryIntelligence({
       transition={{ duration: 0.35, ease: 'easeOut' }}
     >
       <TimeBreakdown timeline={timeline} visits={visits} />
-      <TimelineRows timeline={timeline} googleMapsApiKey={googleMapsApiKey} onTimelineTagged={onTimelineTagged} />
+      <TimelineRows timeline={timeline} googleMapsApiKey={googleMapsApiKey} onEditAnchors={onEditAnchors} />
       <MovementSummary timeline={timeline} />
       <InsightsAndStatus
         selectedDay={selectedDay}

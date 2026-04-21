@@ -171,7 +171,7 @@ export function LocationPage({ onBack, onSettings }: LocationPageProps) {
             rangeLabel={rangeLabel}
             lastPointTimestamp={lastPointTimestamp}
             googleMapsApiKey={runtimeOptions?.googleMapsApiKey ?? null}
-            onTimelineTagged={refetch}
+            onEditAnchors={() => setShowLocationSettings(true)}
           />
         </div>
       </div>
