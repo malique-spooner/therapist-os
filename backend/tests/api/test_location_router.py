@@ -203,6 +203,38 @@ def test_location_place_memory_can_be_saved_and_loaded(client):
     assert any(item["placeKey"] == "football-pitch" and item["tone"] == "positive" for item in payload)
 
 
+def test_location_place_memory_home_and_work_are_canonical(client):
+    home = client.put(
+        "/api/location/places/home",
+        headers={"X-API-Key": "dev-secret-key"},
+        json={
+            "label": "Office",
+            "category": "work",
+            "tone": "neutral",
+            "note": "Should stay Home",
+        },
+    )
+    assert home.status_code == 200
+    assert home.json()["placeKey"] == "home"
+    assert home.json()["category"] == "home"
+    assert home.json()["label"] == "Home"
+
+    work = client.put(
+        "/api/location/places/work",
+        headers={"X-API-Key": "dev-secret-key"},
+        json={
+            "label": "Flat",
+            "category": "home",
+            "tone": "positive",
+            "note": "Should stay Work",
+        },
+    )
+    assert work.status_code == 200
+    assert work.json()["placeKey"] == "work"
+    assert work.json()["category"] == "work"
+    assert work.json()["label"] == "Work"
+
+
 def test_location_place_history_tracks_updates_merge_and_split(client):
     for key, label, latitude, longitude in (
         ("football-pitch", "Football", 51.5001, -0.101),

@@ -123,7 +123,9 @@ export function LocationSettingsDrawer({ open, onClose, onSaved }: LocationSetti
   }, [memoryPlaces]);
 
   const unknownPlaces = useMemo(
-    () => knownPlaces.filter((place) => place.category === 'unknown_place'),
+    () => knownPlaces
+      .filter((place) => place.category === 'unknown_place' && !['home', 'work'].includes(place.placeKey))
+      .sort((a, b) => new Date(b.lastSeenAt ?? b.firstSeenAt ?? 0).getTime() - new Date(a.lastSeenAt ?? a.firstSeenAt ?? 0).getTime()),
     [knownPlaces],
   );
 
@@ -184,30 +186,22 @@ export function LocationSettingsDrawer({ open, onClose, onSaved }: LocationSetti
     }
   }
 
-  async function saveKnownPlace(place: LocationPlaceMemoryPayload, overrides?: Partial<LocationPlaceMemoryPayload>) {
-    setSavingKey(`save-${place.placeKey}`);
+  async function saveAnchorFromUnknown(place: LocationPlaceMemoryPayload, role: 'home' | 'work') {
+    setSavingKey(`save-${role}`);
     try {
-      await api.saveLocationPlace(place.placeKey, {
-        label: overrides?.label ?? place.label ?? place.suggestedLabel ?? null,
-        category: overrides?.category ?? place.category ?? 'unknown_place',
-        tone: overrides?.tone ?? place.tone ?? 'neutral',
-        note: overrides?.note ?? place.note ?? null,
-        latitude: overrides?.latitude ?? place.latitude ?? null,
-        longitude: overrides?.longitude ?? place.longitude ?? null,
+      await api.saveLocationPlace(role, {
+        label: role === 'home' ? 'Home' : 'Work',
+        category: role,
+        tone: role === 'home' ? 'positive' : 'neutral',
+        note: place.note ?? null,
+        latitude: place.latitude ?? null,
+        longitude: place.longitude ?? null,
       });
       await refreshMemoryPlaces();
       onSaved?.();
     } finally {
       setSavingKey(null);
     }
-  }
-
-  async function applyPreset(place: LocationPlaceMemoryPayload, role: 'home' | 'work') {
-    await saveKnownPlace(place, {
-      label: role === 'home' ? 'Home' : 'Work',
-      category: role,
-      tone: role === 'home' ? 'positive' : place.tone ?? 'neutral',
-    });
   }
 
   return (
@@ -325,30 +319,9 @@ export function LocationSettingsDrawer({ open, onClose, onSaved }: LocationSetti
                         <p className="truncate text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{place.label ?? place.suggestedLabel ?? place.placeKey}</p>
                         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{place.category ?? 'unknown place'} · {place.visitCount ?? 0} visits</p>
                       </div>
-                      <div className="flex gap-2">
-                        {place.placeKey !== 'home' && (
-                          <button
-                            type="button"
-                            disabled={savingKey === `save-${place.placeKey}`}
-                            onClick={() => void applyPreset(place, 'home')}
-                            className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                            style={{ backgroundColor: 'rgba(45, 106, 79, 0.12)', color: 'var(--color-primary)' }}
-                          >
-                            Home
-                          </button>
-                        )}
-                        {place.placeKey !== 'work' && (
-                          <button
-                            type="button"
-                            disabled={savingKey === `save-${place.placeKey}`}
-                            onClick={() => void applyPreset(place, 'work')}
-                            className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                            style={{ backgroundColor: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6' }}
-                          >
-                            Work
-                          </button>
-                        )}
-                      </div>
+                      <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ backgroundColor: place.placeKey === 'home' ? 'rgba(45, 106, 79, 0.12)' : 'rgba(59, 130, 246, 0.12)', color: place.placeKey === 'home' ? 'var(--color-primary)' : '#3b82f6' }}>
+                        {place.placeKey === 'home' ? 'Home anchor' : 'Work anchor'}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -415,8 +388,8 @@ export function LocationSettingsDrawer({ open, onClose, onSaved }: LocationSetti
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
-                          disabled={savingKey === `save-${place.placeKey}`}
-                          onClick={() => void applyPreset(place, 'home')}
+                          disabled={savingKey === `save-home`}
+                          onClick={() => void saveAnchorFromUnknown(place, 'home')}
                           className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
                           style={{ backgroundColor: 'rgba(45, 106, 79, 0.12)', color: 'var(--color-primary)' }}
                         >
@@ -425,8 +398,8 @@ export function LocationSettingsDrawer({ open, onClose, onSaved }: LocationSetti
                         </button>
                         <button
                           type="button"
-                          disabled={savingKey === `save-${place.placeKey}`}
-                          onClick={() => void applyPreset(place, 'work')}
+                          disabled={savingKey === `save-work`}
+                          onClick={() => void saveAnchorFromUnknown(place, 'work')}
                           className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
                           style={{ backgroundColor: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6' }}
                         >

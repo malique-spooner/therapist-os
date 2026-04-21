@@ -169,15 +169,23 @@ class LocationIntelligenceService:
         }
 
     def upsert_place(self, place_key: str, payload: dict, mode: str | None, db: Session) -> dict:
-        row = db.scalar(select(LocationPlaceMemoryReal).where(LocationPlaceMemoryReal.place_key == place_key))
+        requested_category = (payload.get("category") or "").lower()
+        canonical_anchor_key = place_key if place_key in {"home", "work"} else requested_category if requested_category in {"home", "work"} else None
+        target_key = canonical_anchor_key or place_key
+        row = db.scalar(select(LocationPlaceMemoryReal).where(LocationPlaceMemoryReal.place_key == target_key))
         if not row:
-            row = LocationPlaceMemoryReal(place_key=place_key, status="active")
+            row = LocationPlaceMemoryReal(place_key=target_key, status="active")
             db.add(row)
 
         before = self._serialize_place_memory(row)
-        row.category = payload.get("category")
-        row.label = self._unknown_place_label(payload.get("label"), row.category)
-        row.tone = payload.get("tone")
+        if canonical_anchor_key:
+            row.category = canonical_anchor_key
+            row.label = "Home" if canonical_anchor_key == "home" else "Work"
+            row.tone = payload.get("tone") or ("positive" if canonical_anchor_key == "home" else "neutral")
+        else:
+            row.category = payload.get("category")
+            row.label = self._unknown_place_label(payload.get("label"), row.category)
+            row.tone = payload.get("tone")
         row.note = payload.get("note")
         if payload.get("latitude") is not None:
             row.latitude = payload["latitude"]
@@ -186,7 +194,7 @@ class LocationIntelligenceService:
         db.flush()
         db.add(
             LocationPlaceHistoryReal(
-                place_key=place_key,
+                place_key=target_key,
                 action="rename" if before.get("label") != row.label and row.label else "update",
                 detail_json={"before": before, "after": self._serialize_place_memory(row)},
             )
@@ -1040,8 +1048,13 @@ class LocationIntelligenceService:
         if LocationIntelligenceService._is_legacy_noise_place(row):
             return None
         average_dwell_minutes = int(round((row.total_minutes or 0) / max(row.visit_count or 1, 1))) if row.total_minutes else 0
-        label = row.label if row.category not in {"unknown_place", "errands"} else "Unknown place"
-        category = "unknown_place" if row.category in {"unknown_place", "errands"} else row.category
+        canonical_role = (getattr(row, "place_key", "") or "").lower()
+        if canonical_role in {"home", "work"}:
+            label = "Home" if canonical_role == "home" else "Work"
+            category = canonical_role
+        else:
+            label = row.label if row.category not in {"unknown_place", "errands"} else "Unknown place"
+            category = "unknown_place" if row.category in {"unknown_place", "errands"} else row.category
         return {
             "placeKey": row.place_key,
             "label": label,
@@ -1391,7 +1404,7 @@ class LocationIntelligenceService:
     def _is_cluster_anchor(row) -> bool:
         if LocationIntelligenceService._is_legacy_noise_place(row):
             return False
-        return (getattr(row, "category", None) or "").lower() in {"home", "work"}
+        return (getattr(row, "place_key", None) or "").lower() in {"home", "work"} or (getattr(row, "category", None) or "").lower() in {"home", "work"}
 
     @staticmethod
     def _default_selected_date(summaries: list[object], rows: list[object], end: date) -> str:
