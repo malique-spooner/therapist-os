@@ -295,17 +295,14 @@ class LocationIntelligenceService:
         if movement:
             movement_type = self._normalize_movement_type(payload.get("movementType") or movement.movement_type)
             movement_label = self._movement_label(movement_type)
-            if payload.get("label"):
-                movement.label = payload["label"]
-            else:
-                movement.label = movement_label
+            movement.label = movement_label
             movement.movement_type = movement_type
             override = self._upsert_override(
                 db,
                 target_kind="movement",
                 target_key=row_id,
                 row_id=row_id,
-                label=movement.label,
+                label=movement_label,
                 category=None,
                 movement_type=movement_type,
                 tone=payload.get("tone"),
@@ -533,6 +530,8 @@ class LocationIntelligenceService:
             or self._reverse_geocode_label(latitude, longitude, google_maps_api_key)
             or self._place_label(place_key, category, index)
         )
+        if category == "unknown_place":
+            place_label = self._place_label(place_key, category, index)
         tone = getattr(override, "tone", None) or getattr(place, "tone", None) or self._default_tone(category, companion is not None and bool(getattr(companion, "person_ids", [])))
         row_id = self._timeline_row_id("visit", first["timestamp"], last["timestamp"], place_key)
         return Visit(
@@ -687,11 +686,14 @@ class LocationIntelligenceService:
             else:
                 row = place_model(place_key=key, status="active")
                 db.add(row)
-            row.label = row.label or key_visits[0].place_label
+            if key_visits[0].category == "unknown_place":
+                row.label = self._place_label(key, key_visits[0].category, len(places))
+            else:
+                row.label = row.label or key_visits[0].place_label
             row.category = self._normalize_visit_category(row.category or key_visits[0].category)
             row.tone = row.tone or key_visits[0].tone
-            if row.category == "unknown_place" and not row.label:
-                row.label = "Unknown place"
+            if row.category == "unknown_place":
+                row.label = self._place_label(key, row.category, len(places))
             row.latitude = sum(visit.latitude for visit in key_visits) / len(key_visits)
             row.longitude = sum(visit.longitude for visit in key_visits) / len(key_visits)
             visit_count = len(key_visits)
@@ -765,13 +767,14 @@ class LocationIntelligenceService:
 
     @staticmethod
     def _serialize_timeline_visit(visit: Visit) -> dict:
+        label = visit.place_label if visit.category in {"home", "work"} else "Unknown place"
         return {
             "id": visit.id,
             "rowId": visit.id,
             "kind": "visit",
-            "label": visit.place_label,
+            "label": label,
             "placeKey": visit.place_key,
-            "placeLabel": visit.place_label,
+            "placeLabel": label,
             "category": visit.category,
             "startTimestamp": visit.start_timestamp,
             "endTimestamp": visit.end_timestamp,
@@ -791,7 +794,7 @@ class LocationIntelligenceService:
             "id": movement.id,
             "rowId": movement.id,
             "kind": "movement",
-            "label": movement.label or LocationIntelligenceService._movement_label(movement.movement_type),
+            "label": LocationIntelligenceService._movement_label(movement.movement_type),
             "movementType": movement.movement_type,
             "startTimestamp": movement.start_timestamp,
             "endTimestamp": movement.end_timestamp,
@@ -809,13 +812,14 @@ class LocationIntelligenceService:
 
     @staticmethod
     def _serialize_timeline_visit_record(row, correction: dict | None = None) -> dict:
+        label = row.place_label if row.category in {"home", "work"} else "Unknown place"
         return {
             "id": row.row_id,
             "rowId": row.row_id,
             "kind": "visit",
-            "label": row.place_label or row.place_key,
+            "label": label,
             "placeKey": row.place_key,
-            "placeLabel": row.place_label,
+            "placeLabel": label,
             "category": row.category,
             "startTimestamp": row.start_timestamp.isoformat(),
             "endTimestamp": row.end_timestamp.isoformat(),
@@ -833,7 +837,7 @@ class LocationIntelligenceService:
             "id": row.row_id,
             "rowId": row.row_id,
             "kind": "movement",
-            "label": row.label or LocationIntelligenceService._movement_label(row.movement_type),
+            "label": LocationIntelligenceService._movement_label(row.movement_type),
             "movementType": row.movement_type,
             "startTimestamp": row.start_timestamp.isoformat(),
             "endTimestamp": row.end_timestamp.isoformat(),
@@ -935,10 +939,11 @@ class LocationIntelligenceService:
 
     @staticmethod
     def _serialize_visit(visit: Visit) -> dict:
+        label = visit.place_label if visit.category in {"home", "work"} else "Unknown place"
         return {
             "id": visit.id,
             "placeKey": visit.place_key,
-            "placeLabel": visit.place_label,
+            "placeLabel": label,
             "category": visit.category,
             "startTimestamp": visit.start_timestamp,
             "endTimestamp": visit.end_timestamp,
@@ -966,10 +971,13 @@ class LocationIntelligenceService:
     @staticmethod
     def _serialize_place_memory(row, history_count: int = 0) -> dict:
         average_dwell_minutes = int(round((row.total_minutes or 0) / max(row.visit_count or 1, 1))) if row.total_minutes else 0
+        label = row.label
+        if row.category == "unknown_place":
+            label = label if isinstance(label, str) and label.lower().startswith("unknown place") else LocationIntelligenceService._suggested_label(row.place_key, row.category)
         return {
             "placeKey": row.place_key,
-            "label": row.label,
-            "suggestedLabel": row.label or LocationIntelligenceService._suggested_label(row.place_key, row.category),
+            "label": label,
+            "suggestedLabel": label or LocationIntelligenceService._suggested_label(row.place_key, row.category),
             "category": row.category,
             "tone": row.tone,
             "note": row.note,
